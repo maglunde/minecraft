@@ -42,6 +42,7 @@ public class Main {
     private int miningBlockY = Integer.MIN_VALUE;
     private int miningBlockZ = Integer.MIN_VALUE;
     private float miningDamage = 0.0f;
+    private float miningSoundTimer = 0.0f;
     private boolean isLeftMouseDown = false;
 
     private static final String WORLD_VERT = """
@@ -292,6 +293,7 @@ public class Main {
                                 new no.minecraft.player.AABB(hit.placeX, hit.placeY, hit.placeZ,
                                         hit.placeX + 1, hit.placeY + 1, hit.placeZ + 1)))) {
                             world.setBlock(hit.placeX, hit.placeY, hit.placeZ, toPlace);
+                            no.minecraft.sound.SoundManager.getInstance().play(toPlace.getDigSound(), 0.8f);
                             player.useSelectedBlock();
                         }
                     }
@@ -456,6 +458,7 @@ public class Main {
                     if (player.getGameMode() == GameMode.CREATIVE) {
                         // Creative: Instant break
                         world.setBlock(hx, hy, hz, BlockType.AIR);
+                        no.minecraft.sound.SoundManager.getInstance().play(targetBlock.getBreakSound(), 1.0f);
                         miningDamage = 0.0f;
                         miningBlockX = Integer.MIN_VALUE;
                     } else {
@@ -468,9 +471,17 @@ public class Main {
                         float speed = (multiplier / Math.max(0.05f, hardness));
                         miningDamage += speed * dt;
 
+                        // Periodic dig sound while mining
+                        miningSoundTimer += dt;
+                        if (miningSoundTimer >= 0.28f) {
+                            miningSoundTimer = 0.0f;
+                            no.minecraft.sound.SoundManager.getInstance().play(targetBlock.getDigSound(), 0.6f);
+                        }
+
                         if (miningDamage >= 1.0f) {
                             // Block broken!
                             world.setBlock(hx, hy, hz, BlockType.AIR);
+                            no.minecraft.sound.SoundManager.getInstance().play(targetBlock.getBreakSound(), 1.0f);
                             // Drop item if harvested correctly
                             boolean toolRequired = targetBlock.requiresToolForDrop();
                             boolean hasCorrectTool = tool != null && tool.getItemToolType() == targetBlock.getEffectiveTool();
@@ -485,15 +496,18 @@ public class Main {
                             }
 
                             miningDamage = 0.0f;
+                            miningSoundTimer = 0.0f;
                             miningBlockX = Integer.MIN_VALUE;
                         }
                     }
                 } else {
                     miningDamage = 0.0f;
+                    miningSoundTimer = 0.0f;
                     miningBlockX = Integer.MIN_VALUE;
                 }
             } else if (!isLeftMouseDown) {
                 miningDamage = 0.0f;
+                miningSoundTimer = 0.0f;
                 miningBlockX = Integer.MIN_VALUE;
             }
 
@@ -619,6 +633,7 @@ public class Main {
         worldShader.cleanup();
         atlas.cleanup();
         world.cleanup();
+        no.minecraft.sound.SoundManager.getInstance().cleanup();
 
         glfwDestroyWindow(window);
         glfwTerminate();

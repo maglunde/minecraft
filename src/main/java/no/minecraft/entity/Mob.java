@@ -63,6 +63,9 @@ public class Mob {
 
             if (type == MobType.CREEPER) {
                 if (distToPlayer < 3.2f) {
+                    if (!ignited) {
+                        no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.0f);
+                    }
                     ignited = true;
                     fuseTime += dt;
                     if (fuseTime >= FUSE_MAX) {
@@ -88,6 +91,7 @@ public class Mob {
                 shootCooldown -= dt;
                 if (shootCooldown <= 0 && distToPlayer < 18.0f) {
                     shootCooldown = 2.0f + random.nextFloat() * 0.5f;
+                    no.minecraft.sound.SoundManager.getInstance().play("bow_shoot", 0.9f);
                     float arrowVx = dx * 14.0f;
                     float arrowVy = (player.getPosition().y - position.y) * 2.0f + 2.5f;
                     float arrowVz = dz * 14.0f;
@@ -99,6 +103,7 @@ public class Mob {
                 // Spider climbs walls if horizontal velocity is blocked
                 if (position.distance(player.getPosition()) < 1.6f && attackCooldown <= 0) {
                     player.damage(type.getAttackDamage());
+                    no.minecraft.sound.SoundManager.getInstance().play("spider_say", 0.85f);
                     attackCooldown = 1.0f;
                 }
             } else { // ZOMBIE
@@ -106,6 +111,7 @@ public class Mob {
                 moveZ = dz * type.getMoveSpeed();
                 if (distToPlayer < 1.4f && attackCooldown <= 0) {
                     player.damage(type.getAttackDamage());
+                    no.minecraft.sound.SoundManager.getInstance().play("zombie_say", 0.85f);
                     attackCooldown = 1.0f;
                 }
             }
@@ -139,6 +145,7 @@ public class Mob {
 
     private void explode(World world, Player player) {
         dead = true;
+        no.minecraft.sound.SoundManager.getInstance().play("explode", 1.0f);
         int radius = 3;
         int cx = (int) Math.floor(position.x);
         int cy = (int) Math.floor(position.y);

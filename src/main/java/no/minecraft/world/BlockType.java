@@ -174,6 +174,25 @@ public enum BlockType {
         };
     }
 
+    public String getDigSound() {
+        return switch (this) {
+            case STONE, COBBLESTONE, BRICKS, BEDROCK, FURNACE -> "dig_stone";
+            case WOOD, PLANKS, CRAFTING_TABLE, CHEST, TRAPDOOR, FENCE, FENCE_GATE, WOODEN_SLAB, WOODEN_STAIRS -> "dig_wood";
+            case SAND -> "dig_sand";
+            case DIRT, GRASS, LEAVES -> "dig_grass";
+            default -> "dig_stone";
+        };
+    }
+
+    public String getBreakSound() {
+        return switch (this) {
+            case STONE, COBBLESTONE, BRICKS, BEDROCK, FURNACE -> "break_stone";
+            case WOOD, PLANKS, CRAFTING_TABLE, CHEST, TRAPDOOR, FENCE, FENCE_GATE, WOODEN_SLAB, WOODEN_STAIRS -> "break_wood";
+            case DIRT, GRASS, LEAVES, SAND -> "break_grass";
+            default -> "break_stone";
+        };
+    }
+
     private static final BlockType[] BY_ID = new BlockType[256];
     static {
         for (BlockType type : values()) {

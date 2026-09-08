@@ -114,6 +114,7 @@ public class MainMenu {
         for (int i = 0; i < 3; i++) {
             float by = startY + i * gap;
             if (mx >= startX && mx <= startX + btnW && my >= by && my <= by + btnH) {
+                no.minecraft.sound.SoundManager.getInstance().play("click");
                 this.selectedMode = modes[i];
                 this.inMenu = false; // Start game in selected mode
                 return true;

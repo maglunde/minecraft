@@ -148,9 +148,10 @@ public class Player {
             moveWithCollision(velocity.x * dt, velocity.y * dt, velocity.z * dt);
 
             // Fall damage calculation on hard landing in Survival
-            if (wasInAir && onGround && gameMode == GameMode.SURVIVAL) {
+            if (wasInAir && onGround && gameMode != GameMode.CREATIVE) {
                 if (lastAirVerticalSpeed < -16.0f) {
                     int damage = (int) ((-lastAirVerticalSpeed - 16.0f) * 1.5f);
+                    no.minecraft.sound.SoundManager.getInstance().play("fall_small", 0.9f);
                     damage(Math.max(1, damage));
                 }
                 lastAirVerticalSpeed = 0.0f;
@@ -174,6 +175,7 @@ public class Player {
         if (gameMode == GameMode.CREATIVE) return;
         health = Math.max(0, health - amount);
         deathFlashTimer = 0.6f;
+        no.minecraft.sound.SoundManager.getInstance().play("hurt", 1.0f);
         if (health <= 0) {
             die();
         }
@@ -376,6 +378,7 @@ public class Player {
         if (type == BlockType.AIR || type == BlockType.BEDROCK) return;
         if (gameMode != GameMode.CREATIVE) {
             inventory.addItem(type, 1);
+            no.minecraft.sound.SoundManager.getInstance().play("pop", 0.7f);
         }
     }
 

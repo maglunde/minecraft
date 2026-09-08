@@ -223,6 +223,7 @@ public class HUD {
     }
 
     private void handleSlotClick(ItemStack slot, int button) {
+        no.minecraft.sound.SoundManager.getInstance().play("click");
         if (carriedItem.isEmpty()) {
             if (!slot.isEmpty()) {
                 if (button == GLFW_MOUSE_BUTTON_RIGHT && slot.getCount() > 1) {
@@ -639,6 +640,7 @@ public class HUD {
             if (mx >= resX && mx <= resX + resSize && my >= resY && my <= resY + resSize) {
                 ItemStack res = get3x3CraftingResult();
                 if (res != null && !res.isEmpty()) {
+                    no.minecraft.sound.SoundManager.getInstance().play("click");
                     if (carriedItem.isEmpty()) {
                         carriedItem.setType(res.getType());
                         carriedItem.setCount(res.getCount());
@@ -788,6 +790,7 @@ public class HUD {
         if (mx >= resultSlotX && mx <= resultSlotX + resSize && my >= resultSlotY && my <= resultSlotY + resSize) {
             ItemStack res = getCraftingResult();
             if (res != null && !res.isEmpty()) {
+                no.minecraft.sound.SoundManager.getInstance().play("click");
                 if (carriedItem.isEmpty()) {
                     carriedItem.setType(res.getType());
                     carriedItem.setCount(res.getCount());
