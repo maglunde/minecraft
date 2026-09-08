@@ -419,6 +419,9 @@ public class Main {
                     // Toggle Inventory / Crafting GUI
                     hud.toggleInventory(player);
                     setCursorLocked(!hud.isInventoryOpen());
+                } else if (!mainMenu.isInMenu() && !pauseMenu.isOpen() && (key == GLFW_KEY_F3 || key == gs.keyToggleDebug)) {
+                    // Toggle F3 Debug Screen
+                    hud.toggleDebugInfo();
                 } else if (!mainMenu.isInMenu() && !pauseMenu.isOpen() && key == GLFW_KEY_G) {
                     // Toggle GameMode (Survival / Creative)
                     player.toggleGameMode();
@@ -697,6 +700,7 @@ public class Main {
         double lastTime = glfwGetTime();
         double fpsTimer = lastTime;
         int frameCount = 0;
+        int currentFps = 60;
 
         Vector3f skyColor = new Vector3f(0.53f, 0.81f, 0.98f); // Minecraft sky blue
 
@@ -892,6 +896,7 @@ public class Main {
             // FPS Counter & Info
             frameCount++;
             if (currentTime - fpsTimer >= 1.0) {
+                currentFps = frameCount;
                 String status = player.getDeathFlashTimer() > 0 ? " [💀 DU DØDE - Falt ut av verden!]" : "";
                 String sprintIndicator = sprint ? " [⚡ SPRINT]" : "";
                 String countStr = player.getSelectedBlockCount() == -1 ? "∞" : String.valueOf(player.getSelectedBlockCount());
@@ -1010,7 +1015,7 @@ public class Main {
                     pauseMenu.render(width, height, (float) lastMouseX, (float) lastMouseY, atlas);
                 }
             } else {
-                hud.render(width, height, (float) lastMouseX, (float) lastMouseY, player, atlas, world, chatManager);
+                hud.render(width, height, (float) lastMouseX, (float) lastMouseY, player, atlas, world, chatManager, currentFps, targetedHit);
                 if (pauseMenu.isOpen()) {
                     pauseMenu.render(width, height, (float) lastMouseX, (float) lastMouseY, atlas);
                 }

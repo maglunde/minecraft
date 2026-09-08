@@ -27,6 +27,9 @@ public class HUD {
     private boolean inventoryOpen = false;
     private boolean craftingTableOpen = false;
     private boolean recipeBookOpen = false;
+    private boolean showDebugInfo = false;
+    private int lastFps = 60;
+    private no.minecraft.player.Raycast.HitResult lastTargetedHit = null;
     private final List<CraftingRecipe> recipes = CraftingRecipe.getDefaultRecipes();
 
     private final ItemStack[] craftSlots = new ItemStack[4];
@@ -99,6 +102,18 @@ public class HUD {
         for (int i = 0; i < 9; i++) {
             benchSlots[i] = new ItemStack(BlockType.AIR, 0);
         }
+    }
+
+    public boolean isDebugInfoOpen() {
+        return showDebugInfo;
+    }
+
+    public void setDebugInfoOpen(boolean open) {
+        this.showDebugInfo = open;
+    }
+
+    public void toggleDebugInfo() {
+        this.showDebugInfo = !this.showDebugInfo;
     }
 
     public boolean isInventoryOpen() {
@@ -842,8 +857,14 @@ public class HUD {
     }
 
     public void render(int windowWidth, int windowHeight, float mouseX, float mouseY, Player player, TextureAtlas atlas, no.minecraft.world.World world, no.minecraft.chat.ChatManager chatManager) {
+        render(windowWidth, windowHeight, mouseX, mouseY, player, atlas, world, chatManager, this.lastFps, this.lastTargetedHit);
+    }
+
+    public void render(int windowWidth, int windowHeight, float mouseX, float mouseY, Player player, TextureAtlas atlas, no.minecraft.world.World world, no.minecraft.chat.ChatManager chatManager, int fps, no.minecraft.player.Raycast.HitResult targetedHit) {
         this.mouseX = mouseX;
         this.mouseY = mouseY;
+        this.lastFps = fps;
+        this.lastTargetedHit = targetedHit;
         render(windowWidth, windowHeight, player, atlas, world, chatManager);
     }
 
@@ -871,7 +892,11 @@ public class HUD {
         if (!isInventoryOpen()) {
             float cx = windowWidth / 2.0f;
             float cy = windowHeight / 2.0f;
-            drawMinecraftCrosshair(geom, cx, cy);
+            if (showDebugInfo) {
+                drawDebugCrosshair(geom, cx, cy);
+            } else {
+                drawMinecraftCrosshair(geom, cx, cy);
+            }
         }
 
         // 3. Minecraft HUD (Hotbar + Hearts + Hunger Bar + XP Bar) as shown in reference image 2
@@ -890,6 +915,11 @@ public class HUD {
         // 3d. Chat Log and Chat Input field (Minecraft style bottom-left)
         if (chatManager != null) {
             renderChat(geom, overlayGeom, windowWidth, windowHeight, chatManager);
+        }
+
+        // 3e. F3 Debug Screen (authentic Minecraft Java Edition)
+        if (showDebugInfo) {
+            renderDebugMenu(geom, overlayGeom, windowWidth, windowHeight, player, world);
         }
 
         // 4. Minecraft Inventory & Crafting GUI
@@ -1613,6 +1643,28 @@ public class HUD {
         addRect(g, cx - th / 2, cy - size, th, size * 2, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 0.9f);
     }
 
+    private void drawDebugCrosshair(List<Float> g, float cx, float cy) {
+        float arm = 10.0f;
+        float th = 2.0f;
+
+        // Dark outline for contrast
+        addRect(g, cx - 1.0f, cy - 1.0f, arm + 2.0f, th + 2.0f, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.7f);
+        addRect(g, cx - 1.0f, cy - arm - 1.0f, th + 2.0f, arm + 2.0f, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.7f);
+        addRect(g, cx - 1.0f, cy - 1.0f, th + 2.0f, arm + 2.0f, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.7f);
+
+        // Center white dot
+        addRect(g, cx, cy, th, th, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 1.0f);
+
+        // Red arm (+X: right)
+        addRect(g, cx + th, cy, arm - th, th, 0, 0, 0, 0, 0.95f, 0.15f, 0.15f, 1.0f);
+
+        // Green arm (+Y: up)
+        addRect(g, cx, cy - arm + th, th, arm - th, 0, 0, 0, 0, 0.15f, 0.95f, 0.15f, 1.0f);
+
+        // Blue arm (+Z: down)
+        addRect(g, cx, cy + th, th, arm - th, 0, 0, 0, 0, 0.25f, 0.45f, 1.0f, 1.0f);
+    }
+
     private void drawMinecraftNumber(List<Float> g, int number, float rightX, float bottomY, float s) {
         String numStr = String.valueOf(number);
         int charWidth = 5;
@@ -1899,6 +1951,117 @@ public class HUD {
         }
     }
 
+    private void renderDebugMenu(List<Float> geom, List<Float> overlayGeom, int windowWidth, int windowHeight,
+                                Player player, no.minecraft.world.World world) {
+        if (world == null || player == null) return;
+
+        float scale = 1.35f;
+        float lineHeight = 10.0f * scale;
+        float startX = 8.0f;
+        float startY = 8.0f;
+
+        org.joml.Vector3f pos = player.getPosition();
+        int bx = (int) Math.floor(pos.x);
+        int by = (int) Math.floor(pos.y);
+        int bz = (int) Math.floor(pos.z);
+
+        int cx = Math.floorDiv(bx, 16);
+        int cy = Math.floorDiv(by, 16);
+        int cz = Math.floorDiv(bz, 16);
+
+        int inCx = Math.floorMod(bx, 16);
+        int inCy = Math.floorMod(by, 16);
+        int inCz = Math.floorMod(bz, 16);
+
+        org.joml.Vector3f fwd = player.getCamera().getForward();
+        String facing;
+        String toward;
+        if (Math.abs(fwd.x) > Math.abs(fwd.z)) {
+            if (fwd.x > 0) {
+                facing = "east";
+                toward = "Towards positive X (+X)";
+            } else {
+                facing = "west";
+                toward = "Towards negative X (-X)";
+            }
+        } else {
+            if (fwd.z > 0) {
+                facing = "south";
+                toward = "Towards positive Z (+Z)";
+            } else {
+                facing = "north";
+                toward = "Towards negative Z (-Z)";
+            }
+        }
+
+        float yaw = player.getCamera().getYaw();
+        float pitch = player.getCamera().getPitch();
+
+        int skyLight = (int) (world.getSunLightLevel() * 15.0f);
+        boolean openToSky = !world.isDarkAt(bx, by, bz);
+        int light = openToSky ? skyLight : Math.max(0, skyLight - 8);
+
+        int day = (int) (world.getWorldTime() / no.minecraft.world.World.DAY_LENGTH_SECONDS) + 1;
+        String timeStr = world.isNight() ? "Night" : "Day";
+
+        List<String> leftLines = new ArrayList<>();
+        leftLines.add(String.format("Minecraft 1.20 Clone (%d fps)", lastFps));
+        leftLines.add(String.format(java.util.Locale.ROOT, "XYZ: %.3f / %.3f / %.3f", pos.x, pos.y, pos.z));
+        leftLines.add(String.format(java.util.Locale.ROOT, "Block: %d %d %d", bx, by, bz));
+        leftLines.add(String.format(java.util.Locale.ROOT, "Chunk: %d %d %d [%d %d %d in chunk]", cx, cy, cz, inCx, inCy, inCz));
+        leftLines.add(String.format(java.util.Locale.ROOT, "Facing: %s (%s) (%.1f / %.1f)", facing, toward, yaw, pitch));
+        leftLines.add(String.format("Dimension: %s", world.getCurrentDimension().name().toLowerCase()));
+        leftLines.add(String.format("Biome: %s", world.getBiomeName(bx, by, bz)));
+        leftLines.add(String.format(java.util.Locale.ROOT, "Light: %d (%d sky, %d block)", light, skyLight, 0));
+        leftLines.add(String.format(java.util.Locale.ROOT, "Day %d (%s, sun: %.2f)", day, timeStr, world.getSunLightLevel()));
+        leftLines.add(String.format(java.util.Locale.ROOT, "Chunks: %d loaded | Mobs: %d | Drops: %d",
+                world.getLoadedChunkCount(), world.getMobs().size(), world.getDroppedItems().size()));
+
+        for (int i = 0; i < leftLines.size(); i++) {
+            String line = leftLines.get(i);
+            float y = startY + i * lineHeight;
+            float textW = line.length() * (6.0f * scale);
+            addRect(geom, startX - 2.0f, y - 1.0f, textW + 4.0f, lineHeight - 1.0f, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.55f);
+            drawHudText(overlayGeom, line, startX, y, scale, 0.90f, 0.90f, 0.90f);
+        }
+
+        // Right panel
+        List<String> rightLines = new ArrayList<>();
+        Runtime rt = Runtime.getRuntime();
+        long maxMem = rt.maxMemory() / (1024 * 1024);
+        long totalMem = rt.totalMemory() / (1024 * 1024);
+        long freeMem = rt.freeMemory() / (1024 * 1024);
+        long usedMem = totalMem - freeMem;
+        long memPct = totalMem > 0 ? (usedMem * 100 / totalMem) : 0;
+        String javaVer = System.getProperty("java.version");
+        String arch = System.getProperty("os.arch").contains("64") ? "64bit" : "32bit";
+
+        rightLines.add(String.format("Java: %s %s", javaVer, arch));
+        rightLines.add(String.format(java.util.Locale.ROOT, "Mem: %d%% %d/%dMB", memPct, usedMem, totalMem));
+        rightLines.add(String.format(java.util.Locale.ROOT, "Allocated: %dMB (Max: %dMB)", totalMem, maxMem));
+        rightLines.add(String.format("Display: %dx%d", windowWidth, windowHeight));
+        rightLines.add(String.format("GameMode: %s%s", player.getGameMode().name(), player.isFlying() ? " [FLY]" : ""));
+
+        if (lastTargetedHit != null) {
+            rightLines.add(""); // spacer
+            rightLines.add(String.format(java.util.Locale.ROOT, "Targeted Block: %d, %d, %d",
+                    lastTargetedHit.hitX, lastTargetedHit.hitY, lastTargetedHit.hitZ));
+            BlockType tb = world.getBlock(lastTargetedHit.hitX, lastTargetedHit.hitY, lastTargetedHit.hitZ);
+            rightLines.add("Block: " + tb.name());
+            rightLines.add("Solid: " + tb.isSolid());
+        }
+
+        for (int i = 0; i < rightLines.size(); i++) {
+            String line = rightLines.get(i);
+            if (line.isEmpty()) continue;
+            float y = startY + i * lineHeight;
+            float textW = line.length() * (6.0f * scale);
+            float rx = windowWidth - 8.0f - textW;
+            addRect(geom, rx - 2.0f, y - 1.0f, textW + 4.0f, lineHeight - 1.0f, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.55f);
+            drawHudText(overlayGeom, line, rx, y, scale, 0.90f, 0.90f, 0.90f);
+        }
+    }
+
     private int[][] getGlyph(char c) {
         return switch (c) {
             case 'A' -> new int[][]{{0,1,1,0},{1,0,0,1},{1,1,1,1},{1,0,0,1},{1,0,0,1}};
@@ -1951,6 +2114,15 @@ public class HUD {
             case '!' -> new int[][]{{1},{1},{1},{0},{1}};
             case '?' -> new int[][]{{1,1,1},{0,0,1},{0,1,0},{0,0,0},{0,1,0}};
             case ' ' -> new int[][]{{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}};
+            case '(' -> new int[][]{{0,1},{1,0},{1,0},{1,0},{0,1}};
+            case ')' -> new int[][]{{1,0},{0,1},{0,1},{0,1},{1,0}};
+            case '+' -> new int[][]{{0,0,0},{0,1,0},{1,1,1},{0,1,0},{0,0,0}};
+            case '%' -> new int[][]{{1,0,1},{0,0,1},{0,1,0},{1,0,0},{1,0,1}};
+            case '=' -> new int[][]{{0,0,0},{1,1,1},{0,0,0},{1,1,1},{0,0,0}};
+            case '|' -> new int[][]{{1},{1},{1},{1},{1}};
+            case 'Æ' -> new int[][]{{0,1,1,1},{1,0,1,0},{1,1,1,0},{1,0,1,0},{1,0,1,1}};
+            case 'Ø' -> new int[][]{{0,1,1,1},{1,0,0,1},{1,0,1,1},{1,1,0,1},{1,1,1,0}};
+            case 'Å' -> new int[][]{{0,1,0},{1,0,1},{1,1,1},{1,0,1},{1,0,1}};
             default -> null;
         };
     }
