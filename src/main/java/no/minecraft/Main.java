@@ -31,11 +31,11 @@ public class Main {
     private SkyRenderer skyRenderer;
     private HUD hud;
     private MainMenu mainMenu;
+    private no.minecraft.render.PauseMenu pauseMenu;
 
     private boolean cursorLocked = false;
     private double lastMouseX, lastMouseY;
     private boolean firstMouse = true;
-    private float mouseSensitivity = 0.12f;
 
     // Mining progress state
     private int miningBlockX = Integer.MIN_VALUE;
@@ -157,6 +157,7 @@ public class Main {
         skyRenderer = new SkyRenderer();
         hud = new HUD();
         mainMenu = new MainMenu();
+        pauseMenu = new PauseMenu();
 
         world = new World();
         int spawnY = world.getSpawnHeight(0, 0);
@@ -181,7 +182,7 @@ public class Main {
     private void setupInput() {
         // Cursor movement
         glfwSetCursorPosCallback(window, (win, xpos, ypos) -> {
-            if (hud.isInventoryOpen() || !cursorLocked) {
+            if (hud.isInventoryOpen() || mainMenu.isInMenu() || pauseMenu.isOpen() || !cursorLocked) {
                 lastMouseX = xpos;
                 lastMouseY = ypos;
                 firstMouse = true;
@@ -200,11 +201,27 @@ public class Main {
             lastMouseX = xpos;
             lastMouseY = ypos;
 
-            player.getCamera().rotate(dx * mouseSensitivity, dy * mouseSensitivity);
+            float sens = no.minecraft.settings.GameSettings.getInstance().getMouseSensitivity();
+            player.getCamera().rotate(dx * sens, dy * sens);
         });
 
         // Mouse clicks for mining, combat, placing and crafting
         glfwSetMouseButtonCallback(window, (win, button, action, mods) -> {
+            if (pauseMenu.isOpen()) {
+                if (action == GLFW_PRESS) {
+                    pauseMenu.handleClick(lastMouseX, lastMouseY, button, width, height);
+                    if (pauseMenu.isQuitToTitleRequested()) {
+                        pauseMenu.clearQuitToTitleRequested();
+                        pauseMenu.close();
+                        mainMenu.setInMenu(true);
+                        setCursorLocked(false);
+                    } else if (!pauseMenu.isOpen()) {
+                        setCursorLocked(true);
+                    }
+                }
+                return;
+            }
+
             if (mainMenu.isInMenu()) {
                 if (action == GLFW_PRESS) {
                     boolean wasGameStarted = mainMenu.isGameStarted();
@@ -328,13 +345,22 @@ public class Main {
             }
 
             if (action == GLFW_PRESS) {
+                if (pauseMenu.isOpen()) {
+                    pauseMenu.handleKey(key, action);
+                    if (!pauseMenu.isOpen()) {
+                        setCursorLocked(true);
+                    }
+                    return;
+                }
+
+                no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
+
                 if (key == GLFW_KEY_ESCAPE) {
                     if (mainMenu.isInMenu()) {
                         if (mainMenu.isGameStarted()) {
-                            // Resume game from pause
+                            // Resume game from start menu
                             no.minecraft.sound.SoundManager.getInstance().play("click");
                             mainMenu.setInMenu(false);
-                            player.setGameMode(mainMenu.getSelectedMode());
                             setCursorLocked(true);
                         }
                         return;
@@ -343,21 +369,21 @@ public class Main {
                         hud.closeInventory(player);
                         setCursorLocked(true);
                     } else {
-                        // Pause game
-                        mainMenu.setInMenu(true);
+                        // Open dedicated Pause Menu
+                        pauseMenu.open();
                         setCursorLocked(false);
                     }
-                } else if (key == GLFW_KEY_M && !hud.isInventoryOpen()) {
+                } else if (key == GLFW_KEY_M && !hud.isInventoryOpen() && !pauseMenu.isOpen()) {
                     mainMenu.setInMenu(true);
                     setCursorLocked(false);
-                } else if (!mainMenu.isInMenu() && key == GLFW_KEY_E) {
+                } else if (!mainMenu.isInMenu() && !pauseMenu.isOpen() && key == gs.keyInventory) {
                     // Toggle Inventory / Crafting GUI
                     hud.toggleInventory(player);
                     setCursorLocked(!hud.isInventoryOpen());
-                } else if (!mainMenu.isInMenu() && key == GLFW_KEY_G) {
+                } else if (!mainMenu.isInMenu() && !pauseMenu.isOpen() && key == GLFW_KEY_G) {
                     // Toggle GameMode (Survival / Creative)
                     player.toggleGameMode();
-                } else if (!mainMenu.isInMenu() && key == GLFW_KEY_F) {
+                } else if (!mainMenu.isInMenu() && !pauseMenu.isOpen() && key == GLFW_KEY_F) {
                     player.toggleFlying();
                 } else if (key == GLFW_KEY_P) {
                     // Reset position to ground at spawn
@@ -366,9 +392,9 @@ public class Main {
                     player.getVelocity().set(0, 0, 0);
                 } else if (key >= GLFW_KEY_1 && key <= GLFW_KEY_9) {
                     player.setSelectedSlot(key - GLFW_KEY_1);
-                } else if (key == GLFW_KEY_SPACE) {
+                } else if (key == gs.keyJump) {
                     // Double-tap Space detection for flying in Creative mode (0 gravity)
-                    if (!hud.isInventoryOpen()) {
+                    if (!hud.isInventoryOpen() && !pauseMenu.isOpen()) {
                         double now = glfwGetTime();
                         if (now - lastSpacePressTime < 0.35) {
                             if (player.getGameMode() == GameMode.CREATIVE) {
@@ -379,8 +405,8 @@ public class Main {
                             lastSpacePressTime = now;
                         }
                     }
-                } else if (key == GLFW_KEY_W) {
-                    // Double-tap W detection for Minecraft-style sprinting
+                } else if (key == gs.keyForward) {
+                    // Double-tap forward detection for Minecraft-style sprinting
                     double now = glfwGetTime();
                     if (now - lastWPressTime < 0.30) {
                         doubleTapSprint = true;
@@ -388,7 +414,7 @@ public class Main {
                     lastWPressTime = now;
                 }
             } else if (action == GLFW_RELEASE) {
-                if (key == GLFW_KEY_W) {
+                if (key == no.minecraft.settings.GameSettings.getInstance().keyForward) {
                     doubleTapSprint = false;
                 }
             }
@@ -418,12 +444,16 @@ public class Main {
             // Cap dt to prevent physics tunneling during lags
             dt = Math.min(dt, 0.05f);
 
+            no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
+            boolean isPaused = mainMenu.isInMenu() || pauseMenu.isOpen();
+            boolean inGui = isPaused || hud.isInventoryOpen();
+
             // Input handling (multi-key simultaneous support)
-            boolean fwd = !mainMenu.isInMenu() && !hud.isInventoryOpen() && isKeyDown(GLFW_KEY_W);
-            boolean bwd = !mainMenu.isInMenu() && !hud.isInventoryOpen() && isKeyDown(GLFW_KEY_S);
-            boolean left = !mainMenu.isInMenu() && !hud.isInventoryOpen() && isKeyDown(GLFW_KEY_A);
-            boolean right = !mainMenu.isInMenu() && !hud.isInventoryOpen() && isKeyDown(GLFW_KEY_D);
-            boolean jump = !mainMenu.isInMenu() && !hud.isInventoryOpen() && isKeyDown(GLFW_KEY_SPACE);
+            boolean fwd = !inGui && isKeyDown(gs.keyForward);
+            boolean bwd = !inGui && isKeyDown(gs.keyBackward);
+            boolean left = !inGui && isKeyDown(gs.keyLeft);
+            boolean right = !inGui && isKeyDown(gs.keyRight);
+            boolean jump = !inGui && isKeyDown(gs.keyJump);
 
             // Sprinting via double-tap W, Left Shift, Tab, R, or Left/Right Control
             boolean sprintKey = isKeyDown(GLFW_KEY_LEFT_SHIFT) ||
@@ -434,19 +464,19 @@ public class Main {
 
             boolean sprint = (doubleTapSprint || sprintKey) && fwd;
 
-            boolean sneak = !mainMenu.isInMenu() && !hud.isInventoryOpen() && (isKeyDown(GLFW_KEY_LEFT_SHIFT) ||
+            boolean sneak = !inGui && (isKeyDown(gs.keySneak) ||
                             isKeyDown(GLFW_KEY_RIGHT_SHIFT) ||
                             isKeyDown(GLFW_KEY_C) ||
                             isKeyDown(GLFW_KEY_LEFT_ALT));
 
-            if (!mainMenu.isInMenu()) {
+            if (!isPaused) {
                 player.update(dt, fwd, bwd, left, right, jump, sneak, sprint);
                 world.update(dt, player);
             }
 
             // Continuous Mining Logic (Left Click hold down)
             Raycast.HitResult targetedHit = null;
-            if (!mainMenu.isInMenu() && !hud.isInventoryOpen()) {
+            if (!inGui) {
                 targetedHit = Raycast.raycast(
                         world,
                         player.getCamera().getPosition(),
@@ -580,7 +610,7 @@ public class Main {
 
             // Setup 3D matrices
             Matrix4f projection = new Matrix4f().perspective(
-                    (float) Math.toRadians(75.0),
+                    (float) Math.toRadians(gs.getFov()),
                     (float) width / (float) height,
                     0.05f,
                     300.0f
@@ -591,8 +621,10 @@ public class Main {
             skyRenderer.render(projection, view, player.getPosition(), world.getDayFraction());
 
             // 2. Render World Chunks
-            float fogEnd = World.RENDER_DISTANCE * 16.0f;
+            float fogEnd = gs.getRenderDistance() * 16.0f;
             float fogStart = fogEnd * 0.65f;
+            float brightness = gs.getBrightness();
+            float dynamicSunLight = Math.min(1.0f, sunLight * (1.0f + brightness * 0.4f) + brightness * 0.15f);
 
             worldShader.bind();
             worldShader.setUniform("uProjection", projection);
@@ -600,7 +632,7 @@ public class Main {
             worldShader.setUniform("uSkyColor", skyColor);
             worldShader.setUniform("uFogStart", fogStart);
             worldShader.setUniform("uFogEnd", fogEnd);
-            worldShader.setUniform("uSunLight", sunLight);
+            worldShader.setUniform("uSunLight", dynamicSunLight);
 
             atlas.bind();
             world.updateAndRender();
@@ -625,11 +657,14 @@ public class Main {
                 blockOutline.render(projection, view, targetedHit.hitX, targetedHit.hitY, targetedHit.hitZ);
             }
 
-            // 7. Render 2D HUD or Main Menu
+            // 7. Render 2D HUD or Main Menu or Pause Menu
             if (mainMenu.isInMenu()) {
                 mainMenu.render(width, height, (float) lastMouseX, (float) lastMouseY, atlas);
             } else {
                 hud.render(width, height, (float) lastMouseX, (float) lastMouseY, player, atlas);
+                if (pauseMenu.isOpen()) {
+                    pauseMenu.render(width, height, (float) lastMouseX, (float) lastMouseY, atlas);
+                }
             }
 
             glfwSwapBuffers(window);
@@ -638,6 +673,9 @@ public class Main {
     }
 
     private void cleanup() {
+        if (pauseMenu != null) {
+            pauseMenu.cleanup();
+        }
         mainMenu.cleanup();
         hud.cleanup();
         skyRenderer.cleanup();

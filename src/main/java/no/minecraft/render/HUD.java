@@ -641,6 +641,12 @@ public class HUD {
                 ItemStack res = get3x3CraftingResult();
                 if (res != null && !res.isEmpty()) {
                     no.minecraft.sound.SoundManager.getInstance().play("click");
+                    if (res.getType() == BlockType.WOODEN_SWORD || res.getType() == BlockType.STONE_SWORD) {
+                        no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.TIME_TO_STRIKE);
+                    } else if (res.getType() == BlockType.FURNACE) {
+                        no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.HOT_TOPIC);
+                    }
+
                     if (carriedItem.isEmpty()) {
                         carriedItem.setType(res.getType());
                         carriedItem.setCount(res.getCount());

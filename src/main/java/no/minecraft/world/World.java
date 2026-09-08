@@ -225,11 +225,14 @@ public class World {
     }
 
     private void updateLoadedChunks(int centerCx, int centerCz) {
+        int rd = no.minecraft.settings.GameSettings.getInstance().getRenderDistance();
+        int unloadDist = rd + 2;
+
         // 1. Generate / load chunks within render distance
         List<Chunk> newlyGenerated = new ArrayList<>();
 
-        for (int dx = -RENDER_DISTANCE; dx <= RENDER_DISTANCE; dx++) {
-            for (int dz = -RENDER_DISTANCE; dz <= RENDER_DISTANCE; dz++) {
+        for (int dx = -rd; dx <= rd; dx++) {
+            for (int dz = -rd; dz <= rd; dz++) {
                 int cx = centerCx + dx;
                 int cz = centerCz + dz;
                 long key = chunkKey(cx, cz);
@@ -261,7 +264,7 @@ public class World {
             Map.Entry<Long, Chunk> entry = iterator.next();
             Chunk chunk = entry.getValue();
             int dist = Math.max(Math.abs(chunk.getChunkX() - centerCx), Math.abs(chunk.getChunkZ() - centerCz));
-            if (dist > UNLOAD_DISTANCE) {
+            if (dist > unloadDist) {
                 chunk.cleanup();
                 generatedChunks.remove(entry.getKey());
                 iterator.remove();

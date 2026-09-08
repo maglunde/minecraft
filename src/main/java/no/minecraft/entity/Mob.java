@@ -192,6 +192,7 @@ public class Mob {
 
         if (health <= 0) {
             dead = true;
+            no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.MONSTER_HUNTER);
             // Drop mob loot
             int count = 1 + random.nextInt(2);
             world.spawnItemDrop(position.x, position.y + 0.5f, position.z, type.getDropItem(), count);

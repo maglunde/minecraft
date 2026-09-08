@@ -56,6 +56,10 @@ public class SoundManager {
     }
 
     public void play(String name, float volume) {
+        float masterVolume = no.minecraft.settings.GameSettings.getInstance().getSoundVolume();
+        if (masterVolume <= 0.001f) return;
+        final float finalVol = volume * masterVolume;
+
         soundPool.submit(() -> {
             try {
                 byte[] data = soundCache.get(name);
@@ -71,7 +75,7 @@ public class SoundManager {
 
                 if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
                     FloatControl gainControl = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
-                    float dB = (float) (Math.log10(Math.max(0.0001f, volume)) * 20.0);
+                    float dB = (float) (Math.log10(Math.max(0.0001f, finalVol)) * 20.0);
                     dB = Math.clamp(dB, gainControl.getMinimum(), gainControl.getMaximum());
                     gainControl.setValue(dB);
                 }
