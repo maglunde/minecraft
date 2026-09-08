@@ -44,6 +44,8 @@ public class Main {
     private float miningDamage = 0.0f;
     private float miningSoundTimer = 0.0f;
     private boolean isLeftMouseDown = false;
+    private boolean isRightMouseDown = false;
+    private float rightClickTimer = 0.0f;
 
     private static final String WORLD_VERT = """
             #version 330 core
@@ -216,7 +218,9 @@ public class Main {
                         mainMenu.setInMenu(true);
                         setCursorLocked(false);
                     } else if (!pauseMenu.isOpen()) {
-                        setCursorLocked(true);
+                        if (!mainMenu.isInMenu()) {
+                            setCursorLocked(true);
+                        }
                     }
                 }
                 return;
@@ -233,8 +237,14 @@ public class Main {
                             world.setSeed(newSeed);
                             int sy = world.getSpawnHeight(0, 0);
                             player.resetToSpawn(0.5f, sy + 0.05f, 0.5f);
+                            mainMenu.setGameStarted(true);
                         }
                         setCursorLocked(true);
+                    } else if (mainMenu.isOpenOptionsRequested()) {
+                        mainMenu.clearOpenOptionsRequested();
+                        pauseMenu.openOptionsFromTitle();
+                    } else if (mainMenu.isQuitRequested()) {
+                        glfwSetWindowShouldClose(window, true);
                     }
                 }
                 return;
@@ -293,34 +303,17 @@ public class Main {
                     miningDamage = 0.0f;
                     miningBlockX = Integer.MIN_VALUE;
                 }
-            } else if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
-                Raycast.HitResult hit = Raycast.raycast(
-                        world,
-                        player.getCamera().getPosition(),
-                        player.getCamera().getForward(),
-                        5.5f
-                );
-
-                if (hit != null) {
-                    BlockType clickedBlock = world.getBlock(hit.hitX, hit.hitY, hit.hitZ);
-                    if (clickedBlock == BlockType.CRAFTING_TABLE) {
-                        hud.openCraftingTable();
-                        setCursorLocked(false);
-                        isLeftMouseDown = false;
-                        return;
+            } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+                if (action == GLFW_PRESS) {
+                    isRightMouseDown = true;
+                    if (tryPlaceBlock()) {
+                        rightClickTimer = 0.22f;
+                    } else {
+                        rightClickTimer = 0.0f;
                     }
-
-                    // Place block only if player has it in inventory
-                    if (player.canPlaceSelectedBlock()) {
-                        BlockType toPlace = player.getSelectedBlock();
-                        if (toPlace.isSolid() && (player.isFlying() || !player.getBoundingBox().intersects(
-                                new no.minecraft.player.AABB(hit.placeX, hit.placeY, hit.placeZ,
-                                        hit.placeX + 1, hit.placeY + 1, hit.placeZ + 1)))) {
-                            world.setBlock(hit.placeX, hit.placeY, hit.placeZ, toPlace);
-                            no.minecraft.sound.SoundManager.getInstance().play(toPlace.getDigSound(), 0.8f);
-                            player.useSelectedBlock();
-                        }
-                    }
+                } else if (action == GLFW_RELEASE) {
+                    isRightMouseDown = false;
+                    rightClickTimer = 0.0f;
                 }
             }
         });
@@ -348,6 +341,21 @@ public class Main {
                 if (pauseMenu.isOpen()) {
                     pauseMenu.handleKey(key, action);
                     if (!pauseMenu.isOpen()) {
+                        if (!mainMenu.isInMenu()) {
+                            setCursorLocked(true);
+                        }
+                    }
+                    return;
+                }
+
+                if (mainMenu.isInMenu()) {
+                    if (mainMenu.handleKey(key, action)) {
+                        return;
+                    }
+                    if (key == GLFW_KEY_ESCAPE && mainMenu.isGameStarted()) {
+                        // Resume game if already in progress
+                        no.minecraft.sound.SoundManager.getInstance().play("click");
+                        mainMenu.setInMenu(false);
                         setCursorLocked(true);
                     }
                     return;
@@ -356,15 +364,6 @@ public class Main {
                 no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
 
                 if (key == GLFW_KEY_ESCAPE) {
-                    if (mainMenu.isInMenu()) {
-                        if (mainMenu.isGameStarted()) {
-                            // Resume game from start menu
-                            no.minecraft.sound.SoundManager.getInstance().play("click");
-                            mainMenu.setInMenu(false);
-                            setCursorLocked(true);
-                        }
-                        return;
-                    }
                     if (hud.isInventoryOpen()) {
                         hud.closeInventory(player);
                         setCursorLocked(true);
@@ -421,6 +420,43 @@ public class Main {
         });
     }
 
+    private boolean tryPlaceBlock() {
+        Raycast.HitResult hit = Raycast.raycast(
+                world,
+                player.getCamera().getPosition(),
+                player.getCamera().getForward(),
+                5.5f
+        );
+
+        if (hit != null) {
+            BlockType clickedBlock = world.getBlock(hit.hitX, hit.hitY, hit.hitZ);
+            if (clickedBlock == BlockType.CRAFTING_TABLE) {
+                hud.openCraftingTable();
+                setCursorLocked(false);
+                isLeftMouseDown = false;
+                isRightMouseDown = false;
+                return true;
+            }
+
+            // Place block only if player has it in inventory
+            if (player.canPlaceSelectedBlock()) {
+                BlockType toPlace = player.getSelectedBlock();
+                if (toPlace != null && toPlace.isSolid()) {
+                    boolean roomAvailable = player.isFlying() || !player.getBoundingBox().intersects(
+                            new no.minecraft.player.AABB(hit.placeX, hit.placeY, hit.placeZ,
+                                    hit.placeX + 1, hit.placeY + 1, hit.placeZ + 1));
+                    if (roomAvailable) {
+                        world.setBlock(hit.placeX, hit.placeY, hit.placeZ, toPlace);
+                        no.minecraft.sound.SoundManager.getInstance().play(toPlace.getDigSound(), 0.8f);
+                        player.useSelectedBlock();
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     private void setCursorLocked(boolean locked) {
         this.cursorLocked = locked;
         glfwSetInputMode(window, GLFW_CURSOR, locked ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
@@ -447,6 +483,10 @@ public class Main {
             no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
             boolean isPaused = mainMenu.isInMenu() || pauseMenu.isOpen();
             boolean inGui = isPaused || hud.isInventoryOpen();
+            if (inGui) {
+                isLeftMouseDown = false;
+                isRightMouseDown = false;
+            }
 
             // Input handling (multi-key simultaneous support)
             boolean fwd = !inGui && isKeyDown(gs.keyForward);
@@ -555,6 +595,21 @@ public class Main {
                 miningBlockX = Integer.MIN_VALUE;
             }
 
+            // Continuous Block Placement Logic (Right Click hold down)
+            if (isRightMouseDown && !inGui) {
+                rightClickTimer -= dt;
+                if (rightClickTimer <= 0.0f) {
+                    if (tryPlaceBlock()) {
+                        rightClickTimer = 0.22f; // Minecraft default block placement cooldown (~4 ticks)
+                    } else {
+                        // Rapid polling so jumping upwards places block at the exact moment room clears
+                        rightClickTimer = 0.02f;
+                    }
+                }
+            } else if (!isRightMouseDown) {
+                rightClickTimer = 0.0f;
+            }
+
             // FPS Counter & Info
             frameCount++;
             if (currentTime - fpsTimer >= 1.0) {
@@ -660,6 +715,9 @@ public class Main {
             // 7. Render 2D HUD or Main Menu or Pause Menu
             if (mainMenu.isInMenu()) {
                 mainMenu.render(width, height, (float) lastMouseX, (float) lastMouseY, atlas);
+                if (pauseMenu.isOpen()) {
+                    pauseMenu.render(width, height, (float) lastMouseX, (float) lastMouseY, atlas);
+                }
             } else {
                 hud.render(width, height, (float) lastMouseX, (float) lastMouseY, player, atlas);
                 if (pauseMenu.isOpen()) {

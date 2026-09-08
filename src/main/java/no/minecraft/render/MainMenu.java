@@ -20,8 +20,16 @@ public class MainMenu {
     private final int vaoId;
     private final int vboId;
 
+    public enum Screen {
+        TITLE,
+        MODE_SELECT
+    }
+
+    private Screen currentScreen = Screen.TITLE;
     private boolean inMenu = true;
     private boolean gameStarted = false;
+    private boolean quitRequested = false;
+    private boolean openOptionsRequested = false;
     private GameMode selectedMode = GameMode.SURVIVAL;
 
     private static final String VERT_SRC = """
@@ -98,32 +106,116 @@ public class MainMenu {
 
     public void setInMenu(boolean inMenu) {
         this.inMenu = inMenu;
+        if (inMenu) {
+            this.currentScreen = Screen.TITLE;
+        }
+    }
+
+    public Screen getCurrentScreen() {
+        return currentScreen;
+    }
+
+    public void setCurrentScreen(Screen currentScreen) {
+        this.currentScreen = currentScreen;
+    }
+
+    public boolean isQuitRequested() {
+        return quitRequested;
+    }
+
+    public void clearQuitRequested() {
+        quitRequested = false;
+    }
+
+    public boolean isOpenOptionsRequested() {
+        return openOptionsRequested;
+    }
+
+    public void clearOpenOptionsRequested() {
+        openOptionsRequested = false;
     }
 
     public GameMode getSelectedMode() {
         return selectedMode;
     }
 
+    public boolean handleKey(int key, int action) {
+        if (!inMenu || action != GLFW_PRESS) return false;
+        if (key == GLFW_KEY_ESCAPE) {
+            if (currentScreen == Screen.MODE_SELECT) {
+                no.minecraft.sound.SoundManager.getInstance().play("click");
+                currentScreen = Screen.TITLE;
+                return true;
+            }
+        }
+        return false;
+    }
+
     public boolean handleClick(double mx, double my, int button, int width, int height) {
         if (!inMenu || button != GLFW_MOUSE_BUTTON_LEFT) return false;
 
         float p = 2.4f;
-        float btnW = 160.0f * p;
-        float btnH = 24.0f * p;
-        float startX = (width - btnW) / 2.0f;
-        float startY = height * 0.38f;
-        float gap = 34.0f * p;
 
-        // Start Menu: 3 Game mode buttons (Creative, Survival, Hardcore)
-        GameMode[] modes = {GameMode.CREATIVE, GameMode.SURVIVAL, GameMode.HARDCORE};
+        if (currentScreen == Screen.TITLE) {
+            float btnW = 180.0f * p;
+            float btnH = 24.0f * p;
+            float startX = (width - btnW) / 2.0f;
+            float startY = height * 0.38f;
+            float gap = 34.0f * p;
 
-        for (int i = 0; i < 3; i++) {
-            float by = startY + i * gap;
-            if (mx >= startX && mx <= startX + btnW && my >= by && my <= by + btnH) {
+            // Button 0: Nytt spill
+            float y0 = startY;
+            if (mx >= startX && mx <= startX + btnW && my >= y0 && my <= y0 + btnH) {
                 no.minecraft.sound.SoundManager.getInstance().play("click");
-                this.selectedMode = modes[i];
-                this.inMenu = false; // Start game in selected mode
-                return true;
+                currentScreen = Screen.MODE_SELECT;
+                return false;
+            }
+
+            // Button 1: Options...
+            float y1 = startY + gap;
+            if (mx >= startX && mx <= startX + btnW && my >= y1 && my <= y1 + btnH) {
+                no.minecraft.sound.SoundManager.getInstance().play("click");
+                openOptionsRequested = true;
+                return false;
+            }
+
+            // Button 2: Avslutt
+            float y2 = startY + gap * 2.0f;
+            if (mx >= startX && mx <= startX + btnW && my >= y2 && my <= y2 + btnH) {
+                no.minecraft.sound.SoundManager.getInstance().play("click");
+                quitRequested = true;
+                return false;
+            }
+
+            return false;
+        } else if (currentScreen == Screen.MODE_SELECT) {
+            float btnW = 180.0f * p;
+            float btnH = 24.0f * p;
+            float startX = (width - btnW) / 2.0f;
+            float startY = height * 0.34f;
+            float gap = 32.0f * p;
+
+            // 3 Mode Buttons: Creative, Survival, Hardcore
+            GameMode[] modes = {GameMode.CREATIVE, GameMode.SURVIVAL, GameMode.HARDCORE};
+
+            for (int i = 0; i < 3; i++) {
+                float by = startY + i * gap;
+                if (mx >= startX && mx <= startX + btnW && my >= by && my <= by + btnH) {
+                    no.minecraft.sound.SoundManager.getInstance().play("click");
+                    this.selectedMode = modes[i];
+                    this.inMenu = false; // Start game in selected mode
+                    return true;
+                }
+            }
+
+            // 4th Button: Tilbake
+            float backY = startY + 3 * gap + 6.0f * p;
+            float backW = 140.0f * p;
+            float backX = (width - backW) / 2.0f;
+            if (mx >= backX && mx <= backX + backW && my >= backY && my <= backY + btnH) {
+                no.minecraft.sound.SoundManager.getInstance().play("click");
+                currentScreen = Screen.TITLE;
+                return false;
             }
         }
 
@@ -163,47 +255,97 @@ public class MainMenu {
 
         // 2. Title Text ("MINECRAFT")
         drawMinecraftTitle(overlayGeom, "MINECRAFT", width / 2.0f, height * 0.16f, p * 1.6f);
-        drawModeSelectSubtitle(overlayGeom, "VELG MODUS FOR A STARTE", width / 2.0f, height * 0.28f, p * 0.9f);
 
-        // 3. Menu Buttons
-        float btnW = 160.0f * p;
-        float btnH = 24.0f * p;
-        float startX = (width - btnW) / 2.0f;
-        float startY = height * 0.38f;
-        float gap = 34.0f * p;
+        boolean norwegian = no.minecraft.settings.GameSettings.getInstance().getLanguage() == no.minecraft.settings.GameSettings.Language.NORWEGIAN;
 
-        String[] titles = {"CREATIVE", "SURVIVAL", "HARDCORE"};
-        String[] descs = {
-                "Uendelige ressurser, flyving & udodelighet",
-                "Samle ressurser, lag verktoy, overlev natten",
-                "Ett liv! Mobs er farlige, ingen respawn"
-        };
-        int[] iconTiles = {
-                BlockType.GRASS.getTexture(BlockType.Face.TOP),
-                BlockType.WOODEN_PICKAXE.getTexture(BlockType.Face.TOP),
-                BlockType.STONE_SWORD.getTexture(BlockType.Face.TOP)
-        };
+        if (currentScreen == Screen.TITLE) {
+            drawModeSelectSubtitle(overlayGeom, "JAVA CLONE", width / 2.0f, height * 0.28f, p * 0.9f);
 
-        for (int i = 0; i < 3; i++) {
-            float by = startY + i * gap;
-            boolean hovered = (mx >= startX && mx <= startX + btnW && my >= by && my <= by + btnH);
+            // 3 Buttons: Nytt spill, Options..., Avslutt
+            float btnW = 180.0f * p;
+            float btnH = 24.0f * p;
+            float startX = (width - btnW) / 2.0f;
+            float startY = height * 0.38f;
+            float gap = 34.0f * p;
 
-            // Button frame with 3D bevel
-            drawMinecraftMenuButton(geom, startX, by, btnW, btnH, hovered, p);
+            String[] titles = {
+                    norwegian ? "NYTT SPILL" : "NEW GAME",
+                    norwegian ? "INNSTILLINGER..." : "OPTIONS...",
+                    norwegian ? "AVSLUTT" : "QUIT GAME"
+            };
+            String[] descs = {
+                    norwegian ? "Velg modus og start ny verden" : "Choose mode and start a new world",
+                    norwegian ? "Grafikk, kontroller, lyd og sprak" : "Video, controls, sound and language",
+                    norwegian ? "Avslutt spillet og lukk vinduet" : "Quit the game and close window"
+            };
+            int[] iconTiles = {
+                    BlockType.GRASS.getTexture(BlockType.Face.TOP),
+                    BlockType.CRAFTING_TABLE.getTexture(BlockType.Face.TOP),
+                    BlockType.STONE_SWORD.getTexture(BlockType.Face.TOP)
+            };
 
-            // Icon on button left
-            float[] uv = TextureAtlas.getUVs(iconTiles[i]);
-            addRect(tex, startX + 6.0f * p, by + 4.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
+            for (int i = 0; i < 3; i++) {
+                float by = startY + i * gap;
+                boolean hovered = (mx >= startX && mx <= startX + btnW && my >= by && my <= by + btnH);
 
-            // Button Label in pixel letters
-            drawButtonLabel(overlayGeom, titles[i], startX + 28.0f * p, by + 6.0f * p, p * 0.9f, i == 2 ? 0.95f : 1.0f, i == 2 ? 0.3f : 1.0f, i == 2 ? 0.3f : 1.0f);
+                drawMinecraftMenuButton(geom, startX, by, btnW, btnH, hovered, p);
 
-            // Description below label
-            drawSmallDescription(overlayGeom, descs[i], startX + 28.0f * p, by + 14.5f * p, p * 0.55f);
+                float[] uv = TextureAtlas.getUVs(iconTiles[i]);
+                addRect(tex, startX + 6.0f * p, by + 4.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
+
+                drawButtonLabel(overlayGeom, titles[i], startX + 28.0f * p, by + 6.0f * p, p * 0.9f, 1.0f, 1.0f, 1.0f);
+                drawSmallDescription(overlayGeom, descs[i], startX + 28.0f * p, by + 14.5f * p, p * 0.55f);
+            }
+        } else if (currentScreen == Screen.MODE_SELECT) {
+            drawModeSelectSubtitle(overlayGeom, norwegian ? "VELG MODUS FOR A STARTE" : "SELECT GAME MODE TO START", width / 2.0f, height * 0.26f, p * 0.9f);
+
+            float btnW = 180.0f * p;
+            float btnH = 24.0f * p;
+            float startX = (width - btnW) / 2.0f;
+            float startY = height * 0.34f;
+            float gap = 32.0f * p;
+
+            String[] titles = {
+                    norwegian ? "KREATIV" : "CREATIVE",
+                    norwegian ? "OVERLEVELSE" : "SURVIVAL",
+                    norwegian ? "HARDCORE" : "HARDCORE"
+            };
+            String[] descs = {
+                    norwegian ? "Uendelige ressurser, flyving og udodelighet" : "Infinite resources, flight and invulnerability",
+                    norwegian ? "Samle ressurser, lag verktoy, overlev natten" : "Gather resources, craft tools, survive the night",
+                    norwegian ? "Ett liv! Mobs er farlige, ingen respawn" : "One life! Hostile mobs, no respawn"
+            };
+            int[] iconTiles = {
+                    BlockType.GRASS.getTexture(BlockType.Face.TOP),
+                    BlockType.WOODEN_PICKAXE.getTexture(BlockType.Face.TOP),
+                    BlockType.STONE_SWORD.getTexture(BlockType.Face.TOP)
+            };
+
+            for (int i = 0; i < 3; i++) {
+                float by = startY + i * gap;
+                boolean hovered = (mx >= startX && mx <= startX + btnW && my >= by && my <= by + btnH);
+
+                drawMinecraftMenuButton(geom, startX, by, btnW, btnH, hovered, p);
+
+                float[] uv = TextureAtlas.getUVs(iconTiles[i]);
+                addRect(tex, startX + 6.0f * p, by + 4.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
+
+                drawButtonLabel(overlayGeom, titles[i], startX + 28.0f * p, by + 6.0f * p, p * 0.9f, i == 2 ? 0.95f : 1.0f, i == 2 ? 0.3f : 1.0f, i == 2 ? 0.3f : 1.0f);
+                drawSmallDescription(overlayGeom, descs[i], startX + 28.0f * p, by + 14.5f * p, p * 0.55f);
+            }
+
+            // Back button
+            float backY = startY + 3 * gap + 6.0f * p;
+            float backW = 140.0f * p;
+            float backX = (width - backW) / 2.0f;
+            boolean backHovered = (mx >= backX && mx <= backX + backW && my >= backY && my <= backY + btnH);
+
+            drawMinecraftMenuButton(geom, backX, backY, backW, btnH, backHovered, p);
+            drawCenteredButtonLabel(overlayGeom, norwegian ? "TILBAKE" : "BACK", width / 2.0f, backY + 7.5f * p, p * 0.9f, 1.0f, 1.0f, 1.0f);
         }
 
         // Footer version info
-        drawSmallDescription(overlayGeom, "Minecraft Java Clone - Velg et alternativ med musen", width / 2.0f - 110.0f * p, height - 16.0f * p, p * 0.65f);
+        drawSmallDescription(overlayGeom, norwegian ? "Minecraft Java Clone - Velg et alternativ med musen" : "Minecraft Java Clone - Select an option with the mouse", width / 2.0f - 110.0f * p, height - 16.0f * p, p * 0.65f);
 
         // Draw calls
         shader.setUniform("uUseTexture", 0);
@@ -270,6 +412,12 @@ public class MainMenu {
         }
     }
 
+    private void drawCenteredButtonLabel(List<Float> g, String label, float cx, float startY, float s, float red, float green, float blue) {
+        float totalWidth = label.length() * (6 * s);
+        float startX = cx - totalWidth / 2.0f;
+        drawButtonLabel(g, label, startX, startY, s, red, green, blue);
+    }
+
     private void drawButtonLabel(List<Float> g, String label, float startX, float startY, float s, float red, float green, float blue) {
         for (int i = 0; i < label.length(); i++) {
             float px = startX + i * (6 * s);
@@ -318,6 +466,7 @@ public class MainMenu {
             case 'N' -> new int[][]{{1,0,0,1},{1,1,0,1},{1,0,1,1},{1,0,0,1},{1,0,0,1}};
             case 'O' -> new int[][]{{0,1,1,0},{1,0,0,1},{1,0,0,1},{1,0,0,1},{0,1,1,0}};
             case 'P' -> new int[][]{{1,1,1,0},{1,0,0,1},{1,1,1,0},{1,0,0,0},{1,0,0,0}};
+            case 'Q' -> new int[][]{{0,1,1,0},{1,0,0,1},{1,0,0,1},{1,0,1,0},{0,1,0,1}};
             case 'R' -> new int[][]{{1,1,1,0},{1,0,0,1},{1,1,1,0},{1,0,1,0},{1,0,0,1}};
             case 'S' -> new int[][]{{0,1,1,1},{1,0,0,0},{0,1,1,0},{0,0,0,1},{1,1,1,0}};
             case 'T' -> new int[][]{{1,1,1,1,1},{0,0,1,0,0},{0,0,1,0,0},{0,0,1,0,0},{0,0,1,0,0}};
@@ -327,6 +476,18 @@ public class MainMenu {
             case 'X' -> new int[][]{{1,0,0,1},{1,0,0,1},{0,1,1,0},{1,0,0,1},{1,0,0,1}};
             case 'Y' -> new int[][]{{1,0,0,1},{1,0,0,1},{0,1,1,0},{0,0,1,0},{0,0,1,0}};
             case 'Z' -> new int[][]{{1,1,1,1},{0,0,0,1},{0,1,1,0},{1,0,0,0},{1,1,1,1}};
+            case '0' -> new int[][]{{1,1,1},{1,0,1},{1,0,1},{1,0,1},{1,1,1}};
+            case '1' -> new int[][]{{0,1,0},{1,1,0},{0,1,0},{0,1,0},{1,1,1}};
+            case '2' -> new int[][]{{1,1,1},{0,0,1},{1,1,1},{1,0,0},{1,1,1}};
+            case '3' -> new int[][]{{1,1,1},{0,0,1},{1,1,1},{0,0,1},{1,1,1}};
+            case '4' -> new int[][]{{1,0,1},{1,0,1},{1,1,1},{0,0,1},{0,0,1}};
+            case '5' -> new int[][]{{1,1,1},{1,0,0},{1,1,1},{0,0,1},{1,1,1}};
+            case '6' -> new int[][]{{1,1,1},{1,0,0},{1,1,1},{1,0,1},{1,1,1}};
+            case '7' -> new int[][]{{1,1,1},{0,0,1},{0,0,1},{0,0,1},{0,0,1}};
+            case '8' -> new int[][]{{1,1,1},{1,0,1},{1,1,1},{1,0,1},{1,1,1}};
+            case '9' -> new int[][]{{1,1,1},{1,0,1},{1,1,1},{0,0,1},{1,1,1}};
+            case '%' -> new int[][]{{1,0,1},{0,0,1},{0,1,0},{1,0,0},{1,0,1}};
+            case ':' -> new int[][]{{0},{1},{0},{1},{0}};
             case '-' -> new int[][]{{0,0,0,0},{0,0,0,0},{1,1,1,1},{0,0,0,0},{0,0,0,0}};
             case '!' -> new int[][]{{1},{1},{1},{0},{1}};
             case ',' -> new int[][]{{0},{0},{0},{1},{1}};

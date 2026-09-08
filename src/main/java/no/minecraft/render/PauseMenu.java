@@ -38,6 +38,7 @@ public class PauseMenu {
 
     // Callback flag when player chooses "Save and Quit to Title"
     private boolean quitToTitleRequested = false;
+    private boolean fromTitle = false;
 
     private static final String VERT_SRC = """
             #version 330 core
@@ -105,11 +106,19 @@ public class PauseMenu {
 
     public void open() {
         currentScreen = Screen.MAIN;
+        fromTitle = false;
+        rebindingActionIndex = -1;
+    }
+
+    public void openOptionsFromTitle() {
+        currentScreen = Screen.OPTIONS;
+        fromTitle = true;
         rebindingActionIndex = -1;
     }
 
     public void close() {
         currentScreen = Screen.NONE;
+        fromTitle = false;
         rebindingActionIndex = -1;
     }
 
@@ -154,6 +163,8 @@ public class PauseMenu {
                 close();
             } else if (currentScreen == Screen.CONTROLS) {
                 currentScreen = Screen.OPTIONS;
+            } else if (currentScreen == Screen.OPTIONS && fromTitle) {
+                close();
             } else {
                 currentScreen = Screen.MAIN;
             }
@@ -309,7 +320,11 @@ public class PauseMenu {
         float doneY = height * 0.85f;
         if (mx >= doneX && mx <= doneX + doneW && my >= doneY && my <= doneY + btnH) {
             SoundManager.getInstance().play("click");
-            currentScreen = Screen.MAIN;
+            if (fromTitle) {
+                close();
+            } else {
+                currentScreen = Screen.MAIN;
+            }
             return true;
         }
 
