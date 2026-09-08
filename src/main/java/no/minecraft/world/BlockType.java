@@ -40,7 +40,23 @@ public enum BlockType {
     ROTTEN_FLESH((byte) 36, "Rått Kjøtt", false, true, 38, 38, 38),
     GUNPOWDER((byte) 37, "Krutt", false, true, 39, 39, 39),
     STRING((byte) 38, "Tråd", false, true, 40, 40, 40),
-    BONE((byte) 39, "Bein", false, true, 41, 41, 41);
+    BONE((byte) 39, "Bein", false, true, 41, 41, 41),
+    OBSIDIAN((byte) 40, "Obsidian", true, false, 52, 52, 52),
+    NETHERRACK((byte) 41, "Netherrack", true, false, 53, 53, 53),
+    NETHER_BRICKS((byte) 42, "Nethermur", true, false, 54, 54, 54),
+    NETHER_PORTAL((byte) 43, "Nether-portal", false, true, 55, 55, 55),
+    END_STONE((byte) 44, "Endstein", true, false, 56, 56, 56),
+    END_PORTAL_FRAME((byte) 45, "End-portalramme", true, false, 57, 3, 58),
+    END_PORTAL_FRAME_FILLED((byte) 46, "End-portalramme (Aktiv)", true, false, 59, 3, 58),
+    END_PORTAL((byte) 47, "End-portal", false, true, 60, 60, 60),
+    DRAGON_EGG((byte) 48, "Drageegg", true, false, 61, 61, 61),
+    BLAZE_ROD((byte) 49, "Flammestav", false, true, 62, 62, 62),
+    BLAZE_POWDER((byte) 50, "Flammepulver", false, true, 63, 63, 63),
+    ENDER_PEARL((byte) 51, "Enderperle", false, true, 64, 64, 64),
+    EYE_OF_ENDER((byte) 52, "Enderøye", false, true, 65, 65, 65),
+    BOW((byte) 53, "Bue", false, true, 66, 66, 66),
+    ARROW((byte) 54, "Pil", false, true, 67, 67, 67),
+    FLINT_AND_STEEL((byte) 55, "Ildstål", false, true, 68, 68, 68);
 
     public enum ToolType {
         NONE, PICKAXE, AXE, SHOVEL, SWORD
@@ -66,9 +82,14 @@ public enum BlockType {
 
     public float getHardness() {
         return switch (this) {
-            case BEDROCK -> -1.0f; // Unbreakable
+            case BEDROCK, END_PORTAL, NETHER_PORTAL -> -1.0f; // Unbreakable
+            case OBSIDIAN -> 5.0f;
+            case END_PORTAL_FRAME, END_PORTAL_FRAME_FILLED -> -1.0f;
+            case END_STONE -> 3.0f;
             case STONE -> 1.5f;
-            case COBBLESTONE, BRICKS, FURNACE -> 2.0f;
+            case COBBLESTONE, BRICKS, FURNACE, NETHER_BRICKS -> 2.0f;
+            case NETHERRACK -> 0.4f;
+            case DRAGON_EGG -> 1.0f;
             case WOOD, PLANKS, CHEST, CRAFTING_TABLE, WOODEN_DOOR, TRAPDOOR, FENCE, FENCE_GATE, WOODEN_STAIRS, WOODEN_SLAB -> 1.0f;
             case DIRT, GRASS -> 0.5f;
             case SAND -> 0.4f;
@@ -79,7 +100,7 @@ public enum BlockType {
 
     public ToolType getEffectiveTool() {
         return switch (this) {
-            case STONE, COBBLESTONE, BRICKS, FURNACE -> ToolType.PICKAXE;
+            case STONE, COBBLESTONE, BRICKS, FURNACE, OBSIDIAN, NETHERRACK, NETHER_BRICKS, END_STONE -> ToolType.PICKAXE;
             case WOOD, PLANKS, CHEST, CRAFTING_TABLE, WOODEN_DOOR, TRAPDOOR, FENCE, FENCE_GATE, WOODEN_STAIRS, WOODEN_SLAB -> ToolType.AXE;
             case DIRT, GRASS, SAND -> ToolType.SHOVEL;
             case LEAVES -> ToolType.SWORD;
@@ -89,7 +110,7 @@ public enum BlockType {
 
     public boolean requiresToolForDrop() {
         return switch (this) {
-            case STONE, COBBLESTONE, BRICKS, FURNACE -> true;
+            case STONE, COBBLESTONE, BRICKS, FURNACE, OBSIDIAN, NETHERRACK, NETHER_BRICKS, END_STONE -> true;
             default -> false;
         };
     }
@@ -176,7 +197,7 @@ public enum BlockType {
 
     public String getDigSound() {
         return switch (this) {
-            case STONE, COBBLESTONE, BRICKS, BEDROCK, FURNACE -> "dig_stone";
+            case STONE, COBBLESTONE, BRICKS, BEDROCK, FURNACE, OBSIDIAN, NETHERRACK, NETHER_BRICKS, END_STONE, DRAGON_EGG, END_PORTAL_FRAME, END_PORTAL_FRAME_FILLED -> "dig_stone";
             case WOOD, PLANKS, CRAFTING_TABLE, CHEST, TRAPDOOR, FENCE, FENCE_GATE, WOODEN_SLAB, WOODEN_STAIRS -> "dig_wood";
             case SAND -> "dig_sand";
             case DIRT, GRASS, LEAVES -> "dig_grass";
@@ -186,7 +207,7 @@ public enum BlockType {
 
     public String getBreakSound() {
         return switch (this) {
-            case STONE, COBBLESTONE, BRICKS, BEDROCK, FURNACE -> "break_stone";
+            case STONE, COBBLESTONE, BRICKS, BEDROCK, FURNACE, OBSIDIAN, NETHERRACK, NETHER_BRICKS, END_STONE, DRAGON_EGG, END_PORTAL_FRAME, END_PORTAL_FRAME_FILLED -> "break_stone";
             case WOOD, PLANKS, CRAFTING_TABLE, CHEST, TRAPDOOR, FENCE, FENCE_GATE, WOODEN_SLAB, WOODEN_STAIRS -> "break_wood";
             case DIRT, GRASS, LEAVES, SAND -> "break_grass";
             default -> "break_stone";

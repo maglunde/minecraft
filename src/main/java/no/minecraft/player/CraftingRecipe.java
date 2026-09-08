@@ -143,6 +143,24 @@ public class CraftingRecipe {
         // 25. Ovn: 8 Brostein -> 1 Ovn
         list.add(new CraftingRecipe("Ovn", Map.of(BlockType.COBBLESTONE, 8), new ItemStack(BlockType.FURNACE, 1)));
 
+        // 26. Flammepulver: 1 Flammestav -> 2 Flammepulver
+        list.add(new CraftingRecipe("Flammepulver", Map.of(BlockType.BLAZE_ROD, 1), new ItemStack(BlockType.BLAZE_POWDER, 2)));
+
+        // 27. Enderøye: 1 Enderperle + 1 Flammepulver -> 1 Enderøye
+        list.add(new CraftingRecipe("Enderøye", Map.of(BlockType.ENDER_PEARL, 1, BlockType.BLAZE_POWDER, 1), new ItemStack(BlockType.EYE_OF_ENDER, 1)));
+
+        // 28. Bue: 3 Pinner + 3 Tråd -> 1 Bue
+        list.add(new CraftingRecipe("Bue", Map.of(BlockType.STICK, 3, BlockType.STRING, 3), new ItemStack(BlockType.BOW, 1)));
+
+        // 29. Pil: 1 Brostein + 1 Pinne + 1 Tråd -> 4 Piler
+        list.add(new CraftingRecipe("Pil", Map.of(BlockType.COBBLESTONE, 1, BlockType.STICK, 1, BlockType.STRING, 1), new ItemStack(BlockType.ARROW, 4)));
+
+        // 30. Obsidian: 4 Stein + 4 Brostein -> 2 Obsidian
+        list.add(new CraftingRecipe("Obsidian", Map.of(BlockType.STONE, 4, BlockType.COBBLESTONE, 4), new ItemStack(BlockType.OBSIDIAN, 2)));
+
+        // 31. Ildstål: 1 Stein + 1 Krutt -> 1 Ildstål
+        list.add(new CraftingRecipe("Ildstål", Map.of(BlockType.STONE, 1, BlockType.GUNPOWDER, 1), new ItemStack(BlockType.FLINT_AND_STEEL, 1)));
+
         return list;
     }
 }

@@ -311,6 +311,181 @@ public class TextureAtlas {
             });
         }
 
+        // 52: Obsidian (Dark purple/black mottled)
+        loadOrPaint(pixelData, 52, "obsidian.png", (x, y, rand) -> {
+            int base = 15 + rand.nextInt(25);
+            int purple = (rand.nextInt(4) == 0) ? 25 : 5;
+            return rgba(base + purple / 2, base, base + purple, 255);
+        });
+
+        // 53: Netherrack (Dark crimson red)
+        loadOrPaint(pixelData, 53, "netherrack.png", (x, y, rand) -> {
+            int r = 110 + rand.nextInt(45);
+            int g = (int)(r * 0.22f) + rand.nextInt(10);
+            int b = (int)(r * 0.22f);
+            return rgba(r, g, b, 255);
+        });
+
+        // 54: Nether Bricks (Dark maroon bricks)
+        loadOrPaint(pixelData, 54, "nether_bricks.png", (x, y, rand) -> {
+            int row = y / 4;
+            int shift = (row % 2 == 0) ? 0 : 4;
+            boolean mortar = (y % 4 == 0) || ((x + shift) % 8 == 0);
+            if (mortar) return rgba(35, 15, 18, 255);
+            int r = 65 + rand.nextInt(25);
+            return rgba(r, (int)(r * 0.25f), (int)(r * 0.35f), 255);
+        });
+
+        // 55: Nether Portal (Translucent purple swirl)
+        loadOrPaint(pixelData, 55, "nether_portal.png", (x, y, rand) -> {
+            int v = 140 + rand.nextInt(90);
+            return rgba((int)(v * 0.75f), (int)(v * 0.25f), v, 200);
+        });
+
+        // 56: End Stone (Pale yellow/cream mottled stone)
+        loadOrPaint(pixelData, 56, "end_stone.png", (x, y, rand) -> {
+            int v = 180 + rand.nextInt(40);
+            return rgba(v, (int)(v * 0.98f), (int)(v * 0.72f), 255);
+        });
+
+        // 57: End Portal Frame Top (Empty)
+        loadOrPaint(pixelData, 57, "end_portal_frame_top.png", (x, y, rand) -> {
+            boolean centerRecess = (x >= 4 && x <= 11 && y >= 4 && y <= 11);
+            if (centerRecess) {
+                int v = 30 + rand.nextInt(20);
+                return rgba(v, (int)(v * 1.3f), (int)(v * 1.1f), 255);
+            }
+            int g = 100 + rand.nextInt(35);
+            return rgba((int)(g * 0.6f), g, (int)(g * 0.65f), 255);
+        });
+
+        // 58: End Portal Frame Side
+        loadOrPaint(pixelData, 58, "end_portal_frame_side.png", (x, y, rand) -> {
+            if (y >= 12) {
+                // Pale stone base
+                int v = 175 + rand.nextInt(30);
+                return rgba(v, (int)(v * 0.96f), (int)(v * 0.70f), 255);
+            }
+            int g = 90 + rand.nextInt(30);
+            return rgba((int)(g * 0.55f), g, (int)(g * 0.60f), 255);
+        });
+
+        // 59: End Portal Frame Top (Filled with Eye)
+        loadOrPaint(pixelData, 59, "end_portal_frame_eye.png", (x, y, rand) -> {
+            boolean eye = (x >= 5 && x <= 10 && y >= 5 && y <= 10);
+            boolean pupil = (x >= 7 && x <= 8 && y >= 6 && y <= 9);
+            if (pupil) return rgba(20, 20, 20, 255);
+            if (eye) {
+                int r = 220 + rand.nextInt(35);
+                return rgba(r, (int)(r * 0.65f), 30, 255);
+            }
+            int g = 100 + rand.nextInt(35);
+            return rgba((int)(g * 0.6f), g, (int)(g * 0.65f), 255);
+        });
+
+        // 60: End Portal (Starry Black Void)
+        loadOrPaint(pixelData, 60, "end_portal.png", (x, y, rand) -> {
+            boolean star = rand.nextInt(12) == 0;
+            if (star) {
+                return (rand.nextBoolean()) ? rgba(180, 255, 240, 255) : rgba(220, 180, 255, 255);
+            }
+            return rgba(12, 12, 22, 255);
+        });
+
+        // 61: Dragon Egg (Obsidian black with purple speckles)
+        loadOrPaint(pixelData, 61, "dragon_egg.png", (x, y, rand) -> {
+            float dx = x - 7.5f;
+            float dy = y - 7.5f;
+            if (dx * dx + dy * dy > 45) return rgba(0, 0, 0, 0);
+            boolean speckle = rand.nextInt(6) == 0;
+            if (speckle) return rgba(160, 40, 220, 255);
+            int v = 15 + rand.nextInt(20);
+            return rgba(v, v, v, 255);
+        });
+
+        // 62: Blaze Rod (Golden fiery rod)
+        loadOrPaint(pixelData, 62, "blaze_rod.png", (x, y, rand) -> {
+            boolean rod = (x + y >= 13 && x + y <= 17) && Math.abs(x - y) <= 2;
+            if (rod) {
+                int r = 240 + rand.nextInt(15);
+                int g = 160 + rand.nextInt(50);
+                return rgba(r, g, 20, 255);
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 63: Blaze Powder (Fiery powder)
+        loadOrPaint(pixelData, 63, "blaze_powder.png", (x, y, rand) -> {
+            float dx = x - 7.5f;
+            float dy = y - 7.5f;
+            if (dx * dx + dy * dy <= 25 && rand.nextInt(4) != 0) {
+                int r = 240 + rand.nextInt(15);
+                int g = 120 + rand.nextInt(60);
+                return rgba(r, g, 15, 255);
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 64: Ender Pearl (Teal/cyan sphere)
+        loadOrPaint(pixelData, 64, "ender_pearl.png", (x, y, rand) -> {
+            float dx = x - 7.5f;
+            float dy = y - 7.5f;
+            float distSq = dx * dx + dy * dy;
+            if (distSq <= 30) {
+                int c = (distSq < 10) ? 140 : 80;
+                return rgba((int)(c * 0.2f), (int)(c * 0.9f), (int)(c * 0.85f), 255);
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 65: Eye of Ender (Green pearl with slit pupil)
+        loadOrPaint(pixelData, 65, "eye_of_ender.png", (x, y, rand) -> {
+            float dx = x - 7.5f;
+            float dy = y - 7.5f;
+            float distSq = dx * dx + dy * dy;
+            if (distSq <= 30) {
+                boolean pupil = (Math.abs(dx) <= 0.8f && Math.abs(dy) <= 3.0f);
+                if (pupil) return rgba(10, 10, 10, 255);
+                if (distSq < 12) {
+                    return rgba(240, 160, 30, 255); // Orange iris
+                }
+                int g = 100 + rand.nextInt(40);
+                return rgba((int)(g * 0.35f), g, (int)(g * 0.45f), 255);
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 66: Bow (Curved wooden bow with string)
+        loadOrPaint(pixelData, 66, "bow.png", (x, y, rand) -> {
+            if (x == 3 && y >= 2 && y <= 13) return rgba(230, 230, 230, 255); // String
+            float distFromArc = Math.abs((float)Math.sqrt((x - 3) * (x - 3) + (y - 7.5f) * (y - 7.5f)) - 5.5f);
+            if (distFromArc < 1.0f && x >= 3) {
+                return rgba(130, 85, 40, 255); // Wood arc
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 67: Arrow (Feather fletch, stick, tip)
+        loadOrPaint(pixelData, 67, "arrow.png", (x, y, rand) -> {
+            if (Math.abs(x - y) <= 0.5f) {
+                if (x < 4) return rgba(220, 220, 220, 255); // Fletching
+                if (x > 12) return rgba(120, 120, 120, 255); // Tip
+                return rgba(140, 95, 45, 255); // Shaft
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 68: Flint and Steel
+        loadOrPaint(pixelData, 68, "flint_and_steel.png", (x, y, rand) -> {
+            if (x >= 7 && x <= 13 && y >= 3 && y <= 12 && (x == 7 || x == 13 || y == 3 || y == 12)) {
+                return rgba(210, 210, 220, 255); // Steel arc
+            }
+            if (x >= 4 && x <= 7 && y >= 8 && y <= 12) {
+                return rgba(35, 35, 40, 255); // Flint
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
         for (int y = 0; y < ATLAS_SIZE; y++) {
             buffer.put(pixelData[y]);
         }

@@ -841,13 +841,13 @@ public class HUD {
         return true;
     }
 
-    public void render(int windowWidth, int windowHeight, float mouseX, float mouseY, Player player, TextureAtlas atlas) {
+    public void render(int windowWidth, int windowHeight, float mouseX, float mouseY, Player player, TextureAtlas atlas, no.minecraft.world.World world) {
         this.mouseX = mouseX;
         this.mouseY = mouseY;
-        render(windowWidth, windowHeight, player, atlas);
+        render(windowWidth, windowHeight, player, atlas, world);
     }
 
-    public void render(int windowWidth, int windowHeight, Player player, TextureAtlas atlas) {
+    public void render(int windowWidth, int windowHeight, Player player, TextureAtlas atlas, no.minecraft.world.World world) {
         glDisable(GL_DEPTH_TEST);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -876,6 +876,16 @@ public class HUD {
 
         // 3. Minecraft HUD (Hotbar + Hearts + Hunger Bar + XP Bar) as shown in reference image 2
         renderMinecraftHUD(geom, tex, overlayGeom, windowWidth, windowHeight, player, atlas);
+
+        // 3b. Ender Dragon Boss Bar in The End
+        if (world != null && world.getCurrentDimension() == no.minecraft.world.Dimension.THE_END) {
+            renderBossBar(geom, overlayGeom, windowWidth, world);
+        }
+
+        // 3c. Victory / Game Over screen if Ender Dragon is defeated
+        if (world != null && world.isGameWon()) {
+            renderVictoryOverlay(geom, overlayGeom, windowWidth, windowHeight);
+        }
 
         // 4. Minecraft Inventory & Crafting GUI
         if (craftingTableOpen) {
@@ -1755,6 +1765,123 @@ public class HUD {
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
+    }
+
+    private void renderBossBar(List<Float> geom, List<Float> overlayGeom, int windowWidth, no.minecraft.world.World world) {
+        no.minecraft.entity.Mob dragon = null;
+        for (no.minecraft.entity.Mob m : world.getMobs()) {
+            if (m.getType() == no.minecraft.entity.MobType.ENDER_DRAGON) {
+                dragon = m;
+                break;
+            }
+        }
+        if (dragon == null) return;
+
+        float barW = 360.0f;
+        float barH = 12.0f;
+        float bx = (windowWidth - barW) / 2.0f;
+        float by = 18.0f;
+
+        // Boss Title text: "Ender Dragon"
+        String title = "ENDER DRAGON";
+        float scale = 1.8f;
+        float textW = title.length() * (6.0f * scale);
+        float tx = (windowWidth - textW) / 2.0f;
+        drawHudText(overlayGeom, title, tx, by - 12.0f, scale, 0.95f, 0.4f, 0.95f);
+
+        // Background dark bar
+        addRect(geom, bx - 2, by - 2, barW + 4, barH + 4, 0, 0, 0, 0, 0.08f, 0.08f, 0.08f, 0.85f);
+        addRect(geom, bx, by, barW, barH, 0, 0, 0, 0, 0.22f, 0.08f, 0.25f, 1.0f);
+
+        // Purple Boss Health Fill
+        float hpRatio = Math.clamp((float) dragon.getHealth() / dragon.getType().getMaxHealth(), 0.0f, 1.0f);
+        float fillW = barW * hpRatio;
+        if (fillW > 0) {
+            addRect(geom, bx, by, fillW, barH, 0, 0, 0, 0, 0.82f, 0.18f, 0.88f, 1.0f);
+            addRect(geom, bx, by, fillW, 3.0f, 0, 0, 0, 0, 0.95f, 0.45f, 1.0f, 1.0f);
+        }
+    }
+
+    private void renderVictoryOverlay(List<Float> geom, List<Float> overlayGeom, int windowWidth, int windowHeight) {
+        // Dark translucent overlay
+        addRect(geom, 0, 0, windowWidth, windowHeight, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.75f);
+
+        // Game Over / Victory banners
+        String title = "SPILLET ER VUNNET";
+        String titleSub = "FREE THE END!";
+        float scale = 3.6f;
+        float textW = title.length() * (6.0f * scale);
+        float tx = (windowWidth - textW) / 2.0f;
+        float ty = windowHeight * 0.30f;
+
+        drawHudText(overlayGeom, title, tx, ty, scale, 1.0f, 0.85f, 0.15f);
+
+        float scale2 = 2.2f;
+        float textW2 = titleSub.length() * (6.0f * scale2);
+        drawHudText(overlayGeom, titleSub, (windowWidth - textW2) / 2.0f, ty + 42.0f, scale2, 0.85f, 0.45f, 0.95f);
+
+        String desc1 = "DRAGEN ER BESEIRET";
+        float scale3 = 1.8f;
+        drawHudText(overlayGeom, desc1, (windowWidth - desc1.length() * (6.0f * scale3)) / 2.0f, ty + 85.0f, scale3, 0.9f, 0.9f, 0.9f);
+
+        String hint = "TRYKK ESC FOR MENY";
+        drawHudText(overlayGeom, hint, (windowWidth - hint.length() * (6.0f * scale3)) / 2.0f, ty + 125.0f, scale3, 0.7f, 0.7f, 0.7f);
+    }
+
+    private void drawHudText(List<Float> g, String text, float startX, float startY, float s, float r, float gr, float b) {
+        for (int i = 0; i < text.length(); i++) {
+            float px = startX + i * (6.0f * s);
+            char c = Character.toUpperCase(text.charAt(i));
+            drawHudChar(g, c, px + s * 0.5f, startY + s * 0.5f, s, 0.12f, 0.12f, 0.12f);
+            drawHudChar(g, c, px, startY, s, r, gr, b);
+        }
+    }
+
+    private void drawHudChar(List<Float> g, char ch, float x, float y, float s, float r, float gr, float b) {
+        int[][] glyph = getGlyph(ch);
+        if (glyph == null) return;
+        for (int row = 0; row < glyph.length; row++) {
+            for (int col = 0; col < glyph[row].length; col++) {
+                if (glyph[row][col] == 1) {
+                    addRect(g, x + col * s, y + row * s, s, s, 0, 0, 0, 0, r, gr, b, 1.0f);
+                }
+            }
+        }
+    }
+
+    private int[][] getGlyph(char c) {
+        return switch (c) {
+            case 'A' -> new int[][]{{0,1,1,0},{1,0,0,1},{1,1,1,1},{1,0,0,1},{1,0,0,1}};
+            case 'B' -> new int[][]{{1,1,1,0},{1,0,0,1},{1,1,1,0},{1,0,0,1},{1,1,1,0}};
+            case 'C' -> new int[][]{{0,1,1,1},{1,0,0,0},{1,0,0,0},{1,0,0,0},{0,1,1,1}};
+            case 'D' -> new int[][]{{1,1,1,0},{1,0,0,1},{1,0,0,1},{1,0,0,1},{1,1,1,0}};
+            case 'E' -> new int[][]{{1,1,1,1},{1,0,0,0},{1,1,1,0},{1,0,0,0},{1,1,1,1}};
+            case 'F' -> new int[][]{{1,1,1,1},{1,0,0,0},{1,1,1,0},{1,0,0,0},{1,0,0,0}};
+            case 'G' -> new int[][]{{0,1,1,1},{1,0,0,0},{1,0,1,1},{1,0,0,1},{0,1,1,1}};
+            case 'H' -> new int[][]{{1,0,0,1},{1,0,0,1},{1,1,1,1},{1,0,0,1},{1,0,0,1}};
+            case 'I' -> new int[][]{{1,1,1},{0,1,0},{0,1,0},{0,1,0},{1,1,1}};
+            case 'J' -> new int[][]{{0,0,1,1},{0,0,0,1},{0,0,0,1},{1,0,0,1},{0,1,1,0}};
+            case 'K' -> new int[][]{{1,0,0,1},{1,0,1,0},{1,1,0,0},{1,0,1,0},{1,0,0,1}};
+            case 'L' -> new int[][]{{1,0,0,0},{1,0,0,0},{1,0,0,0},{1,0,0,0},{1,1,1,1}};
+            case 'M' -> new int[][]{{1,0,0,0,1},{1,1,0,1,1},{1,0,1,0,1},{1,0,0,0,1},{1,0,0,0,1}};
+            case 'N' -> new int[][]{{1,0,0,1},{1,1,0,1},{1,0,1,1},{1,0,0,1},{1,0,0,1}};
+            case 'O' -> new int[][]{{0,1,1,0},{1,0,0,1},{1,0,0,1},{1,0,0,1},{0,1,1,0}};
+            case 'P' -> new int[][]{{1,1,1,0},{1,0,0,1},{1,1,1,0},{1,0,0,0},{1,0,0,0}};
+            case 'Q' -> new int[][]{{0,1,1,0},{1,0,0,1},{1,0,0,1},{1,0,1,0},{0,1,0,1}};
+            case 'R' -> new int[][]{{1,1,1,0},{1,0,0,1},{1,1,1,0},{1,0,1,0},{1,0,0,1}};
+            case 'S' -> new int[][]{{0,1,1,1},{1,0,0,0},{0,1,1,0},{0,0,0,1},{1,1,1,0}};
+            case 'T' -> new int[][]{{1,1,1,1,1},{0,0,1,0,0},{0,0,1,0,0},{0,0,1,0,0},{0,0,1,0,0}};
+            case 'U' -> new int[][]{{1,0,0,1},{1,0,0,1},{1,0,0,1},{1,0,0,1},{0,1,1,0}};
+            case 'V' -> new int[][]{{1,0,0,1},{1,0,0,1},{1,0,0,1},{0,1,1,0},{0,0,0,0}};
+            case 'W' -> new int[][]{{1,0,0,0,1},{1,0,0,0,1},{1,0,1,0,1},{1,1,0,1,1},{1,0,0,0,1}};
+            case 'X' -> new int[][]{{1,0,0,1},{1,0,0,1},{0,1,1,0},{1,0,0,1},{1,0,0,1}};
+            case 'Y' -> new int[][]{{1,0,0,1},{1,0,0,1},{0,1,1,0},{0,0,1,0},{0,0,1,0}};
+            case 'Z' -> new int[][]{{1,1,1,1},{0,0,0,1},{0,1,1,0},{1,0,0,0},{1,1,1,1}};
+            case '!' -> new int[][]{{1},{1},{1},{0},{1}};
+            case '?' -> new int[][]{{1,1,1},{0,0,1},{0,1,0},{0,0,0},{0,1,0}};
+            case ' ' -> new int[][]{{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}};
+            default -> null;
+        };
     }
 
     public void cleanup() {

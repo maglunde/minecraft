@@ -306,7 +306,7 @@ public class Main {
             } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
                 if (action == GLFW_PRESS) {
                     isRightMouseDown = true;
-                    if (tryPlaceBlock()) {
+                    if (handleRightClickAction()) {
                         rightClickTimer = 0.22f;
                     } else {
                         rightClickTimer = 0.0f;
@@ -420,6 +420,51 @@ public class Main {
         });
     }
 
+    private boolean handleRightClickAction() {
+        // 1. Bow shooting (fires Arrow entity if player has arrows or is in Creative)
+        BlockType held = player.getSelectedBlock();
+        if (held == BlockType.BOW) {
+            boolean hasArrow = player.getGameMode() == GameMode.CREATIVE || player.getInventory().getItemCount(BlockType.ARROW) > 0;
+            if (hasArrow) {
+                if (player.getGameMode() != GameMode.CREATIVE) {
+                    player.getInventory().removeItem(BlockType.ARROW, 1);
+                    player.getInventory().getSlot(player.getSelectedSlot()).damageTool(1);
+                }
+                Vector3f eye = player.getCamera().getPosition();
+                Vector3f fwd = player.getCamera().getForward();
+                world.spawnArrow(eye.x, eye.y, eye.z, fwd.x * 24.0f, fwd.y * 24.0f, fwd.z * 24.0f);
+                no.minecraft.sound.SoundManager.getInstance().play("bow_shoot", 1.0f);
+                return true;
+            }
+        }
+
+        // 2. Eye of Ender throwing towards Stronghold (48, 14, 48)
+        if (held == BlockType.EYE_OF_ENDER) {
+            Raycast.HitResult target = Raycast.raycast(world, player.getCamera().getPosition(), player.getCamera().getForward(), 5.0f);
+            boolean aimingAtFrame = target != null && world.getBlock(target.hitX, target.hitY, target.hitZ) == BlockType.END_PORTAL_FRAME;
+            if (!aimingAtFrame) {
+                // Throw towards Stronghold
+                float dx = World.STRONGHOLD_X - player.getPosition().x;
+                float dz = World.STRONGHOLD_Z - player.getPosition().z;
+                float len = (float) Math.sqrt(dx * dx + dz * dz);
+                if (len > 0.001f) {
+                    dx /= len;
+                    dz /= len;
+                }
+                Vector3f eye = player.getCamera().getPosition();
+                world.spawnArrow(eye.x, eye.y, eye.z, dx * 16.0f, 6.0f, dz * 16.0f);
+                no.minecraft.sound.SoundManager.getInstance().play("pop", 1.0f);
+                no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.EYE_SPY);
+                if (player.getGameMode() != GameMode.CREATIVE) {
+                    player.useSelectedBlock();
+                }
+                return true;
+            }
+        }
+
+        return tryPlaceBlock();
+    }
+
     private boolean tryPlaceBlock() {
         Raycast.HitResult hit = Raycast.raycast(
                 world,
@@ -436,6 +481,27 @@ public class Main {
                 isLeftMouseDown = false;
                 isRightMouseDown = false;
                 return true;
+            }
+
+            // Inserting Eye of Ender into End Portal Frame
+            BlockType held = player.getSelectedBlock();
+            if (clickedBlock == BlockType.END_PORTAL_FRAME && held == BlockType.EYE_OF_ENDER) {
+                world.setBlock(hit.hitX, hit.hitY, hit.hitZ, BlockType.END_PORTAL_FRAME_FILLED);
+                no.minecraft.sound.SoundManager.getInstance().play("stone_dig", 1.0f);
+                if (player.getGameMode() != GameMode.CREATIVE) {
+                    player.useSelectedBlock();
+                }
+                checkAndActivateEndPortal();
+                return true;
+            }
+
+            // Flint and Steel igniting Nether Portal
+            if (held == BlockType.FLINT_AND_STEEL) {
+                if (clickedBlock == BlockType.OBSIDIAN) {
+                    igniteNetherPortal(hit.hitX, hit.hitY, hit.hitZ);
+                    no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.0f);
+                    return true;
+                }
             }
 
             // Place block only if player has it in inventory
@@ -455,6 +521,51 @@ public class Main {
             }
         }
         return false;
+    }
+
+    private void igniteNetherPortal(int x, int y, int z) {
+        // Check adjacent air blocks for obsidian frame
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = 0; dy <= 2; dy++) {
+                int px = x + dx;
+                int py = y + dy;
+                if (world.getBlock(px, py, z) == BlockType.AIR) {
+                    world.setBlock(px, py, z, BlockType.NETHER_PORTAL);
+                }
+            }
+        }
+    }
+
+    private void checkAndActivateEndPortal() {
+        // Stronghold center portal space is at local x: 5..7, z: 5..7 in chunk (3, 3)
+        // World coordinates: cx*16 + 5 = 48 + 5 = 53, py = 12
+        int py = 12;
+        boolean allFilled = true;
+        // Check frames around (53..55, 53..55)
+        for (int x = 53; x <= 55; x++) {
+            if (world.getBlock(x, py, 52) != BlockType.END_PORTAL_FRAME_FILLED ||
+                world.getBlock(x, py, 56) != BlockType.END_PORTAL_FRAME_FILLED) {
+                allFilled = false;
+                break;
+            }
+        }
+        for (int z = 53; z <= 55; z++) {
+            if (world.getBlock(52, py, z) != BlockType.END_PORTAL_FRAME_FILLED ||
+                world.getBlock(56, py, z) != BlockType.END_PORTAL_FRAME_FILLED) {
+                allFilled = false;
+                break;
+            }
+        }
+
+        if (allFilled) {
+            // Fill 3x3 horizontal portal
+            for (int x = 53; x <= 55; x++) {
+                for (int z = 53; z <= 55; z++) {
+                    world.setBlock(x, py, z, BlockType.END_PORTAL);
+                }
+            }
+            no.minecraft.sound.SoundManager.getInstance().play("explode", 0.8f);
+        }
     }
 
     private void setCursorLocked(boolean locked) {
@@ -512,6 +623,28 @@ public class Main {
             if (!isPaused) {
                 player.update(dt, fwd, bwd, left, right, jump, sneak, sprint);
                 world.update(dt, player);
+
+                // Dimension Portal stepping check
+                int px = (int) Math.floor(player.getPosition().x);
+                int py = (int) Math.floor(player.getPosition().y + 0.1f);
+                int pz = (int) Math.floor(player.getPosition().z);
+
+                BlockType currentBlock = world.getBlock(px, py, pz);
+                BlockType belowBlock = world.getBlock(px, (int) Math.floor(player.getPosition().y - 0.2f), pz);
+
+                if (currentBlock == BlockType.NETHER_PORTAL || belowBlock == BlockType.NETHER_PORTAL) {
+                    if (world.getCurrentDimension() == no.minecraft.world.Dimension.OVERWORLD) {
+                        world.teleportToDimension(no.minecraft.world.Dimension.NETHER, player);
+                    } else if (world.getCurrentDimension() == no.minecraft.world.Dimension.NETHER) {
+                        world.teleportToDimension(no.minecraft.world.Dimension.OVERWORLD, player);
+                    }
+                } else if (currentBlock == BlockType.END_PORTAL || belowBlock == BlockType.END_PORTAL) {
+                    if (world.getCurrentDimension() == no.minecraft.world.Dimension.OVERWORLD) {
+                        world.teleportToDimension(no.minecraft.world.Dimension.THE_END, player);
+                    } else if (world.getCurrentDimension() == no.minecraft.world.Dimension.THE_END) {
+                        world.teleportToDimension(no.minecraft.world.Dimension.OVERWORLD, player);
+                    }
+                }
             }
 
             // Continuous Mining Logic (Left Click hold down)
@@ -646,17 +779,23 @@ public class Main {
             Vector3f nightSky = new Vector3f(0.04f, 0.05f, 0.10f);  // Deep starry night sky
             Vector3f sunsetColor = new Vector3f(0.85f, 0.42f, 0.22f); // Golden sunset orange
 
-            // Blend day and night sky
-            skyColor.set(
-                    nightSky.x + (daySky.x - nightSky.x) * sunLight,
-                    nightSky.y + (daySky.y - nightSky.y) * sunLight,
-                    nightSky.z + (daySky.z - nightSky.z) * sunLight
-            );
+            if (world.getCurrentDimension() == no.minecraft.world.Dimension.NETHER) {
+                skyColor.set(world.getCurrentDimension().getSkyR(), world.getCurrentDimension().getSkyG(), world.getCurrentDimension().getSkyB());
+            } else if (world.getCurrentDimension() == no.minecraft.world.Dimension.THE_END) {
+                skyColor.set(world.getCurrentDimension().getSkyR(), world.getCurrentDimension().getSkyG(), world.getCurrentDimension().getSkyB());
+            } else {
+                // Blend day and night sky
+                skyColor.set(
+                        nightSky.x + (daySky.x - nightSky.x) * sunLight,
+                        nightSky.y + (daySky.y - nightSky.y) * sunLight,
+                        nightSky.z + (daySky.z - nightSky.z) * sunLight
+                );
 
-            // Add warm sunset / sunrise tint when sun is on the horizon
-            float sunsetFactor = 1.0f - Math.abs(sunLight - 0.5f) * 2.0f;
-            if (sunsetFactor > 0.0f) {
-                skyColor.lerp(sunsetColor, sunsetFactor * 0.45f);
+                // Add warm sunset / sunrise tint when sun is on the horizon
+                float sunsetFactor = 1.0f - Math.abs(sunLight - 0.5f) * 2.0f;
+                if (sunsetFactor > 0.0f) {
+                    skyColor.lerp(sunsetColor, sunsetFactor * 0.45f);
+                }
             }
 
             // Clear buffers
@@ -672,12 +811,18 @@ public class Main {
             );
             Matrix4f view = player.getCamera().getViewMatrix();
 
-            // 1. Render Moving Celestial Bodies (Sun & Moon in Sky)
-            skyRenderer.render(projection, view, player.getPosition(), world.getDayFraction());
+            // 1. Render Moving Celestial Bodies (Sun & Moon in Sky) in Overworld
+            if (world.getCurrentDimension() == no.minecraft.world.Dimension.OVERWORLD) {
+                skyRenderer.render(projection, view, player.getPosition(), world.getDayFraction());
+            }
 
             // 2. Render World Chunks
             float fogEnd = gs.getRenderDistance() * 16.0f;
             float fogStart = fogEnd * 0.65f;
+            if (world.getCurrentDimension() != no.minecraft.world.Dimension.OVERWORLD) {
+                fogStart = world.getCurrentDimension().getFogStart();
+                fogEnd = world.getCurrentDimension().getFogEnd();
+            }
             float brightness = gs.getBrightness();
             float dynamicSunLight = Math.min(1.0f, sunLight * (1.0f + brightness * 0.4f) + brightness * 0.15f);
 
@@ -698,7 +843,7 @@ public class Main {
             atlas.unbind();
             worldShader.unbind();
 
-            // 4. Render 3D Mobs (Zombie, Creeper, Spider, Skeleton) & Arrows
+            // 4. Render 3D Mobs (Zombie, Creeper, Spider, Skeleton, Blaze, Enderman, Ender Dragon, End Crystal) & Arrows
             mobRenderer.render(world.getMobs(), world.getArrows(), projection, view, sunLight);
 
             // 5. Render Mining crack animation if actively mining
@@ -719,7 +864,7 @@ public class Main {
                     pauseMenu.render(width, height, (float) lastMouseX, (float) lastMouseY, atlas);
                 }
             } else {
-                hud.render(width, height, (float) lastMouseX, (float) lastMouseY, player, atlas);
+                hud.render(width, height, (float) lastMouseX, (float) lastMouseY, player, atlas, world);
                 if (pauseMenu.isOpen()) {
                     pauseMenu.render(width, height, (float) lastMouseX, (float) lastMouseY, atlas);
                 }

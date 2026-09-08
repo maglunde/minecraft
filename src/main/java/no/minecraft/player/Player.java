@@ -414,4 +414,11 @@ public class Player {
         this.inventory.clear();
         this.selectedSlot = 0;
     }
+
+    public void teleportTo(float x, float y, float z) {
+        this.position.set(x, y, z);
+        this.velocity.set(0, 0, 0);
+        this.camera.getPosition().set(x, y + EYE_HEIGHT, z);
+        this.camera.updateVectors();
+    }
 }

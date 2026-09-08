@@ -17,7 +17,12 @@ public class AdvancementManager {
         STONE_AGE("Stone Age", "Steinlalder", "Mine stone with your new pickaxe", BlockType.COBBLESTONE),
         TIME_TO_STRIKE("Time to Strike!", "Tid for strid!", "Craft a sword to defend yourself", BlockType.WOODEN_SWORD),
         HOT_TOPIC("Hot Topic", "Et hett tema", "Construct a furnace out of cobblestone", BlockType.FURNACE),
-        MONSTER_HUNTER("Monster Hunter", "Monsterjeger", "Attack and destroy a dangerous monster", BlockType.BONE);
+        MONSTER_HUNTER("Monster Hunter", "Monsterjeger", "Attack and destroy a dangerous monster", BlockType.BONE),
+        WE_NEED_TO_GO_DEEPER("We Need to Go Deeper", "Vi ma dypere", "Build and enter a Nether Portal", BlockType.NETHERRACK),
+        INTO_FIRE("Into Fire", "Inn i ilden", "Relieve a Blaze of its rod", BlockType.BLAZE_ROD),
+        EYE_SPY("Eye Spy", "Oye for en portal", "Follow an Eye of Ender to a Stronghold", BlockType.EYE_OF_ENDER),
+        THE_END("The End?", "Slutten?", "Enter the End Portal", BlockType.END_PORTAL_FRAME_FILLED),
+        FREE_THE_END("Free the End", "Frigjor Enden", "Defeat the Ender Dragon", BlockType.DRAGON_EGG);
 
         private final String englishTitle;
         private final String norwegianTitle;

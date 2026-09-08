@@ -106,6 +106,46 @@ public class Mob {
                     no.minecraft.sound.SoundManager.getInstance().play("spider_say", 0.85f);
                     attackCooldown = 1.0f;
                 }
+            } else if (type == MobType.BLAZE) {
+                // Blaze hovers and shoots fireballs/arrows at player
+                if (distToPlayer > 8.0f) {
+                    moveX = dx * type.getMoveSpeed();
+                    moveZ = dz * type.getMoveSpeed();
+                } else if (distToPlayer < 4.0f) {
+                    moveX = -dx * type.getMoveSpeed();
+                    moveZ = -dz * type.getMoveSpeed();
+                }
+                // Hover gently around player height + 2
+                float targetY = player.getPosition().y + 1.5f;
+                velocity.y += (targetY - position.y) * 2.0f * dt;
+                velocity.y *= 0.85f;
+
+                shootCooldown -= dt;
+                if (shootCooldown <= 0 && distToPlayer < 20.0f) {
+                    shootCooldown = 2.5f + random.nextFloat();
+                    no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.2f);
+                    float vx = dx * 16.0f;
+                    float vy = (player.getPosition().y - position.y) * 2.0f + 1.5f;
+                    float vz = dz * 16.0f;
+                    world.spawnArrow(position.x, position.y + 0.8f, position.z, vx, vy, vz);
+                }
+            } else if (type == MobType.ENDERMAN) {
+                moveX = dx * type.getMoveSpeed();
+                moveZ = dz * type.getMoveSpeed();
+                if (distToPlayer < 1.6f && attackCooldown <= 0) {
+                    player.damage(type.getAttackDamage());
+                    attackCooldown = 0.8f;
+                }
+                // Random teleportation when hit or close
+                if (random.nextFloat() < 0.005f) {
+                    teleportRandom(world);
+                }
+            } else if (type == MobType.ENDER_DRAGON) {
+                updateDragonAI(dt, world, player);
+                return; // Dragon handles its own movement/flight entirely
+            } else if (type == MobType.END_CRYSTAL) {
+                // Crystal stays stationary, pulses/heals nearby dragon
+                return;
             } else { // ZOMBIE
                 moveX = dx * type.getMoveSpeed();
                 moveZ = dz * type.getMoveSpeed();
@@ -118,8 +158,10 @@ public class Mob {
         }
 
         // Apply movement and gravity
-        if (!onGround) {
-            velocity.y -= 26.0f * dt;
+        if (type != MobType.BLAZE && type != MobType.ENDER_DRAGON && type != MobType.END_CRYSTAL) {
+            if (!onGround) {
+                velocity.y -= 26.0f * dt;
+            }
         }
 
         velocity.x = moveX;
@@ -140,6 +182,93 @@ public class Mob {
 
         if (position.y < -10.0f) {
             dead = true;
+        }
+    }
+
+    private void teleportRandom(World world) {
+        float tx = position.x + (random.nextFloat() - 0.5f) * 16.0f;
+        float tz = position.z + (random.nextFloat() - 0.5f) * 16.0f;
+        int bx = (int) Math.floor(tx);
+        int bz = (int) Math.floor(tz);
+        int by = world.getSpawnHeight(bx, bz);
+        if (by > 0 && by < 60) {
+            position.set(tx, by, tz);
+            no.minecraft.sound.SoundManager.getInstance().play("pop", 0.7f);
+        }
+    }
+
+    private float dragonAngle = 0.0f;
+    private boolean dragonSwooping = false;
+    private float swoopTimer = 0.0f;
+
+    private void updateDragonAI(float dt, World world, Player player) {
+        // Find nearest active End Crystal to heal from
+        Mob nearestCrystal = null;
+        float minCDist = 40.0f;
+        for (Mob m : world.getMobs()) {
+            if (m.getType() == MobType.END_CRYSTAL && !m.isDead()) {
+                float d = m.getPosition().distance(position);
+                if (d < minCDist) {
+                    minCDist = d;
+                    nearestCrystal = m;
+                }
+            }
+        }
+
+        if (nearestCrystal != null && health < type.getMaxHealth()) {
+            health = Math.min(type.getMaxHealth(), health + (int)(6 * dt) + 1);
+        }
+
+        // Dragon flight: circles island or swoops down at player
+        swoopTimer += dt;
+        if (swoopTimer > 15.0f && !dragonSwooping) {
+            dragonSwooping = true;
+            swoopTimer = 0.0f;
+        }
+
+        if (dragonSwooping) {
+            // Swoop towards player
+            Vector3f ppos = player.getPosition();
+            float dx = ppos.x - position.x;
+            float dy = (ppos.y + 1.0f) - position.y;
+            float dz = ppos.z - position.z;
+            float dist = (float) Math.sqrt(dx * dx + dz * dz);
+            yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
+
+            float speed = 12.0f;
+            position.x += (dx / Math.max(1.0f, dist)) * speed * dt;
+            position.y += Math.signum(dy) * 4.0f * dt;
+            position.z += (dz / Math.max(1.0f, dist)) * speed * dt;
+
+            // Attack player on contact
+            if (position.distance(ppos) < 3.8f) {
+                player.damage(type.getAttackDamage());
+                // Launch player up & back
+                player.getVelocity().add(dx * 2.0f, 10.0f, dz * 2.0f);
+                dragonSwooping = false;
+                swoopTimer = 0.0f;
+            }
+
+            if (dist < 2.0f || swoopTimer > 8.0f) {
+                dragonSwooping = false;
+                swoopTimer = 0.0f;
+            }
+        } else {
+            // Circle center of End island (0, 35, 0)
+            dragonAngle += dt * 0.45f;
+            float circleRadius = 26.0f;
+            float targetX = (float) Math.cos(dragonAngle) * circleRadius;
+            float targetZ = (float) Math.sin(dragonAngle) * circleRadius;
+            float targetY = 36.0f + (float) Math.sin(dragonAngle * 2.0f) * 4.0f;
+
+            float dx = targetX - position.x;
+            float dy = targetY - position.y;
+            float dz = targetZ - position.z;
+
+            yaw = (float) Math.toDegrees(Math.atan2(-Math.cos(dragonAngle), Math.sin(dragonAngle)));
+            position.x += dx * 1.5f * dt;
+            position.y += dy * 1.5f * dt;
+            position.z += dz * 1.5f * dt;
         }
     }
 
@@ -193,8 +322,20 @@ public class Mob {
         if (health <= 0) {
             dead = true;
             no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.MONSTER_HUNTER);
+            if (type == MobType.BLAZE) {
+                no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.INTO_FIRE);
+            } else if (type == MobType.ENDER_DRAGON) {
+                no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.FREE_THE_END);
+                no.minecraft.sound.SoundManager.getInstance().play("explode", 1.0f);
+            } else if (type == MobType.END_CRYSTAL) {
+                no.minecraft.sound.SoundManager.getInstance().play("explode", 0.9f);
+                // Explode End Crystal on hit
+                world.spawnItemDrop(position.x, position.y + 0.5f, position.z, BlockType.AIR, 0);
+                return;
+            }
+
             // Drop mob loot
-            int count = 1 + random.nextInt(2);
+            int count = (type == MobType.ENDER_DRAGON) ? 1 : (1 + random.nextInt(2));
             world.spawnItemDrop(position.x, position.y + 0.5f, position.z, type.getDropItem(), count);
         }
     }
@@ -285,4 +426,6 @@ public class Mob {
     public float getHurtTimer() { return hurtTimer; }
     public boolean isIgnited() { return ignited; }
     public float getFuseRatio() { return Math.min(1.0f, fuseTime / FUSE_MAX); }
+    public int getHealth() { return health; }
+    public void setHealth(int health) { this.health = health; }
 }

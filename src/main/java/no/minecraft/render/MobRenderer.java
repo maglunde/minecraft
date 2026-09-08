@@ -163,6 +163,97 @@ public class MobRenderer {
                     // Right leg
                     addBox(verts, x + 0.30f, y + 0.15f, lz, 0.45f, 0.08f, 0.08f, 0.12f, 0.10f, 0.10f);
                 }
+            } else if (mt == MobType.BLAZE) {
+                float br = hurt ? 1.0f : 1.0f;
+                float bg = hurt ? 0.2f : 0.65f;
+                float bb = hurt ? 0.2f : 0.08f;
+
+                // Blaze Head
+                addBox(verts, x - 0.20f, y + 1.25f, z - 0.20f, 0.40f, 0.40f, 0.40f, br, bg, bb);
+                // Eyes
+                addBox(verts, x - 0.15f, y + 1.42f, z - 0.22f, 0.08f, 0.06f, 0.04f, 1.0f, 1.0f, 0.9f);
+                addBox(verts, x + 0.07f, y + 1.42f, z - 0.22f, 0.08f, 0.06f, 0.04f, 1.0f, 1.0f, 0.9f);
+
+                // Orbiting Blaze Rods (upper, middle, lower layers)
+                float rodW = 0.08f, rodH = 0.38f;
+                // Layer 1 (4 rods)
+                for (int rIdx = 0; rIdx < 4; rIdx++) {
+                    double angle = (System.currentTimeMillis() * 0.003) + (rIdx * Math.PI / 2.0);
+                    float rx = x + (float) Math.cos(angle) * 0.38f;
+                    float rz = z + (float) Math.sin(angle) * 0.38f;
+                    addBox(verts, rx - rodW / 2, y + 0.8f, rz - rodW / 2, rodW, rodH, rodW, 1.0f, 0.75f, 0.12f);
+                }
+                // Layer 2 (4 rods)
+                for (int rIdx = 0; rIdx < 4; rIdx++) {
+                    double angle = -(System.currentTimeMillis() * 0.003) + (rIdx * Math.PI / 2.0) + (Math.PI / 4.0);
+                    float rx = x + (float) Math.cos(angle) * 0.46f;
+                    float rz = z + (float) Math.sin(angle) * 0.46f;
+                    addBox(verts, rx - rodW / 2, y + 0.4f, rz - rodW / 2, rodW, rodH, rodW, 0.95f, 0.55f, 0.05f);
+                }
+                // Layer 3 (4 rods)
+                for (int rIdx = 0; rIdx < 4; rIdx++) {
+                    double angle = (System.currentTimeMillis() * 0.0035) + (rIdx * Math.PI / 2.0);
+                    float rx = x + (float) Math.cos(angle) * 0.30f;
+                    float rz = z + (float) Math.sin(angle) * 0.30f;
+                    addBox(verts, rx - rodW / 2, y + 0.05f, rz - rodW / 2, rodW, rodH, rodW, 1.0f, 0.45f, 0.02f);
+                }
+
+            } else if (mt == MobType.ENDERMAN) {
+                float er = hurt ? 1.0f : 0.08f;
+                float eg = hurt ? 0.2f : 0.08f;
+                float eb = hurt ? 0.2f : 0.08f;
+
+                // Long slender legs
+                addBox(verts, x - 0.12f, y, z - 0.05f, 0.08f, 1.5f, 0.08f, er, eg, eb);
+                addBox(verts, x + 0.04f, y, z - 0.05f, 0.08f, 1.5f, 0.08f, er, eg, eb);
+                // Torso
+                addBox(verts, x - 0.18f, y + 1.5f, z - 0.08f, 0.36f, 0.75f, 0.16f, er, eg, eb);
+                // Long slender arms
+                addBox(verts, x - 0.28f, y + 0.6f, z - 0.05f, 0.08f, 1.65f, 0.08f, er, eg, eb);
+                addBox(verts, x + 0.20f, y + 0.6f, z - 0.05f, 0.08f, 1.65f, 0.08f, er, eg, eb);
+                // Head
+                addBox(verts, x - 0.20f, y + 2.25f, z - 0.20f, 0.40f, 0.40f, 0.40f, er, eg, eb);
+                // Glowing Purple eyes
+                addBox(verts, x - 0.15f, y + 2.42f, z - 0.21f, 0.09f, 0.05f, 0.03f, 0.85f, 0.15f, 0.95f);
+                addBox(verts, x + 0.06f, y + 2.42f, z - 0.21f, 0.09f, 0.05f, 0.03f, 0.85f, 0.15f, 0.95f);
+
+            } else if (mt == MobType.END_CRYSTAL) {
+                // Glass outer shell
+                float time = (System.currentTimeMillis() % 10000) * 0.001f;
+                float pulse = 0.85f + 0.15f * (float) Math.sin(time * 5.0f);
+                addBox(verts, x - 0.35f, y + 0.2f, z - 0.35f, 0.7f, 0.7f, 0.7f, 0.8f * pulse, 0.3f, 0.9f * pulse);
+                // Inner core
+                addBox(verts, x - 0.20f, y + 0.35f, z - 0.20f, 0.4f, 0.4f, 0.4f, 1.0f, 0.85f, 1.0f);
+                // Base stand (Obsidian/Bedrock pedestal)
+                addBox(verts, x - 0.45f, y, z - 0.45f, 0.9f, 0.2f, 0.9f, 0.15f, 0.15f, 0.18f);
+
+            } else if (mt == MobType.ENDER_DRAGON) {
+                float dr = hurt ? 1.0f : 0.12f;
+                float dg = hurt ? 0.2f : 0.12f;
+                float db = hurt ? 0.2f : 0.12f;
+
+                // Dragon Body
+                addBox(verts, x - 0.65f, y + 0.5f, z - 1.2f, 1.3f, 0.9f, 2.4f, dr, dg, db);
+                // Dragon Neck & Head
+                addBox(verts, x - 0.35f, y + 0.8f, z + 1.2f, 0.7f, 0.7f, 0.9f, dr * 1.2f, dg * 1.2f, db * 1.2f);
+                addBox(verts, x - 0.30f, y + 1.0f, z + 2.0f, 0.6f, 0.55f, 0.7f, dr, dg, db);
+                // Purple Dragon Eyes
+                addBox(verts, x - 0.32f, y + 1.3f, z + 2.2f, 0.08f, 0.08f, 0.15f, 0.95f, 0.2f, 0.95f);
+                addBox(verts, x + 0.24f, y + 1.3f, z + 2.2f, 0.08f, 0.08f, 0.15f, 0.95f, 0.2f, 0.95f);
+                // Horns
+                addBox(verts, x - 0.25f, y + 1.55f, z + 1.9f, 0.08f, 0.35f, 0.08f, 0.35f, 0.35f, 0.4f);
+                addBox(verts, x + 0.17f, y + 1.55f, z + 1.9f, 0.08f, 0.35f, 0.08f, 0.35f, 0.35f, 0.4f);
+                // Dragon Tail (segments)
+                addBox(verts, x - 0.25f, y + 0.7f, z - 2.0f, 0.5f, 0.5f, 0.9f, dr, dg, db);
+                addBox(verts, x - 0.18f, y + 0.75f, z - 2.8f, 0.36f, 0.36f, 0.9f, dr, dg, db);
+                addBox(verts, x - 0.12f, y + 0.8f, z - 3.6f, 0.24f, 0.24f, 0.9f, dr, dg, db);
+
+                // Flapping Wings
+                float wingFlap = (float) Math.sin(System.currentTimeMillis() * 0.008f) * 0.4f;
+                // Left Wing
+                addBox(verts, x - 2.8f, y + 0.9f + wingFlap, z - 0.8f, 2.2f, 0.08f, 1.8f, 0.22f, 0.18f, 0.24f);
+                // Right Wing
+                addBox(verts, x + 0.65f, y + 0.9f - wingFlap, z - 0.8f, 2.2f, 0.08f, 1.8f, 0.22f, 0.18f, 0.24f);
             }
         }
 
@@ -173,6 +264,33 @@ public class MobRenderer {
             float ay = a.getPosition().y;
             float az = a.getPosition().z;
             addBox(verts, ax - 0.03f, ay - 0.03f, az - 0.25f, 0.06f, 0.06f, 0.5f, 0.9f, 0.85f, 0.75f);
+        }
+
+        // Render Healing Beams from End Crystals to Ender Dragon
+        Mob dragon = null;
+        for (Mob m : mobs) {
+            if (m.getType() == MobType.ENDER_DRAGON && !m.isDead()) {
+                dragon = m;
+                break;
+            }
+        }
+        if (dragon != null) {
+            for (Mob m : mobs) {
+                if (m.getType() == MobType.END_CRYSTAL && !m.isDead()) {
+                    float dist = m.getPosition().distance(dragon.getPosition());
+                    if (dist < 40.0f) {
+                        // Render segmented beam
+                        int segments = (int) (dist * 1.5f);
+                        for (int s = 0; s < segments; s++) {
+                            float t = (float) s / segments;
+                            float bx = m.getPosition().x + (dragon.getPosition().x - m.getPosition().x) * t;
+                            float by = (m.getPosition().y + 0.6f) + (dragon.getPosition().y + 0.8f - (m.getPosition().y + 0.6f)) * t;
+                            float bz = m.getPosition().z + (dragon.getPosition().z - m.getPosition().z) * t;
+                            addBox(verts, bx - 0.06f, by - 0.06f, bz - 0.06f, 0.12f, 0.12f, 0.12f, 0.9f, 0.2f, 0.95f);
+                        }
+                    }
+                }
+            }
         }
 
         if (verts.isEmpty()) return;
