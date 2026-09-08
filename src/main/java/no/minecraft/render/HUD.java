@@ -893,7 +893,7 @@ public class HUD {
             float cx = windowWidth / 2.0f;
             float cy = windowHeight / 2.0f;
             if (showDebugInfo) {
-                drawDebugCrosshair(geom, cx, cy);
+                drawDebugCrosshair(geom, overlayGeom, cx, cy, player.getCamera());
             } else {
                 drawMinecraftCrosshair(geom, cx, cy);
             }
@@ -1643,26 +1643,104 @@ public class HUD {
         addRect(g, cx - th / 2, cy - size, th, size * 2, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 0.9f);
     }
 
-    private void drawDebugCrosshair(List<Float> g, float cx, float cy) {
-        float arm = 10.0f;
-        float th = 2.0f;
+    private void drawThickLine(List<Float> g, float x0, float y0, float x1, float y1, float thickness, float r, float gr, float b, float a) {
+        float dx = x1 - x0;
+        float dy = y1 - y0;
+        float len = (float) Math.sqrt(dx * dx + dy * dy);
+        if (len < 0.8f) {
+            addRect(g, x0 - thickness * 0.5f, y0 - thickness * 0.5f, thickness, thickness, 0, 0, 0, 0, r, gr, b, a);
+            return;
+        }
+        float nx = -dy / len * (thickness * 0.5f);
+        float ny = dx / len * (thickness * 0.5f);
 
-        // Dark outline for contrast
-        addRect(g, cx - 1.0f, cy - 1.0f, arm + 2.0f, th + 2.0f, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.7f);
-        addRect(g, cx - 1.0f, cy - arm - 1.0f, th + 2.0f, arm + 2.0f, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.7f);
-        addRect(g, cx - 1.0f, cy - 1.0f, th + 2.0f, arm + 2.0f, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.7f);
+        addVertex(g, x0 + nx, y0 + ny, 0, 0, r, gr, b, a);
+        addVertex(g, x0 - nx, y0 - ny, 0, 0, r, gr, b, a);
+        addVertex(g, x1 - nx, y1 - ny, 0, 0, r, gr, b, a);
 
-        // Center white dot
-        addRect(g, cx, cy, th, th, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 1.0f);
+        addVertex(g, x0 + nx, y0 + ny, 0, 0, r, gr, b, a);
+        addVertex(g, x1 - nx, y1 - ny, 0, 0, r, gr, b, a);
+        addVertex(g, x1 + nx, y1 + ny, 0, 0, r, gr, b, a);
+    }
 
-        // Red arm (+X: right)
-        addRect(g, cx + th, cy, arm - th, th, 0, 0, 0, 0, 0.95f, 0.15f, 0.15f, 1.0f);
+    private static class AxisData {
+        final float endX, endY, dz;
+        final float r, g, b;
+        final char label;
 
-        // Green arm (+Y: up)
-        addRect(g, cx, cy - arm + th, th, arm - th, 0, 0, 0, 0, 0.15f, 0.95f, 0.15f, 1.0f);
+        AxisData(float endX, float endY, float dz, float r, float g, float b, char label) {
+            this.endX = endX;
+            this.endY = endY;
+            this.dz = dz;
+            this.r = r;
+            this.g = g;
+            this.b = b;
+            this.label = label;
+        }
+    }
 
-        // Blue arm (+Z: down)
-        addRect(g, cx, cy + th, th, arm - th, 0, 0, 0, 0, 0.25f, 0.45f, 1.0f, 1.0f);
+    private void drawDebugCrosshair(List<Float> geom, List<Float> overlayGeom, float cx, float cy, no.minecraft.player.Camera camera) {
+        if (camera == null) {
+            drawMinecraftCrosshair(geom, cx, cy);
+            return;
+        }
+
+        org.joml.Vector3f right = camera.getRight();
+        org.joml.Vector3f up = camera.getUp();
+        org.joml.Vector3f fwd = camera.getForward();
+
+        // Length of crosshair arms in screen pixels
+        float armLength = 16.0f;
+
+        // 3D Oblique Perspective projection:
+        // World vectors for +X, +Y, +Z axes
+        org.joml.Vector3f[] axes = {
+                new org.joml.Vector3f(1.0f, 0.0f, 0.0f),  // X (Red)
+                new org.joml.Vector3f(0.0f, 1.0f, 0.0f),  // Y (Green)
+                new org.joml.Vector3f(0.0f, 0.0f, 1.0f)   // Z (Blue)
+        };
+        float[][] colors = {
+                {0.95f, 0.18f, 0.18f}, // Red
+                {0.18f, 0.95f, 0.18f}, // Green
+                {0.25f, 0.55f, 1.00f}  // Blue
+        };
+        char[] labels = {'X', 'Y', 'Z'};
+
+        List<AxisData> axisList = new ArrayList<>(3);
+        for (int i = 0; i < 3; i++) {
+            org.joml.Vector3f v = axes[i];
+            float dx = right.dot(v);
+            float dy = -up.dot(v);   // Screen Y is down
+            float dz = fwd.dot(v);   // Forward into screen
+
+            // Oblique perspective: axes pointing into screen have depth offset
+            float ex = cx + (dx - dz * 0.32f) * armLength;
+            float ey = cy + (dy + dz * 0.32f) * armLength;
+
+            axisList.add(new AxisData(ex, ey, dz, colors[i][0], colors[i][1], colors[i][2], labels[i]));
+        }
+
+        // Draw axes from back to front (dz > 0 is deeper in screen, dz < 0 is closer)
+        axisList.sort((a, b) -> Float.compare(b.dz, a.dz));
+
+        for (AxisData a : axisList) {
+            // Dark border around line
+            drawThickLine(geom, cx, cy, a.endX, a.endY, 4.0f, 0.0f, 0.0f, 0.0f, 0.75f);
+            // Colored axis line
+            drawThickLine(geom, cx, cy, a.endX, a.endY, 2.0f, a.r, a.g, a.b, 1.0f);
+
+            // Tip indicator
+            addRect(geom, a.endX - 1.5f, a.endY - 1.5f, 3.0f, 3.0f, 0, 0, 0, 0, a.r, a.g, a.b, 1.0f);
+
+            // Label at tip (X, Y, Z)
+            float lx = a.endX + (a.endX >= cx ? 3.0f : -7.0f);
+            float ly = a.endY + (a.endY >= cy ? 2.0f : -6.0f);
+            drawHudChar(overlayGeom, a.label, lx, ly, 0.9f, a.r, a.g, a.b);
+        }
+
+        // Center white crosshair dot
+        addRect(geom, cx - 2.0f, cy - 2.0f, 4.0f, 4.0f, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.8f);
+        addRect(geom, cx - 1.0f, cy - 1.0f, 2.0f, 2.0f, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 1.0f);
     }
 
     private void drawMinecraftNumber(List<Float> g, int number, float rightX, float bottomY, float s) {

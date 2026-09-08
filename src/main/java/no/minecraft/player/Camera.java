@@ -62,6 +62,10 @@ public class Camera {
         return right;
     }
 
+    public Vector3f getUp() {
+        return up;
+    }
+
     public float getYaw() {
         return yaw;
     }
