@@ -1955,7 +1955,7 @@ public class HUD {
                                 Player player, no.minecraft.world.World world) {
         if (world == null || player == null) return;
 
-        float scale = 1.35f;
+        float scale = 2.7f;
         float lineHeight = 10.0f * scale;
         float startX = 8.0f;
         float startY = 8.0f;
