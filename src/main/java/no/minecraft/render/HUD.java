@@ -903,7 +903,7 @@ public class HUD {
         float hy = windowHeight - hotbarH - 8.0f;
 
         // --- A. Health Bar (10 Hearts on left) ---
-        if (player.getGameMode() == GameMode.SURVIVAL) {
+        if (player.getGameMode() != GameMode.CREATIVE) {
             float heartY = hy - 18.0f * pScale;
             int hp = player.getHealth();
 
@@ -961,7 +961,7 @@ public class HUD {
                 }
 
                 // Draw durability bar if damaged tool
-                if (player.getGameMode() == GameMode.SURVIVAL) {
+                if (player.getGameMode() != GameMode.CREATIVE) {
                     ItemStack st = player.getInventory().getSlot(i);
                     if (st.getType().isDamageable() && st.getDamage() > 0) {
                         float barW = 12.0f * pScale;

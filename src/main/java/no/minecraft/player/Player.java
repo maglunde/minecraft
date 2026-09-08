@@ -180,6 +180,15 @@ public class Player {
     }
 
     public void die() {
+        if (gameMode == GameMode.HARDCORE) {
+            // Hardcore death: Drop everything and game over
+            inventory.clear();
+            setGameMode(GameMode.CREATIVE);
+            setFlying(true);
+            deathFlashTimer = 3.0f;
+            return;
+        }
+
         int groundY = world.getSpawnHeight((int) Math.floor(spawnPosition.x), (int) Math.floor(spawnPosition.z));
         position.set(spawnPosition.x, groundY + 0.05f, spawnPosition.z);
         velocity.set(0, 0, 0);
@@ -355,7 +364,7 @@ public class Player {
     }
 
     public void useSelectedBlock() {
-        if (gameMode == GameMode.SURVIVAL) {
+        if (gameMode != GameMode.CREATIVE) {
             ItemStack stack = inventory.getSlot(selectedSlot);
             if (!stack.isEmpty()) {
                 stack.add(-1);
@@ -365,7 +374,7 @@ public class Player {
 
     public void collectBlock(BlockType type) {
         if (type == BlockType.AIR || type == BlockType.BEDROCK) return;
-        if (gameMode == GameMode.SURVIVAL) {
+        if (gameMode != GameMode.CREATIVE) {
             inventory.addItem(type, 1);
         }
     }

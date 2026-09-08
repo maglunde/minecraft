@@ -30,8 +30,9 @@ public class Main {
     private MiningOverlay miningOverlay;
     private SkyRenderer skyRenderer;
     private HUD hud;
+    private MainMenu mainMenu;
 
-    private boolean cursorLocked = true;
+    private boolean cursorLocked = false;
     private double lastMouseX, lastMouseY;
     private boolean firstMouse = true;
     private float mouseSensitivity = 0.12f;
@@ -154,13 +155,14 @@ public class Main {
         miningOverlay = new MiningOverlay();
         skyRenderer = new SkyRenderer();
         hud = new HUD();
+        mainMenu = new MainMenu();
 
         world = new World();
         int spawnY = world.getSpawnHeight(0, 0);
         player = new Player(world, 0.5f, spawnY + 0.05f, 0.5f);
 
-        // Lock cursor by default
-        setCursorLocked(true);
+        // Show cursor in menu
+        setCursorLocked(false);
     }
 
     private final boolean[] keyPressed = new boolean[GLFW_KEY_LAST + 1];
@@ -202,6 +204,17 @@ public class Main {
 
         // Mouse clicks for mining, combat, placing and crafting
         glfwSetMouseButtonCallback(window, (win, button, action, mods) -> {
+            if (mainMenu.isInMenu()) {
+                if (action == GLFW_PRESS) {
+                    if (mainMenu.handleClick(lastMouseX, lastMouseY, button, width, height)) {
+                        // Started game from menu!
+                        player.setGameMode(mainMenu.getSelectedMode());
+                        setCursorLocked(true);
+                    }
+                }
+                return;
+            }
+
             if (hud.isInventoryOpen()) {
                 if (action == GLFW_PRESS) {
                     hud.handleMouseClick(lastMouseX, lastMouseY, button, player, width, height);
@@ -307,20 +320,28 @@ public class Main {
 
             if (action == GLFW_PRESS) {
                 if (key == GLFW_KEY_ESCAPE) {
+                    if (mainMenu.isInMenu()) {
+                        // Already in menu
+                        return;
+                    }
                     if (hud.isInventoryOpen()) {
                         hud.closeInventory(player);
                         setCursorLocked(true);
                     } else {
-                        setCursorLocked(!cursorLocked);
+                        mainMenu.setInMenu(true);
+                        setCursorLocked(false);
                     }
-                } else if (key == GLFW_KEY_E) {
+                } else if (key == GLFW_KEY_M && !hud.isInventoryOpen()) {
+                    mainMenu.setInMenu(true);
+                    setCursorLocked(false);
+                } else if (!mainMenu.isInMenu() && key == GLFW_KEY_E) {
                     // Toggle Inventory / Crafting GUI
                     hud.toggleInventory(player);
                     setCursorLocked(!hud.isInventoryOpen());
-                } else if (key == GLFW_KEY_G) {
+                } else if (!mainMenu.isInMenu() && key == GLFW_KEY_G) {
                     // Toggle GameMode (Survival / Creative)
                     player.toggleGameMode();
-                } else if (key == GLFW_KEY_F) {
+                } else if (!mainMenu.isInMenu() && key == GLFW_KEY_F) {
                     player.toggleFlying();
                 } else if (key == GLFW_KEY_P) {
                     // Reset position to ground at spawn
@@ -382,11 +403,11 @@ public class Main {
             dt = Math.min(dt, 0.05f);
 
             // Input handling (multi-key simultaneous support)
-            boolean fwd = !hud.isInventoryOpen() && isKeyDown(GLFW_KEY_W);
-            boolean bwd = !hud.isInventoryOpen() && isKeyDown(GLFW_KEY_S);
-            boolean left = !hud.isInventoryOpen() && isKeyDown(GLFW_KEY_A);
-            boolean right = !hud.isInventoryOpen() && isKeyDown(GLFW_KEY_D);
-            boolean jump = !hud.isInventoryOpen() && isKeyDown(GLFW_KEY_SPACE);
+            boolean fwd = !mainMenu.isInMenu() && !hud.isInventoryOpen() && isKeyDown(GLFW_KEY_W);
+            boolean bwd = !mainMenu.isInMenu() && !hud.isInventoryOpen() && isKeyDown(GLFW_KEY_S);
+            boolean left = !mainMenu.isInMenu() && !hud.isInventoryOpen() && isKeyDown(GLFW_KEY_A);
+            boolean right = !mainMenu.isInMenu() && !hud.isInventoryOpen() && isKeyDown(GLFW_KEY_D);
+            boolean jump = !mainMenu.isInMenu() && !hud.isInventoryOpen() && isKeyDown(GLFW_KEY_SPACE);
 
             // Sprinting via double-tap W, Left Shift, Tab, R, or Left/Right Control
             boolean sprintKey = isKeyDown(GLFW_KEY_LEFT_SHIFT) ||
@@ -397,17 +418,19 @@ public class Main {
 
             boolean sprint = (doubleTapSprint || sprintKey) && fwd;
 
-            boolean sneak = !hud.isInventoryOpen() && (isKeyDown(GLFW_KEY_LEFT_SHIFT) ||
+            boolean sneak = !mainMenu.isInMenu() && !hud.isInventoryOpen() && (isKeyDown(GLFW_KEY_LEFT_SHIFT) ||
                             isKeyDown(GLFW_KEY_RIGHT_SHIFT) ||
                             isKeyDown(GLFW_KEY_C) ||
                             isKeyDown(GLFW_KEY_LEFT_ALT));
 
-            player.update(dt, fwd, bwd, left, right, jump, sneak, sprint);
-            world.update(dt, player);
+            if (!mainMenu.isInMenu()) {
+                player.update(dt, fwd, bwd, left, right, jump, sneak, sprint);
+                world.update(dt, player);
+            }
 
             // Continuous Mining Logic (Left Click hold down)
             Raycast.HitResult targetedHit = null;
-            if (!hud.isInventoryOpen()) {
+            if (!mainMenu.isInMenu() && !hud.isInventoryOpen()) {
                 targetedHit = Raycast.raycast(
                         world,
                         player.getCamera().getPosition(),
@@ -573,8 +596,12 @@ public class Main {
                 blockOutline.render(projection, view, targetedHit.hitX, targetedHit.hitY, targetedHit.hitZ);
             }
 
-            // 7. Render 2D HUD (Crosshair, Health bar, Hunger bar, XP bar, Hotbar with counts, Crafting UI)
-            hud.render(width, height, (float) lastMouseX, (float) lastMouseY, player, atlas);
+            // 7. Render 2D HUD or Main Menu
+            if (mainMenu.isInMenu()) {
+                mainMenu.render(width, height, (float) lastMouseX, (float) lastMouseY, atlas);
+            } else {
+                hud.render(width, height, (float) lastMouseX, (float) lastMouseY, player, atlas);
+            }
 
             glfwSwapBuffers(window);
             glfwPollEvents();
@@ -582,6 +609,7 @@ public class Main {
     }
 
     private void cleanup() {
+        mainMenu.cleanup();
         hud.cleanup();
         skyRenderer.cleanup();
         miningOverlay.cleanup();
