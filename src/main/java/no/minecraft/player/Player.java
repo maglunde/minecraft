@@ -340,6 +340,10 @@ public class Player {
         return health;
     }
 
+    public void setHealth(int health) {
+        this.health = Math.clamp(health, 0, MAX_HEALTH);
+    }
+
     public BlockType getSelectedBlock() {
         if (gameMode == GameMode.CREATIVE) {
             return CREATIVE_HOTBAR_BLOCKS[selectedSlot];

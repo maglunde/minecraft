@@ -32,6 +32,7 @@ public class Main {
     private HUD hud;
     private MainMenu mainMenu;
     private no.minecraft.render.PauseMenu pauseMenu;
+    private no.minecraft.chat.ChatManager chatManager = new no.minecraft.chat.ChatManager();
 
     private boolean cursorLocked = false;
     private double lastMouseX, lastMouseY;
@@ -46,6 +47,7 @@ public class Main {
     private boolean isLeftMouseDown = false;
     private boolean isRightMouseDown = false;
     private float rightClickTimer = 0.0f;
+    private boolean ignoreNextChar = false;
 
     private static final String WORLD_VERT = """
             #version 330 core
@@ -184,7 +186,7 @@ public class Main {
     private void setupInput() {
         // Cursor movement
         glfwSetCursorPosCallback(window, (win, xpos, ypos) -> {
-            if (hud.isInventoryOpen() || mainMenu.isInMenu() || pauseMenu.isOpen() || !cursorLocked) {
+            if (hud.isInventoryOpen() || mainMenu.isInMenu() || pauseMenu.isOpen() || chatManager.isOpen() || !cursorLocked) {
                 lastMouseX = xpos;
                 lastMouseY = ypos;
                 firstMouse = true;
@@ -254,6 +256,10 @@ public class Main {
                 if (action == GLFW_PRESS) {
                     hud.handleMouseClick(lastMouseX, lastMouseY, button, player, width, height);
                 }
+                return;
+            }
+
+            if (chatManager.isOpen()) {
                 return;
             }
 
@@ -361,7 +367,40 @@ public class Main {
                     return;
                 }
 
+                if (chatManager.isOpen()) {
+                    if (key == GLFW_KEY_ESCAPE) {
+                        chatManager.closeChat();
+                        setCursorLocked(true);
+                    } else if (key == GLFW_KEY_ENTER) {
+                        chatManager.submitMessage(world, player);
+                        setCursorLocked(true);
+                    } else if (key == GLFW_KEY_BACKSPACE) {
+                        chatManager.backspace();
+                    } else if (key == GLFW_KEY_UP) {
+                        chatManager.navigateHistory(-1); // Previous command
+                    } else if (key == GLFW_KEY_DOWN) {
+                        chatManager.navigateHistory(1);  // Next command
+                    } else if (key == GLFW_KEY_TAB) {
+                        chatManager.handleTabCompletion(); // Autocomplete
+                    }
+                    return;
+                }
+
                 no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
+
+                if (key == GLFW_KEY_T && !hud.isInventoryOpen() && !pauseMenu.isOpen()) {
+                    // Open Chat empty (prevent 't' from char callback)
+                    ignoreNextChar = true;
+                    chatManager.openChat("");
+                    setCursorLocked(false);
+                    return;
+                } else if (key == GLFW_KEY_SLASH && !hud.isInventoryOpen() && !pauseMenu.isOpen()) {
+                    // Open Chat with prefilled "/" for quick commands (prevent redundant '/' from char callback)
+                    ignoreNextChar = true;
+                    chatManager.openChat("/");
+                    setCursorLocked(false);
+                    return;
+                }
 
                 if (key == GLFW_KEY_ESCAPE) {
                     if (hud.isInventoryOpen()) {
@@ -416,6 +455,17 @@ public class Main {
                 if (key == no.minecraft.settings.GameSettings.getInstance().keyForward) {
                     doubleTapSprint = false;
                 }
+            }
+        });
+
+        // Text character typing callback for Chat
+        glfwSetCharCallback(window, (win, codepoint) -> {
+            if (ignoreNextChar) {
+                ignoreNextChar = false;
+                return;
+            }
+            if (chatManager.isOpen()) {
+                chatManager.addChar((char) codepoint);
             }
         });
     }
@@ -593,11 +643,13 @@ public class Main {
 
             no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
             boolean isPaused = mainMenu.isInMenu() || pauseMenu.isOpen();
-            boolean inGui = isPaused || hud.isInventoryOpen();
+            boolean inGui = isPaused || hud.isInventoryOpen() || chatManager.isOpen();
             if (inGui) {
                 isLeftMouseDown = false;
                 isRightMouseDown = false;
             }
+
+            chatManager.update(dt);
 
             // Input handling (multi-key simultaneous support)
             boolean fwd = !inGui && isKeyDown(gs.keyForward);
@@ -864,7 +916,7 @@ public class Main {
                     pauseMenu.render(width, height, (float) lastMouseX, (float) lastMouseY, atlas);
                 }
             } else {
-                hud.render(width, height, (float) lastMouseX, (float) lastMouseY, player, atlas, world);
+                hud.render(width, height, (float) lastMouseX, (float) lastMouseY, player, atlas, world, chatManager);
                 if (pauseMenu.isOpen()) {
                     pauseMenu.render(width, height, (float) lastMouseX, (float) lastMouseY, atlas);
                 }

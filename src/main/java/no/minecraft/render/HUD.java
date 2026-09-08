@@ -841,13 +841,13 @@ public class HUD {
         return true;
     }
 
-    public void render(int windowWidth, int windowHeight, float mouseX, float mouseY, Player player, TextureAtlas atlas, no.minecraft.world.World world) {
+    public void render(int windowWidth, int windowHeight, float mouseX, float mouseY, Player player, TextureAtlas atlas, no.minecraft.world.World world, no.minecraft.chat.ChatManager chatManager) {
         this.mouseX = mouseX;
         this.mouseY = mouseY;
-        render(windowWidth, windowHeight, player, atlas, world);
+        render(windowWidth, windowHeight, player, atlas, world, chatManager);
     }
 
-    public void render(int windowWidth, int windowHeight, Player player, TextureAtlas atlas, no.minecraft.world.World world) {
+    public void render(int windowWidth, int windowHeight, Player player, TextureAtlas atlas, no.minecraft.world.World world, no.minecraft.chat.ChatManager chatManager) {
         glDisable(GL_DEPTH_TEST);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -885,6 +885,11 @@ public class HUD {
         // 3c. Victory / Game Over screen if Ender Dragon is defeated
         if (world != null && world.isGameWon()) {
             renderVictoryOverlay(geom, overlayGeom, windowWidth, windowHeight);
+        }
+
+        // 3d. Chat Log and Chat Input field (Minecraft style bottom-left)
+        if (chatManager != null) {
+            renderChat(geom, overlayGeom, windowWidth, windowHeight, chatManager);
         }
 
         // 4. Minecraft Inventory & Crafting GUI
@@ -1849,6 +1854,51 @@ public class HUD {
         }
     }
 
+    private void renderChat(List<Float> geom, List<Float> overlayGeom, int windowWidth, int windowHeight, no.minecraft.chat.ChatManager chat) {
+        float scale = 1.4f;
+        float chatX = 10.0f;
+        float chatBottom = windowHeight - (chat.isOpen() ? 32.0f : 80.0f);
+        float lineHeight = 12.0f * scale;
+
+        // Render recent messages (up to 8 lines)
+        List<no.minecraft.chat.ChatManager.ChatMessage> msgs = chat.getMessages();
+        int maxLines = chat.isOpen() ? 12 : 8;
+        int startIdx = Math.max(0, msgs.size() - maxLines);
+
+        for (int i = startIdx; i < msgs.size(); i++) {
+            no.minecraft.chat.ChatManager.ChatMessage m = msgs.get(i);
+            int linePos = i - startIdx;
+            float lineY = chatBottom - (msgs.size() - startIdx - linePos) * lineHeight;
+
+            float alpha = chat.isOpen() ? 0.9f : Math.min(1.0f, m.getTimeRemaining() / 2.0f);
+            if (alpha <= 0.01f) continue;
+
+            // Translucent dark line background
+            float textWidth = m.getText().length() * (6.0f * scale);
+            addRect(geom, chatX - 2.0f, lineY - 1.0f, textWidth + 6.0f, lineHeight, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.45f * alpha);
+
+            // Message text
+            drawHudText(overlayGeom, m.getText(), chatX, lineY, scale, m.getR(), m.getG(), m.getB());
+        }
+
+        // Render Chat Input Box if Chat is Open
+        if (chat.isOpen()) {
+            float boxY = windowHeight - 24.0f;
+            float boxW = windowWidth - 20.0f;
+            float boxH = 18.0f;
+
+            // Dark input background with white/gray border
+            addRect(geom, chatX - 2.0f, boxY, boxW, boxH, 0, 0, 0, 0, 0.05f, 0.05f, 0.05f, 0.85f);
+            addRect(geom, chatX - 2.0f, boxY, boxW, 1.0f, 0, 0, 0, 0, 0.6f, 0.6f, 0.6f, 1.0f);
+            addRect(geom, chatX - 2.0f, boxY + boxH, boxW, 1.0f, 0, 0, 0, 0, 0.6f, 0.6f, 0.6f, 1.0f);
+
+            // Prompt cursor text
+            boolean blink = (System.currentTimeMillis() / 450) % 2 == 0;
+            String prompt = "> " + chat.getInputText() + (blink ? "_" : "");
+            drawHudText(overlayGeom, prompt, chatX + 2.0f, boxY + 3.0f, scale, 1.0f, 1.0f, 1.0f);
+        }
+    }
+
     private int[][] getGlyph(char c) {
         return switch (c) {
             case 'A' -> new int[][]{{0,1,1,0},{1,0,0,1},{1,1,1,1},{1,0,0,1},{1,0,0,1}};
@@ -1877,6 +1927,27 @@ public class HUD {
             case 'X' -> new int[][]{{1,0,0,1},{1,0,0,1},{0,1,1,0},{1,0,0,1},{1,0,0,1}};
             case 'Y' -> new int[][]{{1,0,0,1},{1,0,0,1},{0,1,1,0},{0,0,1,0},{0,0,1,0}};
             case 'Z' -> new int[][]{{1,1,1,1},{0,0,0,1},{0,1,1,0},{1,0,0,0},{1,1,1,1}};
+            case '0' -> new int[][]{{1,1,1},{1,0,1},{1,0,1},{1,0,1},{1,1,1}};
+            case '1' -> new int[][]{{0,1,0},{1,1,0},{0,1,0},{0,1,0},{1,1,1}};
+            case '2' -> new int[][]{{1,1,1},{0,0,1},{1,1,1},{1,0,0},{1,1,1}};
+            case '3' -> new int[][]{{1,1,1},{0,0,1},{1,1,1},{0,0,1},{1,1,1}};
+            case '4' -> new int[][]{{1,0,1},{1,0,1},{1,1,1},{0,0,1},{0,0,1}};
+            case '5' -> new int[][]{{1,1,1},{1,0,0},{1,1,1},{0,0,1},{1,1,1}};
+            case '6' -> new int[][]{{1,1,1},{1,0,0},{1,1,1},{1,0,1},{1,1,1}};
+            case '7' -> new int[][]{{1,1,1},{0,0,1},{0,1,0},{0,1,0},{0,1,0}};
+            case '8' -> new int[][]{{1,1,1},{1,0,1},{1,1,1},{1,0,1},{1,1,1}};
+            case '9' -> new int[][]{{1,1,1},{1,0,1},{1,1,1},{0,0,1},{1,1,1}};
+            case '/' -> new int[][]{{0,0,1},{0,0,1},{0,1,0},{1,0,0},{1,0,0}};
+            case '-' -> new int[][]{{0,0,0},{0,0,0},{1,1,1},{0,0,0},{0,0,0}};
+            case '_' -> new int[][]{{0,0,0},{0,0,0},{0,0,0},{0,0,0},{1,1,1}};
+            case ':' -> new int[][]{{0,0},{1,0},{0,0},{1,0},{0,0}};
+            case '.' -> new int[][]{{0},{0},{0},{0},{1}};
+            case ',' -> new int[][]{{0},{0},{0},{1},{1}};
+            case '<' -> new int[][]{{0,0,1},{0,1,0},{1,0,0},{0,1,0},{0,0,1}};
+            case '>' -> new int[][]{{1,0,0},{0,1,0},{0,0,1},{0,1,0},{1,0,0}};
+            case '[' -> new int[][]{{1,1},{1,0},{1,0},{1,0},{1,1}};
+            case ']' -> new int[][]{{1,1},{0,1},{0,1},{0,1},{1,1}};
+            case '@' -> new int[][]{{1,1,1},{1,0,1},{1,1,1},{1,0,0},{1,1,1}};
             case '!' -> new int[][]{{1},{1},{1},{0},{1}};
             case '?' -> new int[][]{{1,1,1},{0,0,1},{0,1,0},{0,0,0},{0,1,0}};
             case ' ' -> new int[][]{{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0}};
