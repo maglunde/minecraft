@@ -1,0 +1,148 @@
+package no.minecraft.player;
+
+import no.minecraft.world.BlockType;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+public class CraftingRecipe {
+    private final String name;
+    private final Map<BlockType, Integer> inputs;
+    private final ItemStack output;
+
+    public CraftingRecipe(String name, Map<BlockType, Integer> inputs, ItemStack output) {
+        this.name = name;
+        this.inputs = inputs;
+        this.output = output;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public Map<BlockType, Integer> getInputs() {
+        return Collections.unmodifiableMap(inputs);
+    }
+
+    public ItemStack getOutput() {
+        return output;
+    }
+
+    public boolean canCraft(Inventory inventory) {
+        for (Map.Entry<BlockType, Integer> entry : inputs.entrySet()) {
+            if (inventory.getItemCount(entry.getKey()) < entry.getValue()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public boolean craft(Inventory inventory) {
+        if (!canCraft(inventory)) {
+            return false;
+        }
+
+        // Consume inputs
+        for (Map.Entry<BlockType, Integer> entry : inputs.entrySet()) {
+            inventory.removeItem(entry.getKey(), entry.getValue());
+        }
+
+        // Add output
+        inventory.addItem(output.getType(), output.getCount());
+        return true;
+    }
+
+    public String getRequirementsString() {
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        for (Map.Entry<BlockType, Integer> entry : inputs.entrySet()) {
+            if (i > 0) sb.append(", ");
+            sb.append(entry.getValue()).append("x ").append(entry.getKey().getName());
+            i++;
+        }
+        return sb.toString();
+    }
+
+    public static List<CraftingRecipe> getDefaultRecipes() {
+        List<CraftingRecipe> list = new ArrayList<>();
+
+        // 1. Planker: 1 Eiketre -> 4 Treplanker
+        list.add(new CraftingRecipe("Treplanker", Map.of(BlockType.WOOD, 1), new ItemStack(BlockType.PLANKS, 4)));
+
+        // 2. Arbeidsbenk: 4 Treplanker -> 1 Arbeidsbenk
+        list.add(new CraftingRecipe("Arbeidsbenk", Map.of(BlockType.PLANKS, 4), new ItemStack(BlockType.CRAFTING_TABLE, 1)));
+
+        // 3. Pinner: 2 Treplanker -> 4 Pinner
+        list.add(new CraftingRecipe("Pinne", Map.of(BlockType.PLANKS, 2), new ItemStack(BlockType.STICK, 4)));
+
+        // 4. Trehakke: 3 Treplanker + 2 Pinner -> 1 Trehakke
+        list.add(new CraftingRecipe("Trehakke", Map.of(BlockType.PLANKS, 3, BlockType.STICK, 2), new ItemStack(BlockType.WOODEN_PICKAXE, 1)));
+
+        // 5. Treøks: 3 Treplanker + 2 Pinner -> 1 Treøks
+        list.add(new CraftingRecipe("Treøks", Map.of(BlockType.PLANKS, 3, BlockType.STICK, 2), new ItemStack(BlockType.WOODEN_AXE, 1)));
+
+        // 6. Trespade: 1 Treplanke + 2 Pinner -> 1 Trespade
+        list.add(new CraftingRecipe("Trespade", Map.of(BlockType.PLANKS, 1, BlockType.STICK, 2), new ItemStack(BlockType.WOODEN_SHOVEL, 1)));
+
+        // 7. Tresverd: 2 Treplanker + 1 Pinne -> 1 Tresverd
+        list.add(new CraftingRecipe("Tresverd", Map.of(BlockType.PLANKS, 2, BlockType.STICK, 1), new ItemStack(BlockType.WOODEN_SWORD, 1)));
+
+        // 8. Tregrev: 2 Treplanker + 2 Pinner -> 1 Tregrev
+        list.add(new CraftingRecipe("Tregrev", Map.of(BlockType.PLANKS, 2, BlockType.STICK, 2), new ItemStack(BlockType.WOODEN_HOE, 1)));
+
+        // 9. Trebåt: 5 Treplanker -> 1 Trebåt
+        list.add(new CraftingRecipe("Trebåt", Map.of(BlockType.PLANKS, 5), new ItemStack(BlockType.BOAT, 1)));
+
+        // 10. Kiste: 8 Treplanker -> 1 Kiste
+        list.add(new CraftingRecipe("Kiste", Map.of(BlockType.PLANKS, 8), new ItemStack(BlockType.CHEST, 1)));
+
+        // 11. Tredør: 6 Treplanker -> 3 Tredører
+        list.add(new CraftingRecipe("Tredør", Map.of(BlockType.PLANKS, 6), new ItemStack(BlockType.WOODEN_DOOR, 3)));
+
+        // 12. Fallelem: 6 Treplanker -> 2 Fallemmer
+        list.add(new CraftingRecipe("Fallelem", Map.of(BlockType.PLANKS, 6), new ItemStack(BlockType.TRAPDOOR, 2)));
+
+        // 13. Stige: 7 Pinner -> 3 Stiger
+        list.add(new CraftingRecipe("Stige", Map.of(BlockType.STICK, 7), new ItemStack(BlockType.LADDER, 3)));
+
+        // 14. Tregjerde: 4 Treplanker + 2 Pinner -> 3 Tregjerder
+        list.add(new CraftingRecipe("Tregjerde", Map.of(BlockType.PLANKS, 4, BlockType.STICK, 2), new ItemStack(BlockType.FENCE, 3)));
+
+        // 15. Gjerdeport: 2 Treplanker + 4 Pinner -> 1 Gjerdeport
+        list.add(new CraftingRecipe("Gjerdeport", Map.of(BlockType.PLANKS, 2, BlockType.STICK, 4), new ItemStack(BlockType.FENCE_GATE, 1)));
+
+        // 16. Trehelle: 3 Treplanker -> 6 Treheller
+        list.add(new CraftingRecipe("Trehelle", Map.of(BlockType.PLANKS, 3), new ItemStack(BlockType.WOODEN_SLAB, 6)));
+
+        // 17. Tretrapp: 6 Treplanker -> 4 Tretrapper
+        list.add(new CraftingRecipe("Tretrapp", Map.of(BlockType.PLANKS, 6), new ItemStack(BlockType.WOODEN_STAIRS, 4)));
+
+        // 18. Trebolle: 3 Treplanker -> 4 Treboller
+        list.add(new CraftingRecipe("Trebolle", Map.of(BlockType.PLANKS, 3), new ItemStack(BlockType.BOWL, 4)));
+
+        // 19. Trykkplate: 2 Treplanker -> 1 Trykkplate
+        list.add(new CraftingRecipe("Tre trykkplate", Map.of(BlockType.PLANKS, 2), new ItemStack(BlockType.WOODEN_PRESSURE_PLATE, 1)));
+
+        // 20. Treknapp: 1 Treplanke -> 1 Treknapp
+        list.add(new CraftingRecipe("Treknapp", Map.of(BlockType.PLANKS, 1), new ItemStack(BlockType.WOODEN_BUTTON, 1)));
+
+        // 21. Steinhakke: 3 Brostein + 2 Pinner -> 1 Steinhakke
+        list.add(new CraftingRecipe("Steinhakke", Map.of(BlockType.COBBLESTONE, 3, BlockType.STICK, 2), new ItemStack(BlockType.STONE_PICKAXE, 1)));
+
+        // 22. Steinøks: 3 Brostein + 2 Pinner -> 1 Steinøks
+        list.add(new CraftingRecipe("Steinøks", Map.of(BlockType.COBBLESTONE, 3, BlockType.STICK, 2), new ItemStack(BlockType.STONE_AXE, 1)));
+
+        // 23. Steinspade: 1 Brostein + 2 Pinner -> 1 Steinspade
+        list.add(new CraftingRecipe("Steinspade", Map.of(BlockType.COBBLESTONE, 1, BlockType.STICK, 2), new ItemStack(BlockType.STONE_SHOVEL, 1)));
+
+        // 24. Steinsverd: 2 Brostein + 1 Pinne -> 1 Steinsverd
+        list.add(new CraftingRecipe("Steinsverd", Map.of(BlockType.COBBLESTONE, 2, BlockType.STICK, 1), new ItemStack(BlockType.STONE_SWORD, 1)));
+
+        // 25. Ovn: 8 Brostein -> 1 Ovn
+        list.add(new CraftingRecipe("Ovn", Map.of(BlockType.COBBLESTONE, 8), new ItemStack(BlockType.FURNACE, 1)));
+
+        return list;
+    }
+}

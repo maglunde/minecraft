@@ -1,0 +1,394 @@
+package no.minecraft.player;
+
+import no.minecraft.world.BlockType;
+import no.minecraft.world.World;
+import org.joml.Vector3f;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class Player {
+    public static final float WIDTH = 0.6f;
+    public static final float HEIGHT = 1.8f;
+    public static final float EYE_HEIGHT = 1.62f;
+
+    public static final float GRAVITY = -26.0f;
+    public static final float JUMP_SPEED = 8.5f;
+    public static final float WALK_SPEED = 4.8f;
+    public static final float SPRINT_SPEED = 7.5f;
+    public static final float FLY_SPEED = 12.0f;
+
+    public static final int MAX_HEALTH = 20;
+
+    private final Vector3f position = new Vector3f();
+    private final Vector3f velocity = new Vector3f();
+    private final Camera camera;
+    private final World world;
+
+    private boolean onGround = false;
+    private boolean flying = false;
+
+    private GameMode gameMode = GameMode.SURVIVAL;
+    private final Inventory inventory = new Inventory();
+    private int health = MAX_HEALTH;
+    private float lastAirVerticalSpeed = 0.0f;
+
+    // Hotbar blocks for Creative mode
+    public static final BlockType[] CREATIVE_HOTBAR_BLOCKS = {
+            BlockType.GRASS,
+            BlockType.DIRT,
+            BlockType.STONE,
+            BlockType.COBBLESTONE,
+            BlockType.WOOD,
+            BlockType.LEAVES,
+            BlockType.PLANKS,
+            BlockType.BRICKS,
+            BlockType.GLASS
+    };
+    private int selectedSlot = 0;
+
+    private final Vector3f spawnPosition = new Vector3f();
+    private float deathFlashTimer = 0.0f;
+
+    private float jumpBufferTimer = 0.0f;
+    private float coyoteTimer = 0.0f;
+    private boolean isSprinting = false;
+
+    public Player(World world, float startX, float startY, float startZ) {
+        this.world = world;
+        this.spawnPosition.set(startX, startY, startZ);
+        this.position.set(startX, startY, startZ);
+        this.camera = new Camera(startX, startY + EYE_HEIGHT, startZ);
+    }
+
+    public void update(float dt, boolean forward, boolean backward, boolean left, boolean right,
+                       boolean jump, boolean sneak, boolean sprint) {
+        this.isSprinting = sprint && forward;
+        float baseSpeed = isSprinting ? SPRINT_SPEED : WALK_SPEED;
+        // Sprint-jump momentum boost in air
+        if (!onGround && isSprinting) {
+            baseSpeed *= 1.12f;
+        }
+        float speed = (flying && gameMode == GameMode.CREATIVE) ? FLY_SPEED : baseSpeed;
+
+        // Calculate input movement direction relative to camera yaw
+        float moveX = 0;
+        float moveZ = 0;
+
+        float radYaw = (float) Math.toRadians(camera.getYaw());
+        float cos = (float) Math.cos(radYaw);
+        float sin = (float) Math.sin(radYaw);
+
+        if (forward) {
+            moveX += cos;
+            moveZ += sin;
+        }
+        if (backward) {
+            moveX -= cos;
+            moveZ -= sin;
+        }
+        if (left) {
+            moveX += sin;
+            moveZ -= cos;
+        }
+        if (right) {
+            moveX -= sin;
+            moveZ += cos;
+        }
+
+        float len = (float) Math.sqrt(moveX * moveX + moveZ * moveZ);
+        if (len > 0.001f) {
+            moveX = (moveX / len) * speed;
+            moveZ = (moveZ / len) * speed;
+        } else {
+            moveX = 0;
+            moveZ = 0;
+        }
+
+        velocity.x = moveX;
+        velocity.z = moveZ;
+
+        // Jump buffer and coyote time timers
+        if (jump) {
+            jumpBufferTimer = 0.18f;
+        } else if (jumpBufferTimer > 0) {
+            jumpBufferTimer -= dt;
+        }
+
+        if (onGround) {
+            coyoteTimer = 0.15f;
+        } else if (coyoteTimer > 0) {
+            coyoteTimer -= dt;
+        }
+
+        if (flying && gameMode == GameMode.CREATIVE) {
+            velocity.y = 0;
+            if (jump) velocity.y += FLY_SPEED;
+            if (sneak) velocity.y -= FLY_SPEED;
+            moveWithCollision(velocity.x * dt, velocity.y * dt, velocity.z * dt);
+        } else {
+            if (!onGround) {
+                lastAirVerticalSpeed = velocity.y;
+            }
+
+            // Apply gravity
+            velocity.y += GRAVITY * dt;
+
+            // Jump trigger (support sprint-jumping and jump buffer)
+            if (jumpBufferTimer > 0 && coyoteTimer > 0) {
+                velocity.y = JUMP_SPEED;
+                onGround = false;
+                coyoteTimer = 0.0f;
+                jumpBufferTimer = 0.0f;
+            }
+
+            boolean wasInAir = !onGround;
+
+            // Move with AABB collision resolution
+            moveWithCollision(velocity.x * dt, velocity.y * dt, velocity.z * dt);
+
+            // Fall damage calculation on hard landing in Survival
+            if (wasInAir && onGround && gameMode == GameMode.SURVIVAL) {
+                if (lastAirVerticalSpeed < -16.0f) {
+                    int damage = (int) ((-lastAirVerticalSpeed - 16.0f) * 1.5f);
+                    damage(Math.max(1, damage));
+                }
+                lastAirVerticalSpeed = 0.0f;
+            }
+        }
+
+        // Check if player fell below world minimum Y (The Void)
+        if (deathFlashTimer > 0) {
+            deathFlashTimer -= dt;
+        }
+
+        if (position.y < 0.0f) {
+            die();
+        }
+
+        // Keep camera at eye position
+        camera.getPosition().set(position.x, position.y + EYE_HEIGHT, position.z);
+    }
+
+    public void damage(int amount) {
+        if (gameMode == GameMode.CREATIVE) return;
+        health = Math.max(0, health - amount);
+        deathFlashTimer = 0.6f;
+        if (health <= 0) {
+            die();
+        }
+    }
+
+    public void die() {
+        int groundY = world.getSpawnHeight((int) Math.floor(spawnPosition.x), (int) Math.floor(spawnPosition.z));
+        position.set(spawnPosition.x, groundY + 0.05f, spawnPosition.z);
+        velocity.set(0, 0, 0);
+        health = MAX_HEALTH;
+        deathFlashTimer = 2.0f;
+        if (gameMode == GameMode.SURVIVAL) {
+            flying = false;
+        }
+    }
+
+    public Vector3f getSpawnPosition() {
+        return spawnPosition;
+    }
+
+    public Vector3f getVelocity() {
+        return velocity;
+    }
+
+    public float getDeathFlashTimer() {
+        return deathFlashTimer;
+    }
+
+    private void moveWithCollision(float dx, float dy, float dz) {
+        AABB playerBox = getBoundingBox();
+
+        // Check Y axis first
+        List<AABB> blockBoxes = getSurroundingBlockBoxes(playerBox.offset(0, dy, 0));
+        for (AABB block : blockBoxes) {
+            if (dy > 0 && playerBox.offset(0, dy, 0).intersects(block)) {
+                dy = block.minY - playerBox.maxY - 0.001f;
+                velocity.y = 0;
+            } else if (dy < 0 && playerBox.offset(0, dy, 0).intersects(block)) {
+                dy = block.maxY - playerBox.minY + 0.001f;
+                velocity.y = 0;
+                onGround = true;
+            }
+        }
+        position.y += dy;
+        playerBox = getBoundingBox();
+
+        if (dy <= 0.0001f && dy >= -0.0001f && velocity.y <= 0) {
+            List<AABB> groundCheck = getSurroundingBlockBoxes(playerBox.offset(0, -0.05f, 0));
+            onGround = !groundCheck.isEmpty();
+        } else if (dy > 0) {
+            onGround = false;
+        }
+
+        // Check X axis
+        blockBoxes = getSurroundingBlockBoxes(playerBox.offset(dx, 0, 0));
+        for (AABB block : blockBoxes) {
+            if (dx > 0 && playerBox.offset(dx, 0, 0).intersects(block)) {
+                dx = block.minX - playerBox.maxX - 0.001f;
+            } else if (dx < 0 && playerBox.offset(dx, 0, 0).intersects(block)) {
+                dx = block.maxX - playerBox.minX + 0.001f;
+            }
+        }
+        position.x += dx;
+        playerBox = getBoundingBox();
+
+        // Check Z axis
+        blockBoxes = getSurroundingBlockBoxes(playerBox.offset(0, 0, dz));
+        for (AABB block : blockBoxes) {
+            if (dz > 0 && playerBox.offset(0, 0, dz).intersects(block)) {
+                dz = block.minZ - playerBox.maxZ - 0.001f;
+            } else if (dz < 0 && playerBox.offset(0, 0, dz).intersects(block)) {
+                dz = block.maxZ - playerBox.minZ + 0.001f;
+            }
+        }
+        position.z += dz;
+        playerBox = getBoundingBox();
+
+        // Final solid ground verification after all axis translations
+        List<AABB> groundCheck = getSurroundingBlockBoxes(playerBox.offset(0, -0.08f, 0));
+        onGround = !groundCheck.isEmpty() && velocity.y <= 0.1f;
+    }
+
+    private List<AABB> getSurroundingBlockBoxes(AABB query) {
+        List<AABB> list = new ArrayList<>();
+        int minX = (int) Math.floor(query.minX);
+        int maxX = (int) Math.floor(query.maxX);
+        int minY = (int) Math.floor(query.minY);
+        int maxY = (int) Math.floor(query.maxY);
+        int minZ = (int) Math.floor(query.minZ);
+        int maxZ = (int) Math.floor(query.maxZ);
+
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    BlockType type = world.getBlock(x, y, z);
+                    if (type != BlockType.AIR && type.isSolid()) {
+                        list.add(new AABB(x, y, z, x + 1.0f, y + 1.0f, z + 1.0f));
+                    }
+                }
+            }
+        }
+        return list;
+    }
+
+    public AABB getBoundingBox() {
+        float halfW = WIDTH / 2.0f;
+        return new AABB(
+                position.x - halfW, position.y, position.z - halfW,
+                position.x + halfW, position.y + HEIGHT, position.z + halfW
+        );
+    }
+
+    public void toggleFlying() {
+        if (gameMode == GameMode.CREATIVE) {
+            this.flying = !this.flying;
+            this.velocity.y = 0;
+        }
+    }
+
+    public void setFlying(boolean flying) {
+        if (gameMode == GameMode.CREATIVE) {
+            this.flying = flying;
+            this.velocity.y = 0;
+        } else {
+            this.flying = false;
+        }
+    }
+
+    public boolean isFlying() {
+        return flying && gameMode == GameMode.CREATIVE;
+    }
+
+    public GameMode getGameMode() {
+        return gameMode;
+    }
+
+    public void setGameMode(GameMode mode) {
+        this.gameMode = mode;
+        if (mode == GameMode.SURVIVAL) {
+            this.flying = false;
+        }
+    }
+
+    public void toggleGameMode() {
+        setGameMode(gameMode == GameMode.SURVIVAL ? GameMode.CREATIVE : GameMode.SURVIVAL);
+    }
+
+    public Inventory getInventory() {
+        return inventory;
+    }
+
+    public int getHealth() {
+        return health;
+    }
+
+    public BlockType getSelectedBlock() {
+        if (gameMode == GameMode.CREATIVE) {
+            return CREATIVE_HOTBAR_BLOCKS[selectedSlot];
+        } else {
+            return inventory.getSlot(selectedSlot).getType();
+        }
+    }
+
+    public int getSelectedBlockCount() {
+        if (gameMode == GameMode.CREATIVE) {
+            return -1; // Infinite
+        } else {
+            return inventory.getSlot(selectedSlot).getCount();
+        }
+    }
+
+    public boolean canPlaceSelectedBlock() {
+        if (gameMode == GameMode.CREATIVE) {
+            return true;
+        } else {
+            ItemStack stack = inventory.getSlot(selectedSlot);
+            return !stack.isEmpty();
+        }
+    }
+
+    public void useSelectedBlock() {
+        if (gameMode == GameMode.SURVIVAL) {
+            ItemStack stack = inventory.getSlot(selectedSlot);
+            if (!stack.isEmpty()) {
+                stack.add(-1);
+            }
+        }
+    }
+
+    public void collectBlock(BlockType type) {
+        if (type == BlockType.AIR || type == BlockType.BEDROCK) return;
+        if (gameMode == GameMode.SURVIVAL) {
+            inventory.addItem(type, 1);
+        }
+    }
+
+    public int getSelectedSlot() {
+        return selectedSlot;
+    }
+
+    public void setSelectedSlot(int slot) {
+        if (slot >= 0 && slot < Inventory.HOTBAR_SIZE) {
+            this.selectedSlot = slot;
+        }
+    }
+
+    public void scrollSlot(int direction) {
+        selectedSlot = (selectedSlot + direction + Inventory.HOTBAR_SIZE) % Inventory.HOTBAR_SIZE;
+    }
+
+    public Camera getCamera() {
+        return camera;
+    }
+
+    public Vector3f getPosition() {
+        return position;
+    }
+}
