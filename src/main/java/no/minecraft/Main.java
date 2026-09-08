@@ -48,6 +48,7 @@ public class Main {
     private boolean isRightMouseDown = false;
     private float rightClickTimer = 0.0f;
     private boolean ignoreNextChar = false;
+    private float dimensionPortalCooldown = 0.0f;
 
     private static final String WORLD_VERT = """
             #version 330 core
@@ -574,16 +575,82 @@ public class Main {
     }
 
     private void igniteNetherPortal(int x, int y, int z) {
-        // Check adjacent air blocks for obsidian frame
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dy = 0; dy <= 2; dy++) {
-                int px = x + dx;
-                int py = y + dy;
-                if (world.getBlock(px, py, z) == BlockType.AIR) {
-                    world.setBlock(px, py, z, BlockType.NETHER_PORTAL);
+        // Find which plane (XY or ZY) forms a valid Minecraft Nether Portal frame:
+        // A standard portal frame is 4 wide x 5 tall (interior 2x3 air blocks),
+        // or up to 23x23. We support standard 4x5 vertical frames along X or Z axis.
+        if (tryIgnitePortalAxis(x, y, z, true)) return;
+        tryIgnitePortalAxis(x, y, z, false);
+    }
+
+    private boolean tryIgnitePortalAxis(int startX, int startY, int startZ, boolean alongX) {
+        // Search in a local neighborhood around the clicked obsidian block for candidate portal interior base
+        for (int offset = -3; offset <= 1; offset++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                int baseX = alongX ? startX + offset : startX;
+                int baseZ = alongX ? startZ : startZ + offset;
+                int baseY = startY + dy;
+
+                // Check if this (baseX, baseY, baseZ) is the bottom-left interior corner of a 2x3 portal
+                // Interior is: (i=0..1, j=0..2)
+                // Bottom frame: (baseX + (alongX ? i : 0), baseY - 1, baseZ + (alongX ? 0 : i)) == OBSIDIAN
+                // Top frame: (baseX + (alongX ? i : 0), baseY + 3, baseZ + (alongX ? 0 : i)) == OBSIDIAN
+                // Left frame: (baseX - (alongX ? 1 : 0), baseY + j, baseZ - (alongX ? 0 : 1)) == OBSIDIAN
+                // Right frame: (baseX + (alongX ? 2 : 0), baseY + j, baseZ + (alongX ? 0 : 2)) == OBSIDIAN
+                boolean validFrame = true;
+
+                // Bottom and Top frames
+                for (int i = 0; i < 2; i++) {
+                    int bx = alongX ? baseX + i : baseX;
+                    int bz = alongX ? baseZ : baseZ + i;
+                    if (world.getBlock(bx, baseY - 1, bz) != BlockType.OBSIDIAN ||
+                        world.getBlock(bx, baseY + 3, bz) != BlockType.OBSIDIAN) {
+                        validFrame = false;
+                        break;
+                    }
                 }
+                if (!validFrame) continue;
+
+                // Left and Right sides
+                for (int j = 0; j < 3; j++) {
+                    int lx = alongX ? baseX - 1 : baseX;
+                    int lz = alongX ? baseZ : baseZ - 1;
+                    int rx = alongX ? baseX + 2 : baseX;
+                    int rz = alongX ? baseZ : baseZ + 2;
+                    if (world.getBlock(lx, baseY + j, lz) != BlockType.OBSIDIAN ||
+                        world.getBlock(rx, baseY + j, rz) != BlockType.OBSIDIAN) {
+                        validFrame = false;
+                        break;
+                    }
+                }
+                if (!validFrame) continue;
+
+                // Check that interior is air (or already portal)
+                for (int i = 0; i < 2; i++) {
+                    for (int j = 0; j < 3; j++) {
+                        int ix = alongX ? baseX + i : baseX;
+                        int iz = alongX ? baseZ : baseZ + i;
+                        BlockType cur = world.getBlock(ix, baseY + j, iz);
+                        if (cur != BlockType.AIR && cur != BlockType.NETHER_PORTAL) {
+                            validFrame = false;
+                            break;
+                        }
+                    }
+                    if (!validFrame) break;
+                }
+                if (!validFrame) continue;
+
+                // Valid frame! Fill interior with NETHER_PORTAL
+                for (int i = 0; i < 2; i++) {
+                    for (int j = 0; j < 3; j++) {
+                        int ix = alongX ? baseX + i : baseX;
+                        int iz = alongX ? baseZ : baseZ + i;
+                        world.setBlock(ix, baseY + j, iz, BlockType.NETHER_PORTAL);
+                    }
+                }
+                return true;
             }
         }
+        return false;
     }
 
     private void checkAndActivateEndPortal() {
@@ -676,25 +743,52 @@ public class Main {
                 player.update(dt, fwd, bwd, left, right, jump, sneak, sprint);
                 world.update(dt, player);
 
-                // Dimension Portal stepping check
-                int px = (int) Math.floor(player.getPosition().x);
-                int py = (int) Math.floor(player.getPosition().y + 0.1f);
-                int pz = (int) Math.floor(player.getPosition().z);
+                // Dimension Portal stepping check with cooldown
+                if (dimensionPortalCooldown > 0) {
+                    dimensionPortalCooldown -= dt;
+                } else {
+                    no.minecraft.player.AABB playerAABB = player.getBoundingBox();
+                    int minX = (int) Math.floor(playerAABB.minX);
+                    int maxX = (int) Math.floor(playerAABB.maxX);
+                    int minY = (int) Math.floor(playerAABB.minY);
+                    int maxY = (int) Math.floor(playerAABB.maxY);
+                    int minZ = (int) Math.floor(playerAABB.minZ);
+                    int maxZ = (int) Math.floor(playerAABB.maxZ);
 
-                BlockType currentBlock = world.getBlock(px, py, pz);
-                BlockType belowBlock = world.getBlock(px, (int) Math.floor(player.getPosition().y - 0.2f), pz);
+                    boolean inNetherPortal = false;
+                    boolean inEndPortal = false;
 
-                if (currentBlock == BlockType.NETHER_PORTAL || belowBlock == BlockType.NETHER_PORTAL) {
-                    if (world.getCurrentDimension() == no.minecraft.world.Dimension.OVERWORLD) {
-                        world.teleportToDimension(no.minecraft.world.Dimension.NETHER, player);
-                    } else if (world.getCurrentDimension() == no.minecraft.world.Dimension.NETHER) {
-                        world.teleportToDimension(no.minecraft.world.Dimension.OVERWORLD, player);
+                    for (int x = minX; x <= maxX; x++) {
+                        for (int y = minY; y <= maxY; y++) {
+                            for (int z = minZ; z <= maxZ; z++) {
+                                BlockType bt = world.getBlock(x, y, z);
+                                if (bt == BlockType.NETHER_PORTAL) {
+                                    inNetherPortal = true;
+                                    break;
+                                } else if (bt == BlockType.END_PORTAL) {
+                                    inEndPortal = true;
+                                    break;
+                                }
+                            }
+                            if (inNetherPortal || inEndPortal) break;
+                        }
+                        if (inNetherPortal || inEndPortal) break;
                     }
-                } else if (currentBlock == BlockType.END_PORTAL || belowBlock == BlockType.END_PORTAL) {
-                    if (world.getCurrentDimension() == no.minecraft.world.Dimension.OVERWORLD) {
-                        world.teleportToDimension(no.minecraft.world.Dimension.THE_END, player);
-                    } else if (world.getCurrentDimension() == no.minecraft.world.Dimension.THE_END) {
-                        world.teleportToDimension(no.minecraft.world.Dimension.OVERWORLD, player);
+
+                    if (inNetherPortal) {
+                        dimensionPortalCooldown = 2.5f; // Wait 2.5s before next portal transition
+                        if (world.getCurrentDimension() == no.minecraft.world.Dimension.OVERWORLD) {
+                            world.teleportToDimension(no.minecraft.world.Dimension.NETHER, player);
+                        } else if (world.getCurrentDimension() == no.minecraft.world.Dimension.NETHER) {
+                            world.teleportToDimension(no.minecraft.world.Dimension.OVERWORLD, player);
+                        }
+                    } else if (inEndPortal) {
+                        dimensionPortalCooldown = 2.5f;
+                        if (world.getCurrentDimension() == no.minecraft.world.Dimension.OVERWORLD) {
+                            world.teleportToDimension(no.minecraft.world.Dimension.THE_END, player);
+                        } else if (world.getCurrentDimension() == no.minecraft.world.Dimension.THE_END) {
+                            world.teleportToDimension(no.minecraft.world.Dimension.OVERWORLD, player);
+                        }
                     }
                 }
             }

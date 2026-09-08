@@ -136,21 +136,31 @@ public class World {
         return 25;
     }
 
+    private org.joml.Vector3f lastOverworldPortal = null;
+
     public void teleportToDimension(Dimension newDim, Player player) {
         if (this.currentDimension == newDim) return;
-        this.currentDimension = newDim;
         mobs.clear();
         arrows.clear();
         droppedItems.clear();
 
         if (newDim == Dimension.NETHER) {
+            // Save location where player entered from Overworld
+            if (this.currentDimension == Dimension.OVERWORLD) {
+                lastOverworldPortal = new org.joml.Vector3f(player.getPosition());
+            }
+            this.currentDimension = Dimension.NETHER;
             no.minecraft.advancement.AdvancementManager.getInstance().unlock(
                     no.minecraft.advancement.AdvancementManager.Advancement.WE_NEED_TO_GO_DEEPER
             );
-            // Spawn inside Nether near fortress at (8, 16, 8)
+            // Spawn on Nether portal platform at (8.5, 25.05, 9.5) directly facing the portal frame
             updateLoadedChunks(0, 0);
-            player.teleportTo(8.5f, 16.05f, 8.5f);
+            player.teleportTo(8.5f, 25.05f, 9.5f);
         } else if (newDim == Dimension.THE_END) {
+            if (this.currentDimension == Dimension.OVERWORLD) {
+                lastOverworldPortal = new org.joml.Vector3f(player.getPosition());
+            }
+            this.currentDimension = Dimension.THE_END;
             no.minecraft.advancement.AdvancementManager.getInstance().unlock(
                     no.minecraft.advancement.AdvancementManager.Advancement.THE_END
             );
@@ -162,9 +172,17 @@ public class World {
             spawnMob(no.minecraft.entity.MobType.ENDER_DRAGON, 0.0f, 40.0f, 0.0f);
         } else {
             // Overworld return
-            updateLoadedChunks(0, 0);
-            int sy = getSpawnHeight(0, 0);
-            player.teleportTo(0.5f, sy + 0.05f, 0.5f);
+            this.currentDimension = Dimension.OVERWORLD;
+            if (lastOverworldPortal != null) {
+                int cx = Math.floorDiv((int) Math.floor(lastOverworldPortal.x), Chunk.SIZE_X);
+                int cz = Math.floorDiv((int) Math.floor(lastOverworldPortal.z), Chunk.SIZE_Z);
+                updateLoadedChunks(cx, cz);
+                player.teleportTo(lastOverworldPortal.x, lastOverworldPortal.y, lastOverworldPortal.z);
+            } else {
+                updateLoadedChunks(0, 0);
+                int sy = getSpawnHeight(0, 0);
+                player.teleportTo(0.5f, sy + 0.05f, 0.5f);
+            }
         }
     }
 
@@ -179,6 +197,11 @@ public class World {
 
     public void spawnMob(no.minecraft.entity.MobType type, float x, float y, float z) {
         mobs.add(new no.minecraft.entity.Mob(type, x, y, z));
+    }
+
+    public void clearHostileMobs() {
+        mobs.removeIf(mob -> mob.getType() != no.minecraft.entity.MobType.ENDER_DRAGON &&
+                             mob.getType() != no.minecraft.entity.MobType.END_CRYSTAL);
     }
 
     public List<DroppedItem> getDroppedItems() { return droppedItems; }
@@ -285,12 +308,22 @@ public class World {
         if (mobs.size() >= 20) return;
 
         float angle = rand.nextFloat() * (float) (2 * Math.PI);
-        float dist = 14.0f + rand.nextFloat() * 18.0f;
+        float dist = 32.0f + rand.nextFloat() * 22.0f;
         float mx = player.getPosition().x + (float) Math.cos(angle) * dist;
         float mz = player.getPosition().z + (float) Math.sin(angle) * dist;
         int bx = (int) Math.floor(mx);
         int bz = (int) Math.floor(mz);
         int groundY = getSpawnHeight(bx, bz);
+
+        int playerCx = Math.floorDiv((int) Math.floor(player.getPosition().x), Chunk.SIZE_X);
+        int playerCz = Math.floorDiv((int) Math.floor(player.getPosition().z), Chunk.SIZE_Z);
+        int spawnCx = Math.floorDiv(bx, Chunk.SIZE_X);
+        int spawnCz = Math.floorDiv(bz, Chunk.SIZE_Z);
+
+        // Do not spawn mobs in player's chunk or directly neighboring chunks (minimum 2 chunks away)
+        if (Math.abs(spawnCx - playerCx) <= 1 && Math.abs(spawnCz - playerCz) <= 1) {
+            return;
+        }
 
         if (currentDimension == Dimension.OVERWORLD) {
             if (groundY > 1 && groundY < 50 && isDarkAt(bx, groundY, bz)) {
@@ -304,7 +337,32 @@ public class World {
                 spawnMob(types[rand.nextInt(types.length)], mx, groundY + 0.05f, mz);
             }
         } else if (currentDimension == Dimension.NETHER) {
-            if (groundY > 5 && groundY < 45) {
+            // Check for nearby active Blaze spawners (within 16 blocks)
+            List<int[]> nearSpawners = NetherFortressGenerator.getSpawnersNear(
+                    player.getPosition().x, player.getPosition().z, 16.0f, seed);
+            for (int[] s : nearSpawners) {
+                // Check if spawner block still exists
+                if (getBlock(s[0], s[1], s[2]) == BlockType.SPAWNER) {
+                    // Count blazes near this spawner
+                    int blazeCount = 0;
+                    for (no.minecraft.entity.Mob m : mobs) {
+                        if (m.getType() == no.minecraft.entity.MobType.BLAZE &&
+                            m.getPosition().distance(new org.joml.Vector3f(s[0], s[1], s[2])) < 10.0f) {
+                            blazeCount++;
+                        }
+                    }
+                    if (blazeCount < 3) {
+                        float spawnX = s[0] + (rand.nextFloat() - 0.5f) * 4.0f;
+                        float spawnZ = s[2] + (rand.nextFloat() - 0.5f) * 4.0f;
+                        float spawnY = s[1] + 0.5f;
+                        spawnMob(no.minecraft.entity.MobType.BLAZE, spawnX, spawnY, spawnZ);
+                        no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.4f);
+                    }
+                }
+            }
+
+            // Also regular ambient Nether mob spawning
+            if (groundY > 5 && groundY < 45 && getBlock(bx, groundY - 1, bz) != BlockType.LAVA) {
                 spawnMob(no.minecraft.entity.MobType.BLAZE, mx, groundY + 0.5f, mz);
             }
         } else if (currentDimension == Dimension.THE_END) {
@@ -436,38 +494,110 @@ public class World {
     }
 
     private void generateNetherChunk(Chunk chunk, int startX, int startZ) {
+        long chunkSeed = ((long) chunk.getChunkX() * 341873128712L) ^ ((long) chunk.getChunkZ() * 132897987543L) ^ seed;
+        Random cRand = new Random(chunkSeed);
+
+        // 1. Bedrock floor & ceiling + Cavern terrain & Biomes
         for (int lx = 0; lx < Chunk.SIZE_X; lx++) {
             for (int lz = 0; lz < Chunk.SIZE_Z; lz++) {
-                // Bedrock floor & ceiling
+                int wx = startX + lx;
+                int wz = startZ + lz;
+
+                // Bedrock boundaries
                 chunk.setBlock(lx, 0, lz, BlockType.BEDROCK);
                 chunk.setBlock(lx, 63, lz, BlockType.BEDROCK);
 
-                // Netherrack floor (y: 1..12) and ceiling (y: 50..62)
-                for (int y = 1; y <= 12; y++) {
-                    chunk.setBlock(lx, y, lz, BlockType.NETHERRACK);
+                // Biome calculation based on 2D noise:
+                // 0: Nether Wastes (classic Netherrack + Quartz)
+                // 1: Soul Sand Valley (Soul sand floor, eerie caverns)
+                // 2: Basalt Deltas (Basalt pillars & floors)
+                double bVal = Math.sin((wx + offsetX * 0.5) * 0.02) + Math.cos((wz + offsetZ * 0.5) * 0.02);
+                int biome = (bVal > 0.6) ? 1 : (bVal < -0.6 ? 2 : 0);
+
+                // Base floor and ceiling terrain thickness
+                double fNoise = Math.sin((wx + offsetX) * 0.04) * Math.cos((wz + offsetZ) * 0.04) * 6.0;
+                double cNoise = Math.cos((wx - offsetX) * 0.04) * Math.sin((wz - offsetZ) * 0.04) * 6.0;
+                int floorThickness = (int) Math.clamp(10 + fNoise, 3, 20);
+                int ceilingThickness = (int) Math.clamp(10 + cNoise, 3, 20);
+
+                for (int y = 1; y < Chunk.SIZE_Y - 1; y++) {
+                    boolean isSolid = false;
+                    BlockType block = BlockType.NETHERRACK;
+
+                    if (y <= floorThickness || y >= Chunk.SIZE_Y - 1 - ceilingThickness) {
+                        isSolid = true;
+                    } else {
+                        // 3D Cavern noise for floating ledges and caves
+                        double n3d = Math.sin((wx + offsetX) * 0.06) * Math.cos(y * 0.12) * Math.sin((wz + offsetZ) * 0.06);
+                        if (n3d > 0.35) {
+                            isSolid = true;
+                        }
+                    }
+
+                    // Basalt columns in Basalt Deltas biome
+                    if (biome == 2 && !isSolid && (lx % 5 == 0 && lz % 5 == 0) && y >= 14 && y <= 35) {
+                        isSolid = true;
+                        block = BlockType.BASALT;
+                    }
+
+                    if (isSolid) {
+                        // Apply biome specific surface block
+                        if (biome == 1 && y <= floorThickness && y >= floorThickness - 2) {
+                            block = BlockType.SOUL_SAND;
+                        } else if (biome == 2) {
+                            block = BlockType.BASALT;
+                        } else {
+                            // Nether Wastes: Quartz ore veins (5% chance in Netherrack)
+                            if (cRand.nextInt(20) == 0 && y > 5 && y < 58) {
+                                block = BlockType.NETHER_QUARTZ_ORE;
+                            }
+                        }
+                        chunk.setBlock(lx, y, lz, block);
+                    } else {
+                        // Lava Ocean level at Y <= 16
+                        if (y <= 16) {
+                            chunk.setBlock(lx, y, lz, BlockType.LAVA);
+                        } else {
+                            chunk.setBlock(lx, y, lz, BlockType.AIR);
+                        }
+                    }
                 }
-                for (int y = 50; y <= 62; y++) {
-                    chunk.setBlock(lx, y, lz, BlockType.NETHERRACK);
+
+                // Hanging Glowstone clusters from the ceiling (y: 48..56)
+                if (cRand.nextInt(35) == 0) {
+                    int glowY = Chunk.SIZE_Y - 1 - ceilingThickness;
+                    if (glowY >= 45 && glowY <= 58) {
+                        int len = 1 + cRand.nextInt(3);
+                        for (int gy = 0; gy < len; gy++) {
+                            if (glowY - gy > 20) {
+                                chunk.setBlock(lx, glowY - gy, lz, BlockType.GLOWSTONE);
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        // Fortress corridors & bridges in Nether chunks near origin
-        int cx = chunk.getChunkX();
-        int cz = chunk.getChunkZ();
-        if (Math.abs(cx) <= 2 && Math.abs(cz) <= 2) {
-            // Fortress bridge at y: 14..16
-            for (int lx = 0; lx < Chunk.SIZE_X; lx++) {
-                for (int lz = 6; lz <= 9; lz++) {
-                    chunk.setBlock(lx, 14, lz, BlockType.NETHER_BRICKS);
-                    chunk.setBlock(lx, 15, 6, BlockType.NETHER_BRICKS);
-                    chunk.setBlock(lx, 15, 9, BlockType.NETHER_BRICKS);
+        // 2. Procedural Nether Fortress: continuous connected structures & spawners
+        List<NetherFortressGenerator.FortressPiece> pieces =
+                NetherFortressGenerator.getPiecesIntersectingChunk(chunk.getChunkX(), chunk.getChunkZ(), seed);
+        for (NetherFortressGenerator.FortressPiece piece : pieces) {
+            NetherFortressGenerator.carveAndBuildFortressPiece(chunk, piece);
+        }
+
+        // 3. Nether Portal frame back to Overworld:
+        // Positioned safely at origin chunk (0, 0)
+        if (chunk.getChunkX() == 0 && chunk.getChunkZ() == 0) {
+            // Find a solid base or create platform at (8, 24, 8)
+            for (int px = 6; px <= 11; px++) {
+                for (int pz = 6; pz <= 10; pz++) {
+                    chunk.setBlock(px, 24, pz, BlockType.NETHER_BRICKS);
+                    for (int py = 25; py <= 29; py++) {
+                        chunk.setBlock(px, py, pz, BlockType.AIR);
+                    }
                 }
             }
-            // Nether portal back to Overworld at chunk (0,0) coords (2, 15, 7)
-            if (cx == 0 && cz == 0) {
-                buildNetherPortalFrame(chunk, 2, 15, 7);
-            }
+            buildNetherPortalFrame(chunk, 7, 25, 8);
         }
     }
 
@@ -636,6 +766,26 @@ public class World {
 
     public int getLoadedChunkCount() {
         return getActiveChunks().size();
+    }
+
+    public String getBiomeName(int x, int y, int z) {
+        if (currentDimension == Dimension.NETHER) {
+            double bVal = Math.sin((x + offsetX * 0.5) * 0.02) + Math.cos((z + offsetZ * 0.5) * 0.02);
+            if (bVal > 0.6) return "minecraft:soul_sand_valley";
+            if (bVal < -0.6) return "minecraft:basalt_deltas";
+            return "minecraft:nether_wastes";
+        } else if (currentDimension == Dimension.THE_END) {
+            return "minecraft:the_end";
+        } else {
+            int h = getTerrainHeight(x, z);
+            if (h <= SEA_LEVEL + 1) {
+                return "minecraft:ocean";
+            } else if (h >= 30) {
+                return "minecraft:mountains";
+            } else {
+                return "minecraft:plains";
+            }
+        }
     }
 
     public void cleanup() {

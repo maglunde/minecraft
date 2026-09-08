@@ -53,6 +53,7 @@ public class Player {
     private float jumpBufferTimer = 0.0f;
     private float coyoteTimer = 0.0f;
     private boolean isSprinting = false;
+    private float lavaBurnTimer = 0.0f;
 
     public Player(World world, float startX, float startY, float startZ) {
         this.world = world;
@@ -65,6 +66,13 @@ public class Player {
                        boolean jump, boolean sneak, boolean sprint) {
         this.isSprinting = sprint && forward;
         float baseSpeed = isSprinting ? SPRINT_SPEED : WALK_SPEED;
+        // Soul Sand speed reduction
+        int currX = (int) Math.floor(position.x);
+        int currY = (int) Math.floor(position.y - 0.2f);
+        int currZ = (int) Math.floor(position.z);
+        if (world.getBlock(currX, currY, currZ) == BlockType.SOUL_SAND) {
+            baseSpeed *= 0.45f;
+        }
         // Sprint-jump momentum boost in air
         if (!onGround && isSprinting) {
             baseSpeed *= 1.12f;
@@ -158,6 +166,25 @@ public class Player {
             }
         }
 
+        // Environmental hazard checks (Lava burn damage and Soul Sand slowdown)
+        int px = (int) Math.floor(position.x);
+        int pyFeet = (int) Math.floor(position.y);
+        int pyHead = (int) Math.floor(position.y + 0.9f);
+        int pz = (int) Math.floor(position.z);
+        BlockType bFeet = world.getBlock(px, pyFeet, pz);
+        BlockType bHead = world.getBlock(px, pyHead, pz);
+        BlockType bBelow = world.getBlock(px, pyFeet - 1, pz);
+
+        if (bFeet == BlockType.LAVA || bHead == BlockType.LAVA || bBelow == BlockType.LAVA) {
+            lavaBurnTimer += dt;
+            if (lavaBurnTimer >= 0.5f) {
+                lavaBurnTimer = 0.0f;
+                damage(4); // 2 hearts of lava fire damage every half second
+            }
+        } else if (lavaBurnTimer > 0) {
+            lavaBurnTimer = Math.max(0.0f, lavaBurnTimer - dt);
+        }
+
         // Check if player fell below world minimum Y (The Void)
         if (deathFlashTimer > 0) {
             deathFlashTimer -= dt;
@@ -188,9 +215,11 @@ public class Player {
             setGameMode(GameMode.CREATIVE);
             setFlying(true);
             deathFlashTimer = 3.0f;
+            world.clearHostileMobs();
             return;
         }
 
+        world.clearHostileMobs();
         int groundY = world.getSpawnHeight((int) Math.floor(spawnPosition.x), (int) Math.floor(spawnPosition.z));
         position.set(spawnPosition.x, groundY + 0.05f, spawnPosition.z);
         velocity.set(0, 0, 0);

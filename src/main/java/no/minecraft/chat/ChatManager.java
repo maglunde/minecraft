@@ -3,7 +3,9 @@ package no.minecraft.chat;
 import no.minecraft.player.GameMode;
 import no.minecraft.player.Player;
 import no.minecraft.world.BlockType;
+import no.minecraft.world.Chunk;
 import no.minecraft.world.Dimension;
+import no.minecraft.world.NetherFortressGenerator;
 import no.minecraft.world.World;
 
 import java.util.ArrayList;
@@ -337,7 +339,10 @@ public class ChatManager {
                 if (struct.startsWith("strong")) {
                     addSuccessMessage("Stronghold funnet ved [" + World.STRONGHOLD_X + ", " + World.STRONGHOLD_Y + ", " + World.STRONGHOLD_Z + "]");
                 } else if (struct.startsWith("fort")) {
-                    addSuccessMessage("Nether Fortress funnet ved [0, 15, 0] i Nether");
+                    int rX = Math.floorDiv((int) Math.floor(player.getPosition().x / Chunk.SIZE_X), NetherFortressGenerator.FORTRESS_GRID);
+                    int rZ = Math.floorDiv((int) Math.floor(player.getPosition().z / Chunk.SIZE_Z), NetherFortressGenerator.FORTRESS_GRID);
+                    NetherFortressGenerator.Fortress f = NetherFortressGenerator.getFortressForRegion(rX, rZ, world.getSeed());
+                    addSuccessMessage("Nether Fortress funnet ved [" + f.originX + ", 25, " + f.originZ + "] i Nether (2 Blaze spawners)");
                 } else if (struct.startsWith("end") || struct.startsWith("portal")) {
                     addSuccessMessage("End Portal funnet ved [54, 12, 54] i Stronghold");
                 } else {

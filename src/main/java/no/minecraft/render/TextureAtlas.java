@@ -486,6 +486,83 @@ public class TextureAtlas {
             return rgba(0, 0, 0, 0);
         });
 
+        // 69: Lava (Animated red-orange-yellow molten surface)
+        loadOrPaint(pixelData, 69, "lava.png", (x, y, rand) -> {
+            int r = 220 + rand.nextInt(35);
+            int g = 60 + rand.nextInt(120);
+            int b = (g > 140) ? 20 + rand.nextInt(30) : 5;
+            return rgba(r, g, b, 255);
+        });
+
+        // 70: Nether Quartz Ore (Netherrack base with white/cream quartz crystal streaks)
+        loadOrPaint(pixelData, 70, "nether_quartz_ore.png", (x, y, rand) -> {
+            boolean quartz = (x + y >= 9 && x + y <= 12 && Math.abs(x - y) <= 4) ||
+                             (x >= 10 && x <= 13 && y >= 3 && y <= 6) ||
+                             (x >= 3 && x <= 6 && y >= 11 && y <= 14);
+            if (quartz) {
+                int q = 220 + rand.nextInt(35);
+                return rgba(q, (int)(q * 0.94f), (int)(q * 0.88f), 255);
+            }
+            int r = 110 + rand.nextInt(45);
+            int g = (int)(r * 0.22f) + rand.nextInt(10);
+            int b = (int)(r * 0.22f);
+            return rgba(r, g, b, 255);
+        });
+
+        // 71: Glowstone (Warm golden glowing crystalline cluster)
+        loadOrPaint(pixelData, 71, "glowstone.png", (x, y, rand) -> {
+            int border = ((x % 4 == 0) || (y % 4 == 0)) ? 1 : 0;
+            int r = 210 + rand.nextInt(45) - border * 30;
+            int g = 160 + rand.nextInt(40) - border * 30;
+            int b = 60 + rand.nextInt(30);
+            return rgba(r, g, b, 255);
+        });
+
+        // 72: Soul Sand (Dark wavy brown with ghostly face accents)
+        loadOrPaint(pixelData, 72, "soul_sand.png", (x, y, rand) -> {
+            boolean eye = (x == 4 && y == 5) || (x == 8 && y == 5) || (x == 11 && y == 11) || (x == 13 && y == 11);
+            if (eye) return rgba(35, 20, 15, 255);
+            int base = 70 + rand.nextInt(25);
+            return rgba((int)(base * 1.05f), (int)(base * 0.72f), (int)(base * 0.52f), 255);
+        });
+
+        // 73: Basalt Side (Dark gray vertical column streaks)
+        loadOrPaint(pixelData, 73, "basalt_side.png", (x, y, rand) -> {
+            int col = (x % 3 == 0) ? 45 : (58 + rand.nextInt(15));
+            return rgba(col, col, (int)(col * 1.05f), 255);
+        });
+
+        // 74: Basalt Top (Dark circular basalt column top)
+        loadOrPaint(pixelData, 74, "basalt_top.png", (x, y, rand) -> {
+            float dx = x - 7.5f;
+            float dy = y - 7.5f;
+            float d = (float) Math.sqrt(dx * dx + dy * dy);
+            int ring = (int)(d * 1.5f) % 2;
+            int c = 40 + ring * 25 + rand.nextInt(12);
+            return rgba(c, c, (int)(c * 1.05f), 255);
+        });
+
+        // 75: Mob Spawner (Dark iron cage with fiery glowing orange interior)
+        loadOrPaint(pixelData, 75, "spawner.png", (x, y, rand) -> {
+            boolean cageBar = (x == 0 || x == 15 || y == 0 || y == 15 ||
+                               x == 5 || x == 10 || y == 5 || y == 10 ||
+                               ((x + y) % 5 == 0));
+            if (cageBar) {
+                int iron = 35 + rand.nextInt(25);
+                return rgba(iron, iron, (int)(iron * 1.15f), 255);
+            }
+            // Inner flaming core
+            float dx = x - 7.5f;
+            float dy = y - 7.5f;
+            if (dx * dx + dy * dy <= 16) {
+                int r = 240 + rand.nextInt(15);
+                int g = 120 + rand.nextInt(70);
+                return rgba(r, g, 20, 255);
+            }
+            int bg = 15 + rand.nextInt(15);
+            return rgba(bg, bg, bg, 255);
+        });
+
         for (int y = 0; y < ATLAS_SIZE; y++) {
             buffer.put(pixelData[y]);
         }
