@@ -21,6 +21,7 @@ public class MainMenu {
     private final int vboId;
 
     private boolean inMenu = true;
+    private boolean gameStarted = false;
     private GameMode selectedMode = GameMode.SURVIVAL;
 
     private static final String VERT_SRC = """
@@ -83,6 +84,14 @@ public class MainMenu {
         glBindVertexArray(0);
     }
 
+    public boolean isGameStarted() {
+        return gameStarted;
+    }
+
+    public void setGameStarted(boolean gameStarted) {
+        this.gameStarted = gameStarted;
+    }
+
     public boolean isInMenu() {
         return inMenu;
     }
@@ -105,10 +114,29 @@ public class MainMenu {
         float startY = height * 0.38f;
         float gap = 34.0f * p;
 
-        // 3 Game mode buttons:
-        // 0: Creative
-        // 1: Survival
-        // 2: Hardcore
+        if (gameStarted) {
+            // Pause menu button 1: RESUME (FORTSETT)
+            float rY = startY;
+            if (mx >= startX && mx <= startX + btnW && my >= rY && my <= rY + btnH) {
+                no.minecraft.sound.SoundManager.getInstance().play("click");
+                this.inMenu = false;
+                return true;
+            }
+
+            // Pause menu buttons 2, 3, 4: Switch Game Mode (Creative, Survival, Hardcore)
+            GameMode[] modes = {GameMode.CREATIVE, GameMode.SURVIVAL, GameMode.HARDCORE};
+            for (int i = 0; i < 3; i++) {
+                float by = startY + (i + 1) * gap;
+                if (mx >= startX && mx <= startX + btnW && my >= by && my <= by + btnH) {
+                    no.minecraft.sound.SoundManager.getInstance().play("click");
+                    this.selectedMode = modes[i];
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Initial Start Menu: 3 Game mode buttons (Creative, Survival, Hardcore)
         GameMode[] modes = {GameMode.CREATIVE, GameMode.SURVIVAL, GameMode.HARDCORE};
 
         for (int i = 0; i < 3; i++) {
@@ -116,6 +144,7 @@ public class MainMenu {
             if (mx >= startX && mx <= startX + btnW && my >= by && my <= by + btnH) {
                 no.minecraft.sound.SoundManager.getInstance().play("click");
                 this.selectedMode = modes[i];
+                this.gameStarted = true;
                 this.inMenu = false; // Start game in selected mode
                 return true;
             }
@@ -155,51 +184,96 @@ public class MainMenu {
         // Vignette dark gradient overlay
         addRect(geom, 0, 0, width, height, 0, 0, 0, 0, 0, 0, 0, 0.45f);
 
-        // 2. Minecraft Title Text ("MINECRAFT")
-        drawMinecraftTitle(overlayGeom, width / 2.0f, height * 0.16f, p * 1.6f);
+        // 2. Title Text ("MINECRAFT" or "SPILL PAUSET")
+        if (gameStarted) {
+            drawMinecraftTitle(overlayGeom, "SPILL PAUSET", width / 2.0f, height * 0.16f, p * 1.5f);
+            drawModeSelectSubtitle(overlayGeom, "TRYKK ESC ELLER FORTSETT FOR A GJENOPPTA", width / 2.0f, height * 0.28f, p * 0.75f);
+        } else {
+            drawMinecraftTitle(overlayGeom, "MINECRAFT", width / 2.0f, height * 0.16f, p * 1.6f);
+            drawModeSelectSubtitle(overlayGeom, "VELG MODUS FOR A STARTE", width / 2.0f, height * 0.28f, p * 0.9f);
+        }
 
-        // Subtitle: "VELG MODUS FOR Å STARTE"
-        drawModeSelectSubtitle(overlayGeom, width / 2.0f, height * 0.28f, p * 0.9f);
-
-        // 3. Game Mode Buttons
+        // 3. Menu Buttons
         float btnW = 160.0f * p;
         float btnH = 24.0f * p;
         float startX = (width - btnW) / 2.0f;
         float startY = height * 0.38f;
         float gap = 34.0f * p;
 
-        String[] titles = {"CREATIVE", "SURVIVAL", "HARDCORE"};
-        String[] descs = {
-                "Uendelige ressurser, flyving & udodelighet",
-                "Samle ressurser, lag verktoy, overlev natten",
-                "Ett liv! Mobs er farlige, ingen respawn"
-        };
-        int[] iconTiles = {
-                BlockType.GRASS.getTexture(BlockType.Face.TOP),
-                BlockType.WOODEN_PICKAXE.getTexture(BlockType.Face.TOP),
-                BlockType.STONE_SWORD.getTexture(BlockType.Face.TOP)
-        };
+        if (gameStarted) {
+            // Button 1: FORTSETT (Resume)
+            float rY = startY;
+            boolean rHovered = (mx >= startX && mx <= startX + btnW && my >= rY && my <= rY + btnH);
+            drawMinecraftMenuButton(geom, startX, rY, btnW, btnH, rHovered, p);
+            drawButtonLabel(overlayGeom, "FORTSETT", startX + 48.0f * p, rY + 6.0f * p, p * 0.95f, 0.4f, 1.0f, 0.4f);
+            drawSmallDescription(overlayGeom, "Gjennoppta spillet der du slapp", startX + 30.0f * p, rY + 14.5f * p, p * 0.55f);
 
-        for (int i = 0; i < 3; i++) {
-            float by = startY + i * gap;
-            boolean hovered = (mx >= startX && mx <= startX + btnW && my >= by && my <= by + btnH);
+            // Button 2, 3, 4: Modusknapper
+            String[] titles = {"CREATIVE", "SURVIVAL", "HARDCORE"};
+            String[] descs = {
+                    "Bytt til Creative: flyving & udodelighet",
+                    "Bytt til Survival: samle & overlev",
+                    "Bytt til Hardcore: 1 liv, ingen respawn"
+            };
+            int[] iconTiles = {
+                    BlockType.GRASS.getTexture(BlockType.Face.TOP),
+                    BlockType.WOODEN_PICKAXE.getTexture(BlockType.Face.TOP),
+                    BlockType.STONE_SWORD.getTexture(BlockType.Face.TOP)
+            };
 
-            // Button frame with 3D bevel
-            drawMinecraftMenuButton(geom, startX, by, btnW, btnH, hovered, p);
+            for (int i = 0; i < 3; i++) {
+                float by = startY + (i + 1) * gap;
+                boolean hovered = (mx >= startX && mx <= startX + btnW && my >= by && my <= by + btnH);
+                boolean isCurrent = (selectedMode == (i == 0 ? GameMode.CREATIVE : (i == 1 ? GameMode.SURVIVAL : GameMode.HARDCORE)));
 
-            // Icon on button left
-            float[] uv = TextureAtlas.getUVs(iconTiles[i]);
-            addRect(tex, startX + 6.0f * p, by + 4.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
+                drawMinecraftMenuButton(geom, startX, by, btnW, btnH, hovered, p);
 
-            // Button Label in pixel letters
-            drawButtonLabel(overlayGeom, titles[i], startX + 28.0f * p, by + 6.0f * p, p * 0.9f, i == 2 ? 0.95f : 1.0f, i == 2 ? 0.3f : 1.0f, i == 2 ? 0.3f : 1.0f);
+                float[] uv = TextureAtlas.getUVs(iconTiles[i]);
+                addRect(tex, startX + 6.0f * p, by + 4.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
 
-            // Description below label
-            drawSmallDescription(overlayGeom, descs[i], startX + 28.0f * p, by + 14.5f * p, p * 0.55f);
+                String label = titles[i] + (isCurrent ? " (VALGT)" : "");
+                float lr = isCurrent ? 1.0f : (i == 2 ? 0.95f : 0.85f);
+                float lg = isCurrent ? 0.85f : (i == 2 ? 0.3f : 0.85f);
+                float lb = isCurrent ? 0.2f : (i == 2 ? 0.3f : 0.85f);
+                drawButtonLabel(overlayGeom, label, startX + 28.0f * p, by + 6.0f * p, p * 0.9f, lr, lg, lb);
+                drawSmallDescription(overlayGeom, descs[i], startX + 28.0f * p, by + 14.5f * p, p * 0.55f);
+            }
+
+            drawSmallDescription(overlayGeom, "Minecraft Java Clone - ESC eller klikk Fortsett for a fortsette", width / 2.0f - 145.0f * p, height - 16.0f * p, p * 0.65f);
+        } else {
+            String[] titles = {"CREATIVE", "SURVIVAL", "HARDCORE"};
+            String[] descs = {
+                    "Uendelige ressurser, flyving & udodelighet",
+                    "Samle ressurser, lag verktoy, overlev natten",
+                    "Ett liv! Mobs er farlige, ingen respawn"
+            };
+            int[] iconTiles = {
+                    BlockType.GRASS.getTexture(BlockType.Face.TOP),
+                    BlockType.WOODEN_PICKAXE.getTexture(BlockType.Face.TOP),
+                    BlockType.STONE_SWORD.getTexture(BlockType.Face.TOP)
+            };
+
+            for (int i = 0; i < 3; i++) {
+                float by = startY + i * gap;
+                boolean hovered = (mx >= startX && mx <= startX + btnW && my >= by && my <= by + btnH);
+
+                // Button frame with 3D bevel
+                drawMinecraftMenuButton(geom, startX, by, btnW, btnH, hovered, p);
+
+                // Icon on button left
+                float[] uv = TextureAtlas.getUVs(iconTiles[i]);
+                addRect(tex, startX + 6.0f * p, by + 4.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
+
+                // Button Label in pixel letters
+                drawButtonLabel(overlayGeom, titles[i], startX + 28.0f * p, by + 6.0f * p, p * 0.9f, i == 2 ? 0.95f : 1.0f, i == 2 ? 0.3f : 1.0f, i == 2 ? 0.3f : 1.0f);
+
+                // Description below label
+                drawSmallDescription(overlayGeom, descs[i], startX + 28.0f * p, by + 14.5f * p, p * 0.55f);
+            }
+
+            // Footer version info
+            drawSmallDescription(overlayGeom, "Minecraft Java Clone - Velg et alternativ med musen", width / 2.0f - 110.0f * p, height - 16.0f * p, p * 0.65f);
         }
-
-        // Footer version info
-        drawSmallDescription(overlayGeom, "Minecraft Java Clone - Velg et alternativ med musen", width / 2.0f - 110.0f * p, height - 16.0f * p, p * 0.65f);
 
         // Draw calls
         shader.setUniform("uUseTexture", 0);
@@ -236,8 +310,10 @@ public class MainMenu {
     }
 
     private void drawMinecraftTitle(List<Float> g, float centerX, float centerY, float s) {
-        // "MINECRAFT" logo in 3D pixel letters
-        String text = "MINECRAFT";
+        drawMinecraftTitle(g, "MINECRAFT", centerX, centerY, s);
+    }
+
+    private void drawMinecraftTitle(List<Float> g, String text, float centerX, float centerY, float s) {
         float totalWidth = text.length() * (6 * s);
         float startX = centerX - totalWidth / 2.0f;
 
@@ -250,7 +326,10 @@ public class MainMenu {
     }
 
     private void drawModeSelectSubtitle(List<Float> g, float centerX, float centerY, float s) {
-        String text = "VELG MODUS FOR A STARTE";
+        drawModeSelectSubtitle(g, "VELG MODUS FOR A STARTE", centerX, centerY, s);
+    }
+
+    private void drawModeSelectSubtitle(List<Float> g, String text, float centerX, float centerY, float s) {
         float totalWidth = text.length() * (6 * s);
         float startX = centerX - totalWidth / 2.0f;
 
@@ -314,7 +393,10 @@ public class MainMenu {
             case 'T' -> new int[][]{{1,1,1,1,1},{0,0,1,0,0},{0,0,1,0,0},{0,0,1,0,0},{0,0,1,0,0}};
             case 'U' -> new int[][]{{1,0,0,1},{1,0,0,1},{1,0,0,1},{1,0,0,1},{0,1,1,0}};
             case 'V' -> new int[][]{{1,0,0,1},{1,0,0,1},{1,0,0,1},{0,1,1,0},{0,0,0,0}};
+            case 'W' -> new int[][]{{1,0,0,0,1},{1,0,0,0,1},{1,0,1,0,1},{1,1,0,1,1},{1,0,0,0,1}};
+            case 'X' -> new int[][]{{1,0,0,1},{1,0,0,1},{0,1,1,0},{1,0,0,1},{1,0,0,1}};
             case 'Y' -> new int[][]{{1,0,0,1},{1,0,0,1},{0,1,1,0},{0,0,1,0},{0,0,1,0}};
+            case 'Z' -> new int[][]{{1,1,1,1},{0,0,0,1},{0,1,1,0},{1,0,0,0},{1,1,1,1}};
             case '-' -> new int[][]{{0,0,0,0},{0,0,0,0},{1,1,1,1},{0,0,0,0},{0,0,0,0}};
             case '!' -> new int[][]{{1},{1},{1},{0},{1}};
             case ',' -> new int[][]{{0},{0},{0},{1},{1}};

@@ -323,13 +323,20 @@ public class Main {
             if (action == GLFW_PRESS) {
                 if (key == GLFW_KEY_ESCAPE) {
                     if (mainMenu.isInMenu()) {
-                        // Already in menu
+                        if (mainMenu.isGameStarted()) {
+                            // Resume game from pause
+                            no.minecraft.sound.SoundManager.getInstance().play("click");
+                            mainMenu.setInMenu(false);
+                            player.setGameMode(mainMenu.getSelectedMode());
+                            setCursorLocked(true);
+                        }
                         return;
                     }
                     if (hud.isInventoryOpen()) {
                         hud.closeInventory(player);
                         setCursorLocked(true);
                     } else {
+                        // Pause game
                         mainMenu.setInMenu(true);
                         setCursorLocked(false);
                     }
