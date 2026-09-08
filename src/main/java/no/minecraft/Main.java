@@ -207,9 +207,16 @@ public class Main {
         glfwSetMouseButtonCallback(window, (win, button, action, mods) -> {
             if (mainMenu.isInMenu()) {
                 if (action == GLFW_PRESS) {
+                    boolean wasGameStarted = mainMenu.isGameStarted();
                     if (mainMenu.handleClick(lastMouseX, lastMouseY, button, width, height)) {
-                        // Started game from menu!
                         player.setGameMode(mainMenu.getSelectedMode());
+                        // If freshly started from title menu, generate a brand new random seed terrain!
+                        if (!wasGameStarted) {
+                            long newSeed = new java.util.Random().nextLong();
+                            world.setSeed(newSeed);
+                            int sy = world.getSpawnHeight(0, 0);
+                            player.resetToSpawn(0.5f, sy + 0.05f, 0.5f);
+                        }
                         setCursorLocked(true);
                     }
                 }
@@ -532,7 +539,8 @@ public class Main {
                 }
 
                 String timeStr = world.isNight() ? "🌙 Natt" : "☀️ Dag";
-                String title = String.format("Minecraft Java Clone | FPS: %d | Tid: %s | Mobs: %d | Modus: %s%s | Valgt: %s (x%s) | Drops: %d | E: Crafting%s",
+                String title = String.format("Minecraft Java Clone | Seed: %d | FPS: %d | Tid: %s | Mobs: %d | Modus: %s%s | Valgt: %s (x%s) | Drops: %d | E: Crafting%s",
+                        world.getSeed(),
                         frameCount,
                         timeStr,
                         world.getMobs().size(),

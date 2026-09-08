@@ -403,4 +403,15 @@ public class Player {
     public Vector3f getPosition() {
         return position;
     }
+
+    public void resetToSpawn(float x, float y, float z) {
+        this.spawnPosition.set(x, y, z);
+        this.position.set(x, y, z);
+        this.velocity.set(0, 0, 0);
+        this.health = MAX_HEALTH;
+        this.camera.getPosition().set(x, y + EYE_HEIGHT, z);
+        this.camera.updateVectors();
+        this.inventory.clear();
+        this.selectedSlot = 0;
+    }
 }

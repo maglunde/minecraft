@@ -10,9 +10,29 @@ public class World {
 
     private final Map<Long, Chunk> chunks = new HashMap<>();
     private final Set<Long> generatedChunks = new HashSet<>();
+    private long seed;
+    private double offsetX;
+    private double offsetZ;
 
     public World() {
-        // Initial generation around spawn (0, 0)
+        this(new Random().nextLong());
+    }
+
+    public World(long seed) {
+        setSeed(seed);
+    }
+
+    public long getSeed() {
+        return seed;
+    }
+
+    public void setSeed(long seed) {
+        this.seed = seed;
+        Random r = new Random(seed);
+        // Distribute terrain coordinate offsets randomly within [-100000, 100000]
+        this.offsetX = (r.nextDouble() - 0.5) * 200000.0;
+        this.offsetZ = (r.nextDouble() - 0.5) * 200000.0;
+        cleanup();
         updateLoadedChunks(0, 0);
     }
 
@@ -289,9 +309,9 @@ public class World {
     }
 
     private void decorateChunk(int cx, int cz) {
-        // Deterministic PRNG seed for this chunk
-        long seed = ((long) cx * 341873128711L) ^ ((long) cz * 132897987541L) ^ 424242L;
-        Random treeRand = new Random(seed);
+        // Deterministic PRNG seed for this chunk using world seed
+        long chunkSeed = ((long) cx * 341873128711L) ^ ((long) cz * 132897987541L) ^ seed;
+        Random treeRand = new Random(chunkSeed);
 
         int startX = cx * Chunk.SIZE_X;
         int startZ = cz * Chunk.SIZE_Z;
@@ -339,10 +359,13 @@ public class World {
     }
 
     private int getTerrainHeight(int x, int z) {
-        // Multi-frequency noise using sine/cosine harmonics for infinite coherent terrain
-        double n1 = Math.sin(x * 0.035) * Math.cos(z * 0.035) * 8.0;
-        double n2 = Math.sin((x + 100) * 0.07) * Math.cos((z + 50) * 0.07) * 4.0;
-        double n3 = Math.sin(x * 0.015 + z * 0.015) * 6.0;
+        // Multi-frequency noise shifted by seed-based world coordinate offsets
+        double sx = x + offsetX;
+        double sz = z + offsetZ;
+
+        double n1 = Math.sin(sx * 0.035) * Math.cos(sz * 0.035) * 8.0;
+        double n2 = Math.sin((sx + 100.0) * 0.07) * Math.cos((sz + 50.0) * 0.07) * 4.0;
+        double n3 = Math.sin(sx * 0.015 + sz * 0.015) * 6.0;
 
         int baseHeight = 24;
         int height = (int) Math.round(baseHeight + n1 + n2 + n3);
