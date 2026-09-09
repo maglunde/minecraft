@@ -34,6 +34,7 @@ public class GameSettings {
     public int keyJump = GLFW_KEY_SPACE;
     public int keySneak = GLFW_KEY_LEFT_SHIFT;
     public int keyInventory = GLFW_KEY_E;
+    public int keyDrop = GLFW_KEY_Q;
     public int keyToggleDebug = GLFW_KEY_F3;
     public int keyTogglePerspective = GLFW_KEY_F5;
 

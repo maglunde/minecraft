@@ -6,6 +6,7 @@ import no.minecraft.player.ItemStack;
 import no.minecraft.player.Player;
 import no.minecraft.world.BlockType;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import org.joml.Vector4f;
 import org.lwjgl.BufferUtils;
 
@@ -603,6 +604,25 @@ public class HUD {
         float ix = (windowWidth - invW) / 2.0f;
         float iy = (windowHeight - invH) / 2.0f;
 
+        float minGuiX = recipeBookOpen ? (ix - 126.0f * scale - 6.0f) : ix;
+        float maxGuiX = ix + invW;
+        float minGuiY = iy;
+        float maxGuiY = iy + invH;
+
+        // Dropping item when dragging outside inventory area
+        if (mx < minGuiX || mx > maxGuiX || my < minGuiY || my > maxGuiY) {
+            if (!carriedItem.isEmpty()) {
+                int dropCount = (button == GLFW_MOUSE_BUTTON_RIGHT) ? 1 : carriedItem.getCount();
+                BlockType dropType = carriedItem.getType();
+                carriedItem.add(-dropCount);
+                Vector3f eye = player.getEyePosition();
+                Vector3f fwd = player.getCamera().getForward();
+                player.getWorld().spawnItemDrop(eye.x, eye.y - 0.2f, eye.z, fwd.x * 4.5f, fwd.y * 4.5f + 1.5f, fwd.z * 4.5f, dropType, dropCount);
+                no.minecraft.sound.SoundManager.getInstance().play("pop", 0.8f);
+            }
+            return true;
+        }
+
         // --- Handle Crafting Table (3x3) clicks ---
         if (craftingTableOpen) {
             // 1. Recipe book toggle button
@@ -957,6 +977,120 @@ public class HUD {
         return false;
     }
 
+    public boolean handleDropKeyPress(double mx, double my, boolean dropAll, Player player, int windowWidth, int windowHeight) {
+        if (!inventoryOpen && !craftingTableOpen) return false;
+
+        float scale = 2.4f;
+        float invW = 176.0f * scale;
+        float invH = 166.0f * scale;
+        float ix = (windowWidth - invW) / 2.0f;
+        float iy = (windowHeight - invH) / 2.0f;
+
+        // If carrying an item on mouse cursor, drop that
+        if (!carriedItem.isEmpty()) {
+            return dropFromSlot(carriedItem, dropAll, player);
+        }
+
+        if (craftingTableOpen) {
+            // 1. 3x3 Bench Slots
+            float gridX = ix + 30.0f * scale;
+            float gridY = iy + 17.0f * scale;
+            for (int r = 0; r < 3; r++) {
+                for (int c = 0; c < 3; c++) {
+                    int slotIdx = r * 3 + c;
+                    float sx = gridX + c * 18.0f * scale;
+                    float sy = gridY + r * 18.0f * scale;
+                    if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
+                        return dropFromSlot(benchSlots[slotIdx], dropAll, player);
+                    }
+                }
+            }
+
+            // 2. Result Slot
+            float resX = ix + 124.0f * scale;
+            float resY = iy + 31.0f * scale;
+            float resSize = 24.0f * scale;
+            if (mx >= resX && mx <= resX + resSize && my >= resY && my <= resY + resSize) {
+                return dropFromResultSlot(true, dropAll, player);
+            }
+        } else {
+            // 1. 2x2 Crafting Slots
+            float craftGridX = ix + 98.0f * scale;
+            float craftGridY = iy + 18.0f * scale;
+            for (int r = 0; r < 2; r++) {
+                for (int c = 0; c < 2; c++) {
+                    int slotIdx = r * 2 + c;
+                    float sx = craftGridX + c * 18.0f * scale;
+                    float sy = craftGridY + r * 18.0f * scale;
+                    if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
+                        return dropFromSlot(craftSlots[slotIdx], dropAll, player);
+                    }
+                }
+            }
+
+            // 2. Result Slot
+            float resultSlotX = ix + 152.0f * scale;
+            float resultSlotY = iy + 26.0f * scale;
+            float resSize = 20.0f * scale;
+            if (mx >= resultSlotX && mx <= resultSlotX + resSize && my >= resultSlotY && my <= resultSlotY + resSize) {
+                return dropFromResultSlot(false, dropAll, player);
+            }
+        }
+
+        // Main Inventory Grid (3 rows x 9 columns)
+        float mainInvX = ix + 8.0f * scale;
+        float mainInvY = iy + 84.0f * scale;
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                int slotIndex = 9 + row * 9 + col;
+                float sx = mainInvX + col * 18.0f * scale;
+                float sy = mainInvY + row * 18.0f * scale;
+                if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
+                    return dropFromSlot(player.getInventory().getSlot(slotIndex), dropAll, player);
+                }
+            }
+        }
+
+        // Hotbar Grid in Inventory (1 row x 9 columns)
+        float hotbarInvY = iy + 142.0f * scale;
+        for (int col = 0; col < 9; col++) {
+            float sx = mainInvX + col * 18.0f * scale;
+            if (mx >= sx && mx <= sx + 18.0f * scale && my >= hotbarInvY && my <= hotbarInvY + 18.0f * scale) {
+                return dropFromSlot(player.getInventory().getSlot(col), dropAll, player);
+            }
+        }
+
+        return false;
+    }
+
+    private boolean dropFromSlot(ItemStack slot, boolean dropAll, Player player) {
+        if (slot == null || slot.isEmpty()) return false;
+        int count = dropAll ? slot.getCount() : 1;
+        BlockType type = slot.getType();
+        slot.add(-count);
+        Vector3f eye = player.getEyePosition();
+        Vector3f fwd = player.getCamera().getForward();
+        player.getWorld().spawnItemDrop(eye.x, eye.y - 0.2f, eye.z, fwd.x * 4.5f, fwd.y * 4.5f + 1.5f, fwd.z * 4.5f, type, count);
+        no.minecraft.sound.SoundManager.getInstance().play("pop", 0.8f);
+        return true;
+    }
+
+    private boolean dropFromResultSlot(boolean isBench, boolean dropAll, Player player) {
+        ItemStack res = isBench ? get3x3CraftingResult() : getCraftingResult();
+        if (res == null || res.isEmpty()) return false;
+        int count = res.getCount();
+        BlockType type = res.getType();
+        ItemStack[] sourceSlots = isBench ? benchSlots : craftSlots;
+        for (ItemStack s : sourceSlots) {
+            if (!s.isEmpty()) s.add(-1);
+        }
+        Vector3f eye = player.getEyePosition();
+        Vector3f fwd = player.getCamera().getForward();
+        player.getWorld().spawnItemDrop(eye.x, eye.y - 0.2f, eye.z, fwd.x * 4.5f, fwd.y * 4.5f + 1.5f, fwd.z * 4.5f, type, count);
+        no.minecraft.sound.SoundManager.getInstance().play("pop", 0.8f);
+        return true;
+    }
+
     public void render(int windowWidth, int windowHeight, float mouseX, float mouseY, Player player, TextureAtlas atlas, no.minecraft.world.World world, no.minecraft.chat.ChatManager chatManager) {
         render(windowWidth, windowHeight, mouseX, mouseY, player, atlas, world, chatManager, this.lastFps, this.lastTargetedHit);
     }
@@ -1168,6 +1302,8 @@ public class HUD {
         float ix = (windowWidth - invW) / 2.0f;
         float iy = (windowHeight - invH) / 2.0f;
 
+        ItemStack hoveredStack = null;
+
         // 1. Dark background overlay
         addRect(geom, 0, 0, windowWidth, windowHeight, 0, 0, 0, 0, 0, 0, 0, 0.65f);
 
@@ -1216,6 +1352,9 @@ public class HUD {
 
                 ItemStack stack = craftSlots[slotIdx];
                 if (!stack.isEmpty()) {
+                    if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
+                        hoveredStack = stack;
+                    }
                     int tId = stack.getType().getTexture(BlockType.Face.TOP);
                     float[] uv = TextureAtlas.getUVs(tId);
                     addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
@@ -1239,6 +1378,9 @@ public class HUD {
         // ONLY show result if 2x2 grid contains a valid recipe!
         ItemStack craftResult = getCraftingResult();
         if (craftResult != null && !craftResult.isEmpty()) {
+            if (mouseX >= resultSlotX && mouseX <= resultSlotX + 20.0f * p && mouseY >= resultSlotY && mouseY <= resultSlotY + 20.0f * p) {
+                hoveredStack = craftResult;
+            }
             BlockType outBlock = craftResult.getType();
             int tileId = outBlock.getTexture(BlockType.Face.TOP);
             float[] uv = TextureAtlas.getUVs(tileId);
@@ -1266,6 +1408,9 @@ public class HUD {
 
                 ItemStack stack = player.getInventory().getSlot(slotIndex);
                 if (!stack.isEmpty()) {
+                    if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
+                        hoveredStack = stack;
+                    }
                     int tId = stack.getType().getTexture(BlockType.Face.TOP);
                     float[] uv = TextureAtlas.getUVs(tId);
                     addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
@@ -1284,6 +1429,9 @@ public class HUD {
 
             ItemStack stack = player.getInventory().getSlot(col);
             if (!stack.isEmpty()) {
+                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= hotbarInvY && mouseY <= hotbarInvY + 18.0f * p) {
+                    hoveredStack = stack;
+                }
                 int tId = stack.getType().getTexture(BlockType.Face.TOP);
                 float[] uv = TextureAtlas.getUVs(tId);
                 addRect(tex, sx + 2.0f * p, hotbarInvY + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
@@ -1317,6 +1465,10 @@ public class HUD {
 
                 CraftingRecipe r = recipes.get(i);
                 boolean canCraft = r.canCraft(player.getInventory());
+
+                if (mouseX >= sx && mouseX <= sx + slotW && mouseY >= sy && mouseY <= sy + slotW) {
+                    hoveredStack = r.getOutput();
+                }
 
                 // Slot background
                 drawPixelSlot(geom, sx, sy, slotW, p);
@@ -1354,6 +1506,11 @@ public class HUD {
                 drawMinecraftNumber(overlayGeom, carriedItem.getCount(), cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
             }
         }
+
+        // 15. Item tooltip popup on hover
+        if (carriedItem.isEmpty() && hoveredStack != null && !hoveredStack.isEmpty()) {
+            renderItemTooltip(overlayGeom, hoveredStack, mouseX, mouseY, windowWidth, windowHeight);
+        }
     }
 
     private void renderCraftingTableGUI(List<Float> geom, List<Float> tex, List<Float> overlayGeom, int windowWidth, int windowHeight, Player player, TextureAtlas atlas) {
@@ -1362,6 +1519,8 @@ public class HUD {
         float invH = 166.0f * p;
         float ix = (windowWidth - invW) / 2.0f;
         float iy = (windowHeight - invH) / 2.0f;
+
+        ItemStack hoveredStack = null;
 
         // 1. Dark background overlay
         addRect(geom, 0, 0, windowWidth, windowHeight, 0, 0, 0, 0, 0, 0, 0, 0.65f);
@@ -1384,6 +1543,9 @@ public class HUD {
 
                 ItemStack stack = benchSlots[slotIdx];
                 if (!stack.isEmpty()) {
+                    if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
+                        hoveredStack = stack;
+                    }
                     int tId = stack.getType().getTexture(BlockType.Face.TOP);
                     float[] uv = TextureAtlas.getUVs(tId);
                     addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
@@ -1407,6 +1569,9 @@ public class HUD {
         // ONLY show result when 3x3 grid ingredients form a valid recipe!
         ItemStack craftResult = get3x3CraftingResult();
         if (craftResult != null && !craftResult.isEmpty()) {
+            if (mouseX >= resX && mouseX <= resX + 24.0f * p && mouseY >= resY && mouseY <= resY + 24.0f * p) {
+                hoveredStack = craftResult;
+            }
             BlockType outBlock = craftResult.getType();
             int tileId = outBlock.getTexture(BlockType.Face.TOP);
             float[] uv = TextureAtlas.getUVs(tileId);
@@ -1434,6 +1599,9 @@ public class HUD {
 
                 ItemStack stack = player.getInventory().getSlot(slotIndex);
                 if (!stack.isEmpty()) {
+                    if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
+                        hoveredStack = stack;
+                    }
                     int tId = stack.getType().getTexture(BlockType.Face.TOP);
                     float[] uv = TextureAtlas.getUVs(tId);
                     addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
@@ -1452,6 +1620,9 @@ public class HUD {
 
             ItemStack stack = player.getInventory().getSlot(col);
             if (!stack.isEmpty()) {
+                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= hotbarInvY && mouseY <= hotbarInvY + 18.0f * p) {
+                    hoveredStack = stack;
+                }
                 int tId = stack.getType().getTexture(BlockType.Face.TOP);
                 float[] uv = TextureAtlas.getUVs(tId);
                 addRect(tex, sx + 2.0f * p, hotbarInvY + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
@@ -1485,6 +1656,10 @@ public class HUD {
 
                 CraftingRecipe r = recipes.get(i);
                 boolean canCraft = r.canCraft(player.getInventory());
+
+                if (mouseX >= sx && mouseX <= sx + slotW && mouseY >= sy && mouseY <= sy + slotW) {
+                    hoveredStack = r.getOutput();
+                }
 
                 // Slot background
                 drawPixelSlot(geom, sx, sy, slotW, p);
@@ -1521,6 +1696,89 @@ public class HUD {
             if (carriedItem.getCount() > 0) {
                 drawMinecraftNumber(overlayGeom, carriedItem.getCount(), cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
             }
+        }
+
+        // 12. Item tooltip popup on hover
+        if (carriedItem.isEmpty() && hoveredStack != null && !hoveredStack.isEmpty()) {
+            renderItemTooltip(overlayGeom, hoveredStack, mouseX, mouseY, windowWidth, windowHeight);
+        }
+    }
+
+    private void renderItemTooltip(List<Float> overlayGeom, ItemStack item, float mx, float my, int windowWidth, int windowHeight) {
+        if (item == null || item.isEmpty()) return;
+
+        BlockType bt = item.getType();
+        List<String> lines = new ArrayList<>();
+        List<float[]> colors = new ArrayList<>();
+
+        // Title: Item name (White)
+        lines.add(bt.getName());
+        colors.add(new float[]{1.0f, 1.0f, 1.0f});
+
+        // Food info
+        if (bt.isFood()) {
+            float hearts = bt.getFoodValue() / 2.0f;
+            String heartStr = (hearts == (int) hearts) ? String.valueOf((int) hearts) : String.format(java.util.Locale.ROOT, "%.1f", hearts);
+            lines.add("+" + heartStr + " MAT");
+            colors.add(new float[]{0.70f, 0.70f, 0.70f});
+        }
+
+        // Attack damage
+        int attackDmg = bt.getAttackDamage();
+        if (attackDmg > 1) {
+            lines.add("+" + attackDmg + " ANGREPSSKADE");
+            colors.add(new float[]{0.35f, 0.85f, 0.35f});
+        }
+
+        // Durability
+        if (bt.isDamageable()) {
+            int maxDur = bt.getMaxDurability();
+            int currentDur = maxDur - item.getDamage();
+            lines.add("HOLDBARHET: " + currentDur + " / " + maxDur);
+            colors.add(new float[]{0.75f, 0.75f, 0.75f});
+        }
+
+        float textScale = 1.35f;
+        float charW = 6.0f * textScale;
+        float lineH = 10.0f * textScale;
+
+        float maxW = 0.0f;
+        for (String line : lines) {
+            float w = line.length() * charW;
+            if (w > maxW) maxW = w;
+        }
+
+        float padX = 6.0f;
+        float padY = 5.0f;
+        float boxW = maxW + padX * 2.0f;
+        float boxH = lines.size() * lineH + padY * 2.0f;
+
+        float tx = mx + 12.0f;
+        float ty = my - 12.0f;
+
+        if (tx + boxW > windowWidth - 4.0f) {
+            tx = mx - boxW - 6.0f;
+        }
+        if (tx < 4.0f) tx = 4.0f;
+
+        if (ty + boxH > windowHeight - 4.0f) {
+            ty = windowHeight - 4.0f - boxH;
+        }
+        if (ty < 4.0f) ty = 4.0f;
+
+        // Outer dark border (1.5px)
+        addRect(overlayGeom, tx - 1.5f, ty - 1.5f, boxW + 3.0f, boxH + 3.0f, 0, 0, 0, 0, 0.05f, 0.05f, 0.05f, 0.96f);
+        // Purple border (Minecraft tooltip)
+        addRect(overlayGeom, tx, ty, boxW, boxH, 0, 0, 0, 0, 0.28f, 0.05f, 0.65f, 0.96f);
+        // Dark inner background
+        addRect(overlayGeom, tx + 1.5f, ty + 1.5f, boxW - 3.0f, boxH - 3.0f, 0, 0, 0, 0, 0.08f, 0.04f, 0.12f, 0.94f);
+
+        // Draw lines
+        for (int i = 0; i < lines.size(); i++) {
+            String text = lines.get(i);
+            float[] col = colors.get(i);
+            float ly = ty + padY + i * lineH;
+            drawHudText(overlayGeom, text, tx + padX, ly, textScale, col[0], col[1], col[2], 1.0f);
         }
     }
 
@@ -2313,31 +2571,32 @@ public class HUD {
             float sy = (1.0f - ndcY) * 0.5f * windowHeight;
 
             float alpha = t < 0.65f ? 1.0f : Math.max(0.0f, 1.0f - (t - 0.65f) / 0.35f);
-            float scale = t < 0.12f ? (1.8f - (t / 0.12f) * 0.4f) : 1.4f;
+            float scale = (t < 0.12f ? (1.8f - (t / 0.12f) * 0.4f) : 1.4f) * 2.0f;
 
-            String text;
-            if (ct.hearts == (int) ct.hearts) {
-                text = "-" + ((int) ct.hearts) + " ";
-            } else {
-                text = String.format(java.util.Locale.ROOT, "-%.1f ", ct.hearts);
+            int fullHearts = (int) Math.floor(ct.hearts);
+            boolean hasHalf = (ct.hearts - fullHearts) >= 0.25f;
+            if (fullHearts == 0 && !hasHalf) {
+                hasHalf = true;
             }
+            int totalHearts = fullHearts + (hasHalf ? 1 : 0);
+            totalHearts = Math.min(10, totalHearts);
+            fullHearts = Math.min(fullHearts, totalHearts);
 
-            float textW = text.length() * (6.0f * scale);
             float heartW = 9.0f * scale;
-            float totalW = textW + heartW;
+            float spacing = 2.0f * scale;
+            float totalW = totalHearts * heartW + (totalHearts - 1) * spacing;
 
             float startX = sx - totalW * 0.5f;
-            float startY = sy - 4.5f * scale;
+            float startY = sy - 4.0f * scale;
 
             // Semi-transparent background pill for contrast against any scenery
-            addRect(overlayGeom, startX - 3.0f * scale, startY - 2.0f * scale, totalW + 6.0f * scale, 12.0f * scale, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.35f * alpha);
+            addRect(overlayGeom, startX - 3.0f * scale, startY - 2.0f * scale, totalW + 6.0f * scale, 12.0f * scale, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.40f * alpha);
 
-            // Red damage text with drop shadow
-            drawHudText(overlayGeom, text, startX, startY, scale, 1.0f, 0.22f, 0.22f, alpha);
-
-            // Red pixel heart icon (half heart if <= 0.5, else full heart)
-            int heartState = ct.hearts <= 0.5f ? 1 : 2;
-            drawPixelHeart(overlayGeom, startX + textW, startY - 0.5f * scale, scale, heartState, alpha);
+            // Red pixel hearts only (full and half hearts)
+            for (int i = 0; i < totalHearts; i++) {
+                int heartState = (i < fullHearts) ? 2 : 1;
+                drawPixelHeart(overlayGeom, startX + i * (heartW + spacing), startY, scale, heartState, alpha);
+            }
         }
     }
 

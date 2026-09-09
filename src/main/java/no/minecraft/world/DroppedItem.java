@@ -104,6 +104,14 @@ public class DroppedItem {
         return position;
     }
 
+    public Vector3f getVelocity() {
+        return velocity;
+    }
+
+    public void setPickupDelay(float pickupDelay) {
+        this.pickupDelay = pickupDelay;
+    }
+
     public BlockType getType() {
         return type;
     }

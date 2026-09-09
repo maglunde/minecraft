@@ -361,6 +361,32 @@ public class Main {
                 }
             }
 
+            no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
+
+            if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+                if ((key == GLFW_KEY_Q || key == gs.keyDrop) && !pauseMenu.isOpen() && !mainMenu.isInMenu() && !chatManager.isOpen()) {
+                    boolean isCtrl = (mods & (GLFW_MOD_CONTROL | GLFW_MOD_SUPER)) != 0
+                            || keyPressed[GLFW_KEY_LEFT_CONTROL] || keyPressed[GLFW_KEY_RIGHT_CONTROL];
+                    if (hud.isInventoryOpen()) {
+                        if (hud.handleDropKeyPress(lastMouseX, lastMouseY, isCtrl, player, width, height)) {
+                            return;
+                        }
+                    } else {
+                        no.minecraft.player.ItemStack sel = player.getInventory().getSlot(player.getSelectedSlot());
+                        if (sel != null && !sel.isEmpty()) {
+                            int count = isCtrl ? sel.getCount() : 1;
+                            BlockType type = sel.getType();
+                            sel.add(-count);
+                            Vector3f eye = player.getEyePosition();
+                            Vector3f fwd = player.getCamera().getForward();
+                            world.spawnItemDrop(eye.x, eye.y - 0.2f, eye.z, fwd.x * 4.5f, fwd.y * 4.5f + 1.5f, fwd.z * 4.5f, type, count);
+                            no.minecraft.sound.SoundManager.getInstance().play("pop", 0.8f);
+                            return;
+                        }
+                    }
+                }
+            }
+
             if (action == GLFW_PRESS) {
                 if (pauseMenu.isOpen()) {
                     pauseMenu.handleKey(key, action);
@@ -403,8 +429,6 @@ public class Main {
                     }
                     return;
                 }
-
-                no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
 
                 if (key == GLFW_KEY_T && !hud.isInventoryOpen() && !pauseMenu.isOpen()) {
                     // Open Chat empty (prevent 't' from char callback)

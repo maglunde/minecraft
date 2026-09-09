@@ -495,6 +495,14 @@ public class World {
         droppedItems.add(new DroppedItem(x, y, z, type, count));
     }
 
+    public void spawnItemDrop(float x, float y, float z, float vx, float vy, float vz, BlockType type, int count) {
+        if (type == BlockType.AIR || type == BlockType.BEDROCK || count <= 0) return;
+        DroppedItem item = new DroppedItem(x, y, z, type, count);
+        item.getVelocity().set(vx, vy, vz);
+        item.setPickupDelay(1.2f);
+        droppedItems.add(item);
+    }
+
     public void spawnArrow(float x, float y, float z, float vx, float vy, float vz) {
         arrows.add(new no.minecraft.entity.Arrow(x, y, z, vx, vy, vz));
     }

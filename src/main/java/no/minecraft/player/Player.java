@@ -611,4 +611,8 @@ public class Player {
         no.minecraft.sound.SoundManager.getInstance().play("pop", 1.0f);
         return true;
     }
+
+    public World getWorld() {
+        return world;
+    }
 }
