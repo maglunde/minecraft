@@ -4,6 +4,7 @@ import no.minecraft.player.Player;
 import org.joml.Vector3f;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class World {
     public static final int RENDER_DISTANCE = 5;
@@ -109,8 +110,8 @@ public class World {
         cleanup();
         savedChunkKeys.clear();
         for (Dimension dim : Dimension.values()) {
-            dimensionChunks.put(dim, new HashMap<>());
-            dimensionGenerated.put(dim, new HashSet<>());
+            dimensionChunks.put(dim, new ConcurrentHashMap<>());
+            dimensionGenerated.put(dim, ConcurrentHashMap.newKeySet());
         }
         updateLoadedChunks(0, 0);
         this.spawnPoint = findSafeSpawnPosition(0, 0);
@@ -124,11 +125,11 @@ public class World {
     }
 
     private Map<Long, Chunk> getActiveChunks() {
-        return dimensionChunks.computeIfAbsent(currentDimension, k -> new HashMap<>());
+        return dimensionChunks.computeIfAbsent(currentDimension, k -> new ConcurrentHashMap<>());
     }
 
     private Set<Long> getActiveGenerated() {
-        return dimensionGenerated.computeIfAbsent(currentDimension, k -> new HashSet<>());
+        return dimensionGenerated.computeIfAbsent(currentDimension, k -> ConcurrentHashMap.newKeySet());
     }
 
     public Chunk getChunk(int cx, int cz) {
@@ -1678,13 +1679,13 @@ public class World {
     }
 
     public void markChunkSaved(Dimension dim, int cx, int cz) {
-        savedChunkKeys.computeIfAbsent(dim, k -> new HashSet<>()).add(chunkKey(cx, cz));
+        savedChunkKeys.computeIfAbsent(dim, k -> ConcurrentHashMap.newKeySet()).add(chunkKey(cx, cz));
     }
 
     public void markAllChunksSaved() {
         for (Map.Entry<Dimension, Map<Long, Chunk>> dimEntry : dimensionChunks.entrySet()) {
             Set<Long> genSet = dimensionGenerated.get(dimEntry.getKey());
-            Set<Long> keys = savedChunkKeys.computeIfAbsent(dimEntry.getKey(), k -> new HashSet<>());
+            Set<Long> keys = savedChunkKeys.computeIfAbsent(dimEntry.getKey(), k -> ConcurrentHashMap.newKeySet());
             for (Map.Entry<Long, Chunk> entry : dimEntry.getValue().entrySet()) {
                 entry.getValue().clearNeedsSave();
                 // Only fully generated chunks count as persisted; phantom chunks must be regenerated

@@ -16,6 +16,7 @@ import org.joml.Vector3f;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -381,8 +382,8 @@ public class WorldSaveManager {
                         for (int d = 0; d < numDims; d++) {
                             byte dOrd = in.readByte();
                             Dimension chunkDim = (dOrd >= 0 && dOrd < Dimension.values().length) ? Dimension.values()[dOrd] : Dimension.OVERWORLD;
-                            Map<Long, Chunk> targetChunks = world.getDimensionChunks().computeIfAbsent(chunkDim, k -> new HashMap<>());
-                            Set<Long> targetGen = world.getDimensionGenerated().computeIfAbsent(chunkDim, k -> new HashSet<>());
+                            Map<Long, Chunk> targetChunks = world.getDimensionChunks().computeIfAbsent(chunkDim, k -> new ConcurrentHashMap<>());
+                            Set<Long> targetGen = world.getDimensionGenerated().computeIfAbsent(chunkDim, k -> ConcurrentHashMap.newKeySet());
 
                             int chunkCount = in.readInt();
                             byte[] blockBuf = new byte[Chunk.SIZE_X * Chunk.SIZE_Y * Chunk.SIZE_Z];
