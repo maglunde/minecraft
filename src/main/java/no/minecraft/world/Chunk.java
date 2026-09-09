@@ -26,6 +26,7 @@ public class Chunk {
     private int vboId = 0;
     private int vertexCount = 0;
     private boolean isDirty = true;
+    private boolean needsSave = false;
 
     public Chunk(World world, int chunkX, int chunkZ) {
         this.world = world;
@@ -64,6 +65,7 @@ public class Chunk {
         if (x >= 0 && x < SIZE_X && y >= 0 && y < SIZE_Y && z >= 0 && z < SIZE_Z) {
             blocks[getIndex(x, y, z)] = type.getId();
             setDirty(true);
+            needsSave = true;
             // Mark neighboring chunks dirty if on border
             if (x == 0) world.markChunkDirty(chunkX - 1, chunkZ);
             if (x == SIZE_X - 1) world.markChunkDirty(chunkX + 1, chunkZ);
@@ -78,6 +80,14 @@ public class Chunk {
 
     public void setDirty(boolean dirty) {
         this.isDirty = dirty;
+    }
+
+    public boolean needsSave() {
+        return needsSave;
+    }
+
+    public void clearNeedsSave() {
+        needsSave = false;
     }
 
     public void updateMeshIfNeeded() {

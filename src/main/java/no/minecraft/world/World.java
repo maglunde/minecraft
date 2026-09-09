@@ -2,6 +2,7 @@ package no.minecraft.world;
 
 import no.minecraft.player.Player;
 import org.joml.Vector3f;
+import java.nio.file.Path;
 import java.util.*;
 
 public class World {
@@ -13,6 +14,10 @@ public class World {
     private Dimension currentDimension = Dimension.OVERWORLD;
     private final Map<Dimension, Map<Long, Chunk>> dimensionChunks = new EnumMap<>(Dimension.class);
     private final Map<Dimension, Set<Long>> dimensionGenerated = new EnumMap<>(Dimension.class);
+    private final Map<Dimension, Set<Long>> savedChunkKeys = new EnumMap<>(Dimension.class);
+
+    // Save directory this world is persisted to (null for unsaved worlds)
+    private Path saveDir = null;
 
     private long seed;
     private double offsetX;
@@ -102,6 +107,7 @@ public class World {
         this.offsetZ = (r.nextDouble() - 0.5) * 200000.0;
         this.gameWon = false;
         cleanup();
+        savedChunkKeys.clear();
         for (Dimension dim : Dimension.values()) {
             dimensionChunks.put(dim, new HashMap<>());
             dimensionGenerated.put(dim, new HashSet<>());
@@ -221,6 +227,15 @@ public class World {
         int localX = (x % Chunk.SIZE_X + Chunk.SIZE_X) % Chunk.SIZE_X;
         int localZ = (z % Chunk.SIZE_Z + Chunk.SIZE_Z) % Chunk.SIZE_Z;
         chunk.setBlock(localX, y, localZ, type);
+    }
+
+    // Decoration-only block writes: never create phantom chunks in ungenerated neighbors.
+    // Dropped border writes are repaired when the neighbor chunk is generated later.
+    private void setDecorationBlock(int x, int y, int z, BlockType type) {
+        int cx = Math.floorDiv(x, Chunk.SIZE_X);
+        int cz = Math.floorDiv(z, Chunk.SIZE_Z);
+        if (!getActiveGenerated().contains(chunkKey(cx, cz))) return;
+        setBlockInternal(x, y, z, type);
     }
 
     public void triggerGravityUpdate(int x, int y, int z) {
@@ -534,7 +549,11 @@ public class World {
     }
 
     public void spawnArrow(float x, float y, float z, float vx, float vy, float vz) {
-        arrows.add(new no.minecraft.entity.Arrow(x, y, z, vx, vy, vz));
+        spawnArrow(x, y, z, vx, vy, vz, false);
+    }
+
+    public void spawnArrow(float x, float y, float z, float vx, float vy, float vz, boolean hostileShooter) {
+        arrows.add(new no.minecraft.entity.Arrow(x, y, z, vx, vy, vz, hostileShooter));
     }
 
     public void spawnMob(no.minecraft.entity.MobType type, float x, float y, float z) {
@@ -857,9 +876,15 @@ public class World {
         Set<Long> activeGenerated = getActiveGenerated();
         Chunk chunk = getOrCreateChunk(cx, cz);
         if (!activeGenerated.contains(key)) {
-            generateChunkTerrain(chunk);
-            decorateChunk(cx, cz);
+            // Mark generated before decorating so border decoration writes into this chunk are kept
             activeGenerated.add(key);
+            if (!isChunkSaved(cx, cz) || !loadChunkFromSave(chunk, cx, cz)) {
+                generateChunkTerrain(chunk);
+                decorateChunk(cx, cz);
+                repairNeighborDecorations(cx, cz);
+            }
+            // Generated/loaded terrain is deterministic or persisted; only player edits need saving
+            chunk.clearNeedsSave();
             chunk.setDirty(true);
             markChunkDirty(cx - 1, cz);
             markChunkDirty(cx + 1, cz);
@@ -869,36 +894,68 @@ public class World {
         return chunk;
     }
 
+    // Decorations near a newly generated chunk may have dropped border writes into it;
+    // re-run neighbor decorations (deterministic, idempotent) to fill those in.
+    private void repairNeighborDecorations(int cx, int cz) {
+        if (currentDimension != Dimension.OVERWORLD) return;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (dx == 0 && dz == 0) continue;
+                if (getActiveGenerated().contains(chunkKey(cx + dx, cz + dz))) {
+                    decorateChunk(cx + dx, cz + dz);
+                }
+            }
+        }
+    }
+
     public void updateLoadedChunks(int centerCx, int centerCz) {
         this.lastCenterCx = centerCx;
         this.lastCenterCz = centerCz;
         int rd = no.minecraft.settings.GameSettings.getInstance().getRenderDistance();
-        if (centerCx == lastUpdateCx && centerCz == lastUpdateCz && rd == lastUpdateRd) {
-            return;
-        }
-        lastUpdateCx = centerCx;
-        lastUpdateCz = centerCz;
-        lastUpdateRd = rd;
+        if (centerCx != lastUpdateCx || centerCz != lastUpdateCz || rd != lastUpdateRd) {
+            lastUpdateCx = centerCx;
+            lastUpdateCz = centerCz;
+            lastUpdateRd = rd;
 
-        int unloadDist = rd + 2;
-        Map<Long, Chunk> activeChunks = getActiveChunks();
-
-        for (int dx = -rd; dx <= rd; dx++) {
-            for (int dz = -rd; dz <= rd; dz++) {
-                int cx = centerCx + dx;
-                int cz = centerCz + dz;
-                ensureChunkGenerated(cx, cz);
+            for (int dx = -rd; dx <= rd; dx++) {
+                for (int dz = -rd; dz <= rd; dz++) {
+                    int cx = centerCx + dx;
+                    int cz = centerCz + dz;
+                    ensureChunkGenerated(cx, cz);
+                }
             }
         }
+        evictFarChunks(centerCx, centerCz, rd + 2);
+    }
 
+    private void evictFarChunks(int centerCx, int centerCz, int unloadDist) {
+        // Active dimension: evict chunks past unload distance once their data is persisted
+        Map<Long, Chunk> activeChunks = getActiveChunks();
+        Set<Long> activeGenerated = getActiveGenerated();
         Iterator<Map.Entry<Long, Chunk>> iterator = activeChunks.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<Long, Chunk> entry = iterator.next();
             Chunk chunk = entry.getValue();
             int dist = Math.max(Math.abs(chunk.getChunkX() - centerCx), Math.abs(chunk.getChunkZ() - centerCz));
-            if (dist > unloadDist) {
-                if (chunk.hasMesh()) {
+            if (dist > unloadDist && !chunk.needsSave()) {
+                chunk.unloadMesh();
+                iterator.remove();
+                activeGenerated.remove(entry.getKey());
+            }
+        }
+
+        // Inactive dimensions: keep only dirty chunks; the rest is reloaded from save on return
+        for (Map.Entry<Dimension, Map<Long, Chunk>> dimEntry : dimensionChunks.entrySet()) {
+            if (dimEntry.getKey() == currentDimension) continue;
+            Set<Long> genSet = dimensionGenerated.get(dimEntry.getKey());
+            Iterator<Map.Entry<Long, Chunk>> it = dimEntry.getValue().entrySet().iterator();
+            while (it.hasNext()) {
+                Map.Entry<Long, Chunk> entry = it.next();
+                Chunk chunk = entry.getValue();
+                if (!chunk.needsSave()) {
                     chunk.unloadMesh();
+                    it.remove();
+                    genSet.remove(entry.getKey());
                 }
             }
         }
@@ -1397,7 +1454,7 @@ public class World {
         int height = 1 + rand.nextInt(3);
         for (int dy = 0; dy < height; dy++) {
             if (getBlock(rootX, rootY + dy, rootZ) == BlockType.AIR) {
-                setBlock(rootX, rootY + dy, rootZ, BlockType.CACTUS);
+                setDecorationBlock(rootX, rootY + dy, rootZ, BlockType.CACTUS);
             }
         }
     }
@@ -1405,23 +1462,23 @@ public class World {
     private void spawnPineTree(int rootX, int rootY, int rootZ, Random rand) {
         int trunkHeight = 6 + rand.nextInt(3);
         for (int dy = 0; dy < trunkHeight; dy++) {
-            setBlock(rootX, rootY + dy, rootZ, BlockType.WOOD);
+            setDecorationBlock(rootX, rootY + dy, rootZ, BlockType.WOOD);
         }
         int topY = rootY + trunkHeight;
         // Tip
-        setBlock(rootX, topY, rootZ, BlockType.LEAVES);
+        setDecorationBlock(rootX, topY, rootZ, BlockType.LEAVES);
 
         // Layer 1 (radius 1 cross)
-        setBlock(rootX + 1, topY - 1, rootZ, BlockType.LEAVES);
-        setBlock(rootX - 1, topY - 1, rootZ, BlockType.LEAVES);
-        setBlock(rootX, topY - 1, rootZ + 1, BlockType.LEAVES);
-        setBlock(rootX, topY - 1, rootZ - 1, BlockType.LEAVES);
+        setDecorationBlock(rootX + 1, topY - 1, rootZ, BlockType.LEAVES);
+        setDecorationBlock(rootX - 1, topY - 1, rootZ, BlockType.LEAVES);
+        setDecorationBlock(rootX, topY - 1, rootZ + 1, BlockType.LEAVES);
+        setDecorationBlock(rootX, topY - 1, rootZ - 1, BlockType.LEAVES);
 
         // Layer 2 (3x3 square)
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 if (getBlock(rootX + dx, topY - 2, rootZ + dz) == BlockType.AIR) {
-                    setBlock(rootX + dx, topY - 2, rootZ + dz, BlockType.LEAVES);
+                    setDecorationBlock(rootX + dx, topY - 2, rootZ + dz, BlockType.LEAVES);
                 }
             }
         }
@@ -1431,7 +1488,7 @@ public class World {
             for (int dz = -2; dz <= 2; dz++) {
                 if (Math.abs(dx) == 2 && Math.abs(dz) == 2) continue;
                 if (getBlock(rootX + dx, topY - 3, rootZ + dz) == BlockType.AIR) {
-                    setBlock(rootX + dx, topY - 3, rootZ + dz, BlockType.LEAVES);
+                    setDecorationBlock(rootX + dx, topY - 3, rootZ + dz, BlockType.LEAVES);
                 }
             }
         }
@@ -1442,7 +1499,7 @@ public class World {
                 for (int dz = -2; dz <= 2; dz++) {
                     if (Math.abs(dx) == 2 && Math.abs(dz) == 2 && rand.nextBoolean()) continue;
                     if (getBlock(rootX + dx, topY - 4, rootZ + dz) == BlockType.AIR) {
-                        setBlock(rootX + dx, topY - 4, rootZ + dz, BlockType.LEAVES);
+                        setDecorationBlock(rootX + dx, topY - 4, rootZ + dz, BlockType.LEAVES);
                     }
                 }
             }
@@ -1452,7 +1509,7 @@ public class World {
     private void spawnTree(int rootX, int rootY, int rootZ, Random rand) {
         int trunkHeight = 4 + rand.nextInt(2);
         for (int dy = 0; dy < trunkHeight; dy++) {
-            setBlock(rootX, rootY + dy, rootZ, BlockType.WOOD);
+            setDecorationBlock(rootX, rootY + dy, rootZ, BlockType.WOOD);
         }
         int topY = rootY + trunkHeight;
         for (int dy = -2; dy <= 1; dy++) {
@@ -1466,7 +1523,7 @@ public class World {
                     int ty = topY + dy;
                     int tz = rootZ + dz;
                     if (getBlock(tx, ty, tz) == BlockType.AIR) {
-                        setBlock(tx, ty, tz, BlockType.LEAVES);
+                        setDecorationBlock(tx, ty, tz, BlockType.LEAVES);
                     }
                 }
             }
@@ -1610,5 +1667,41 @@ public class World {
         for (Set<Long> set : dimensionGenerated.values()) {
             set.clear();
         }
+        savedChunkKeys.clear();
+        this.lastUpdateCx = Integer.MIN_VALUE;
+        this.lastUpdateCz = Integer.MIN_VALUE;
+        this.lastUpdateRd = -1;
+    }
+
+    public void setSaveDirectory(Path saveDir) {
+        this.saveDir = saveDir;
+    }
+
+    public void markChunkSaved(Dimension dim, int cx, int cz) {
+        savedChunkKeys.computeIfAbsent(dim, k -> new HashSet<>()).add(chunkKey(cx, cz));
+    }
+
+    public void markAllChunksSaved() {
+        for (Map.Entry<Dimension, Map<Long, Chunk>> dimEntry : dimensionChunks.entrySet()) {
+            Set<Long> genSet = dimensionGenerated.get(dimEntry.getKey());
+            Set<Long> keys = savedChunkKeys.computeIfAbsent(dimEntry.getKey(), k -> new HashSet<>());
+            for (Map.Entry<Long, Chunk> entry : dimEntry.getValue().entrySet()) {
+                entry.getValue().clearNeedsSave();
+                // Only fully generated chunks count as persisted; phantom chunks must be regenerated
+                if (genSet != null && genSet.contains(entry.getKey())) {
+                    keys.add(entry.getKey());
+                }
+            }
+        }
+    }
+
+    private boolean isChunkSaved(int cx, int cz) {
+        Set<Long> keys = savedChunkKeys.get(currentDimension);
+        return keys != null && keys.contains(chunkKey(cx, cz));
+    }
+
+    private boolean loadChunkFromSave(Chunk chunk, int cx, int cz) {
+        if (saveDir == null) return false;
+        return no.minecraft.world.save.WorldSaveManager.loadChunkInto(chunk, saveDir, currentDimension);
     }
 }

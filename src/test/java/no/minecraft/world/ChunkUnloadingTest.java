@@ -3,46 +3,84 @@ package no.minecraft.world;
 import no.minecraft.settings.GameSettings;
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ChunkUnloadingTest {
 
     @Test
-    public void testChunkMeshUnloadingWhenMovingAway() {
-        World world = new World(12345L);
-        GameSettings gs = GameSettings.getInstance();
-        gs.setRenderDistance(5); // rd = 5, unloadDist = 7
+    public void testChunksEvictedFromMemoryWhenMovingAway() {
+        int originalRd = GameSettings.getInstance().getRenderDistance();
+        try {
+            GameSettings.getInstance().setRenderDistance(3); // rd = 3, unloadDist = 5
+            World world = new World(12345L);
+            world.updateLoadedChunks(0, 0);
+            assertNotNull(world.getChunk(0, 0));
 
-        // Initially at spawn (0, 0)
-        world.updateLoadedChunks(0, 0);
-
-        Chunk originChunk = world.getChunk(0, 0);
-        assertNotNull(originChunk);
-        assertFalse(originChunk.hasMesh(), "Chunk starts without mesh");
-
-        // Move 20 chunks away to (20, 0)
-        world.updateLoadedChunks(20, 0);
-
-        // Origin chunk is at distance 20 > 7 (unloadDist)
-        assertFalse(originChunk.hasMesh(), "Origin chunk mesh should not exist when far away");
-
-        // When moving back to (0, 0)
-        world.updateLoadedChunks(0, 0);
-        assertNotNull(world.getChunk(0, 0));
+            // Move to (6, 0): chunk (0, 0) at distance 6 > 5 must leave the chunk map entirely
+            world.updateLoadedChunks(6, 0);
+            assertNull(world.getChunk(0, 0), "Chunk (0,0) skal være eviktert fra minnet, ikke bare meshen");
+        } finally {
+            GameSettings.getInstance().setRenderDistance(originalRd);
+        }
     }
 
     @Test
-    public void testChunkGenerationExpandsAsPlayerMoves() {
-        World world = new World(12345L);
-        int initialLoaded = world.getLoadedChunkCount();
-        assertTrue(initialLoaded > 0, "Should generate chunks at spawn");
+    public void testChunkRegeneratedWhenReturning() {
+        int originalRd = GameSettings.getInstance().getRenderDistance();
+        try {
+            GameSettings.getInstance().setRenderDistance(3);
+            World world = new World(12345L);
+            world.updateLoadedChunks(0, 0);
+            world.updateLoadedChunks(6, 0);
+            assertNull(world.getChunk(0, 0));
 
-        // Move far away to (15, 15)
-        world.updateLoadedChunks(15, 15);
-        int afterMove = world.getLoadedChunkCount();
-        assertTrue(afterMove > initialLoaded, "Loaded chunks count should increase as new area is explored");
+            world.updateLoadedChunks(0, 0);
+            assertNotNull(world.getChunk(0, 0), "Chunk skal re-skapes når player returnerer");
+        } finally {
+            GameSettings.getInstance().setRenderDistance(originalRd);
+        }
+    }
 
-        // Check that chunks at (15, 15) exist
-        assertNotNull(world.getChunk(15, 15));
+    @Test
+    public void testDirtyChunkNotEvictedUntilSaved() {
+        int originalRd = GameSettings.getInstance().getRenderDistance();
+        try {
+            GameSettings.getInstance().setRenderDistance(3);
+            World world = new World(12345L);
+            world.updateLoadedChunks(0, 0);
+            world.setBlock(1, 20, 1, BlockType.GRASS); // player edit -> dirty
+
+            world.updateLoadedChunks(6, 0);
+            assertNotNull(world.getChunk(0, 0), "Skitten chunk må holdes i minnet til den er lagret");
+
+            world.markAllChunksSaved(); // simulerer autosave
+            world.updateLoadedChunks(6, 0);
+            assertNull(world.getChunk(0, 0), "Lagret chunk skal kunne evikteres");
+
+            // Returning: chunk is marked saved but no save file exists -> deterministic regen fallback
+            world.updateLoadedChunks(0, 0);
+            assertNotNull(world.getChunk(0, 0));
+        } finally {
+            GameSettings.getInstance().setRenderDistance(originalRd);
+        }
+    }
+
+    @Test
+    public void testDecorationDoesNotCreatePhantomChunks() {
+        int originalRd = GameSettings.getInstance().getRenderDistance();
+        try {
+            GameSettings.getInstance().setRenderDistance(3);
+            World world = new World(12345L);
+            world.updateLoadedChunks(0, 0);
+
+            for (Map.Entry<Long, Chunk> entry : world.getDimensionChunks().get(Dimension.OVERWORLD).entrySet()) {
+                assertTrue(world.getDimensionGenerated().get(Dimension.OVERWORLD).contains(entry.getKey()),
+                        "Alle chunks i minnet må være fullt generert (ingen phantom-chunks fra border-dekorasjon)");
+            }
+        } finally {
+            GameSettings.getInstance().setRenderDistance(originalRd);
+        }
     }
 }

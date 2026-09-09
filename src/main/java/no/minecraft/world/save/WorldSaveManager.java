@@ -132,11 +132,13 @@ public class WorldSaveManager {
         try {
             Path worldDir = SAVES_DIR.resolve(info.getFolderName());
             Files.createDirectories(worldDir);
+            world.setSaveDirectory(worldDir);
             info.setLastPlayed(System.currentTimeMillis());
 
-            // 1. Save world.dat
+            // 1. Save world.dat (write temp file, then move into place atomically)
             Path datFile = worldDir.resolve("world.dat");
-            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new GZIPOutputStream(Files.newOutputStream(datFile))))) {
+            Path datTmp = worldDir.resolve("world.dat.tmp");
+            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new GZIPOutputStream(Files.newOutputStream(datTmp))))) {
                 out.writeInt(WORLD_MAGIC);
                 out.writeInt(VERSION);
 
@@ -203,10 +205,12 @@ public class WorldSaveManager {
                     out.writeFloat(fd.getMaxBurnTime());
                 }
             }
+            moveAtomically(datTmp, datFile);
 
-            // 2. Save chunks.dat
+            // 2. Save chunks.dat (write temp file, then move into place atomically)
             Path chunksFile = worldDir.resolve("chunks.dat");
-            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new GZIPOutputStream(Files.newOutputStream(chunksFile))))) {
+            Path chunksTmp = worldDir.resolve("chunks.dat.tmp");
+            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new GZIPOutputStream(Files.newOutputStream(chunksTmp))))) {
                 out.writeInt(CHUNKS_MAGIC);
                 out.writeInt(VERSION);
 
@@ -236,7 +240,9 @@ public class WorldSaveManager {
                     }
                 }
             }
+            moveAtomically(chunksTmp, chunksFile);
 
+            world.markAllChunksSaved();
             return true;
         } catch (IOException e) {
             e.printStackTrace();
@@ -249,6 +255,7 @@ public class WorldSaveManager {
         Path worldDir = SAVES_DIR.resolve(info.getFolderName());
         Path datFile = worldDir.resolve("world.dat");
         if (!Files.exists(datFile)) return false;
+        world.setSaveDirectory(worldDir);
 
         try {
             // 1. Read world.dat
@@ -347,6 +354,11 @@ public class WorldSaveManager {
                     fd.setMaxBurnTime(in.readFloat());
                     furnaceList.add(fd);
                 }
+            } catch (Exception e) {
+                // world.dat is unreadable: quarantine it so it can be inspected/recovered manually
+                quarantineCorrupt(datFile);
+                e.printStackTrace();
+                return false;
             }
 
             // Reset world
@@ -382,6 +394,7 @@ public class WorldSaveManager {
                                 Chunk chunk = new Chunk(world, cx, cz);
                                 chunk.setBlocks(blockBuf);
                                 targetChunks.put(World.chunkKey(cx, cz), chunk);
+                                world.markChunkSaved(chunkDim, cx, cz);
                             }
 
                             int genCount = in.readInt();
@@ -423,6 +436,52 @@ public class WorldSaveManager {
             e.printStackTrace();
             return false;
         }
+    }
+
+    public static boolean loadChunkInto(Chunk chunk, Path worldDir, Dimension dim) {
+        Path chunksFile = worldDir.resolve("chunks.dat");
+        if (!Files.exists(chunksFile)) return false;
+        try (DataInputStream in = new DataInputStream(new BufferedInputStream(new GZIPInputStream(Files.newInputStream(chunksFile))))) {
+            int magic = in.readInt();
+            if (magic != CHUNKS_MAGIC) return false;
+            int version = in.readInt();
+            int numDims = in.readInt();
+            byte[] blockBuf = new byte[Chunk.SIZE_X * Chunk.SIZE_Y * Chunk.SIZE_Z];
+            for (int d = 0; d < numDims; d++) {
+                byte dOrd = in.readByte();
+                int chunkCount = in.readInt();
+                for (int c = 0; c < chunkCount; c++) {
+                    int cx = in.readInt();
+                    int cz = in.readInt();
+                    in.readFully(blockBuf);
+                    if (dOrd == dim.ordinal() && cx == chunk.getChunkX() && cz == chunk.getChunkZ()) {
+                        chunk.setBlocks(blockBuf);
+                        return true;
+                    }
+                }
+                int genCount = in.readInt();
+                for (int g = 0; g < genCount; g++) in.readLong();
+            }
+        } catch (IOException e) {
+            return false;
+        }
+        return false;
+    }
+
+    private static void moveAtomically(Path tmp, Path target) throws IOException {
+        try {
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException e) {
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private static void quarantineCorrupt(Path datFile) {
+        try {
+            if (Files.exists(datFile)) {
+                Files.move(datFile, datFile.resolveSibling("world.dat.corrupt"), StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException ignored) {}
     }
 
     public static boolean deleteWorld(WorldInfo info) {
