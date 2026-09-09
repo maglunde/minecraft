@@ -41,6 +41,20 @@ public class Inventory {
         return total;
     }
 
+    public boolean hasSpaceFor(BlockType type, int amount) {
+        if (type == BlockType.AIR || amount <= 0) return true;
+        int remaining = amount;
+        for (ItemStack slot : slots) {
+            if (slot.isEmpty()) {
+                remaining -= MAX_STACK_SIZE;
+            } else if (slot.getType() == type) {
+                remaining -= (MAX_STACK_SIZE - slot.getCount());
+            }
+            if (remaining <= 0) return true;
+        }
+        return false;
+    }
+
     public boolean addItem(BlockType type, int amount) {
         if (type == BlockType.AIR || amount <= 0) return false;
         int remaining = amount;

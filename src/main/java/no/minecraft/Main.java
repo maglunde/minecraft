@@ -259,7 +259,8 @@ public class Main {
 
             if (hud.isInventoryOpen()) {
                 if (action == GLFW_PRESS) {
-                    hud.handleMouseClick(lastMouseX, lastMouseY, button, player, width, height);
+                    boolean isShiftDown = (mods & GLFW_MOD_SHIFT) != 0 || keyPressed[GLFW_KEY_LEFT_SHIFT] || keyPressed[GLFW_KEY_RIGHT_SHIFT];
+                    hud.handleMouseClick(lastMouseX, lastMouseY, button, isShiftDown, player, width, height);
                 }
                 return;
             }
@@ -419,6 +420,13 @@ public class Main {
                     return;
                 }
 
+                if (hud.isInventoryOpen()) {
+                    if (key >= GLFW_KEY_1 && key <= GLFW_KEY_9) {
+                        if (hud.handleInventoryKeyPress(key, lastMouseX, lastMouseY, player, width, height)) {
+                            return;
+                        }
+                    }
+                }
 
                 if (key == GLFW_KEY_ESCAPE) {
                     if (hud.isInventoryOpen()) {
@@ -567,12 +575,18 @@ public class Main {
 
         if (hit != null) {
             BlockType clickedBlock = world.getBlock(hit.hitX, hit.hitY, hit.hitZ);
-            if (clickedBlock == BlockType.CRAFTING_TABLE) {
-                hud.openCraftingTable();
-                setCursorLocked(false);
-                isLeftMouseDown = false;
-                isRightMouseDown = false;
-                return true;
+            boolean isSneaking = player.isSneaking() || keyPressed[GLFW_KEY_LEFT_SHIFT] || keyPressed[GLFW_KEY_RIGHT_SHIFT];
+            boolean canPlace = player.canPlaceSelectedBlock();
+
+            // When holding shift (sneaking) and holding a placeable block, bypass GUI interaction to place block instead!
+            if (!isSneaking || !canPlace) {
+                if (clickedBlock == BlockType.CRAFTING_TABLE) {
+                    hud.openCraftingTable();
+                    setCursorLocked(false);
+                    isLeftMouseDown = false;
+                    isRightMouseDown = false;
+                    return true;
+                }
             }
 
             // Inserting Eye of Ender into End Portal Frame
@@ -597,7 +611,7 @@ public class Main {
             }
 
             // Place block only if player has it in inventory
-            if (player.canPlaceSelectedBlock()) {
+            if (canPlace) {
                 BlockType toPlace = player.getSelectedBlock();
                 if (toPlace != null && toPlace != BlockType.AIR) {
                     boolean roomAvailable = !toPlace.isSolid() || player.isFlying() || !player.getBoundingBox().intersects(

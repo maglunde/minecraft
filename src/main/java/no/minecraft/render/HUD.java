@@ -591,6 +591,10 @@ public class HUD {
     }
 
     public boolean handleMouseClick(double mx, double my, int button, Player player, int windowWidth, int windowHeight) {
+        return handleMouseClick(mx, my, button, false, player, windowWidth, windowHeight);
+    }
+
+    public boolean handleMouseClick(double mx, double my, int button, boolean isShiftDown, Player player, int windowWidth, int windowHeight) {
         if (!inventoryOpen && !craftingTableOpen) return false;
 
         float scale = 2.4f;
@@ -656,23 +660,46 @@ public class HUD {
             if (mx >= resX && mx <= resX + resSize && my >= resY && my <= resY + resSize) {
                 ItemStack res = get3x3CraftingResult();
                 if (res != null && !res.isEmpty()) {
-                    no.minecraft.sound.SoundManager.getInstance().play("click");
-                    if (res.getType() == BlockType.WOODEN_SWORD || res.getType() == BlockType.STONE_SWORD) {
-                        no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.TIME_TO_STRIKE);
-                    } else if (res.getType() == BlockType.FURNACE) {
-                        no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.HOT_TOPIC);
-                    }
-
-                    if (carriedItem.isEmpty()) {
-                        carriedItem.setType(res.getType());
-                        carriedItem.setCount(res.getCount());
-                        for (ItemStack s : benchSlots) {
-                            if (!s.isEmpty()) s.add(-1);
+                    if (isShiftDown) {
+                        int craftedTotal = 0;
+                        BlockType targetType = res.getType();
+                        while (true) {
+                            ItemStack craftRes = get3x3CraftingResult();
+                            if (craftRes == null || craftRes.isEmpty() || craftRes.getType() != targetType) break;
+                            if (!player.getInventory().hasSpaceFor(craftRes.getType(), craftRes.getCount())) break;
+                            player.getInventory().addItem(craftRes.getType(), craftRes.getCount());
+                            craftedTotal += craftRes.getCount();
+                            for (ItemStack s : benchSlots) {
+                                if (!s.isEmpty()) s.add(-1);
+                            }
                         }
-                    } else if (carriedItem.getType() == res.getType() && carriedItem.getCount() + res.getCount() <= no.minecraft.player.Inventory.MAX_STACK_SIZE) {
-                        carriedItem.add(res.getCount());
-                        for (ItemStack s : benchSlots) {
-                            if (!s.isEmpty()) s.add(-1);
+                        if (craftedTotal > 0) {
+                            no.minecraft.sound.SoundManager.getInstance().play("click");
+                            if (res.getType() == BlockType.WOODEN_SWORD || res.getType() == BlockType.STONE_SWORD) {
+                                no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.TIME_TO_STRIKE);
+                            } else if (res.getType() == BlockType.FURNACE) {
+                                no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.HOT_TOPIC);
+                            }
+                        }
+                    } else {
+                        no.minecraft.sound.SoundManager.getInstance().play("click");
+                        if (res.getType() == BlockType.WOODEN_SWORD || res.getType() == BlockType.STONE_SWORD) {
+                            no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.TIME_TO_STRIKE);
+                        } else if (res.getType() == BlockType.FURNACE) {
+                            no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.HOT_TOPIC);
+                        }
+
+                        if (carriedItem.isEmpty()) {
+                            carriedItem.setType(res.getType());
+                            carriedItem.setCount(res.getCount());
+                            for (ItemStack s : benchSlots) {
+                                if (!s.isEmpty()) s.add(-1);
+                            }
+                        } else if (carriedItem.getType() == res.getType() && carriedItem.getCount() + res.getCount() <= no.minecraft.player.Inventory.MAX_STACK_SIZE) {
+                            carriedItem.add(res.getCount());
+                            for (ItemStack s : benchSlots) {
+                                if (!s.isEmpty()) s.add(-1);
+                            }
                         }
                     }
                 }
@@ -812,17 +839,35 @@ public class HUD {
         if (mx >= resultSlotX && mx <= resultSlotX + resSize && my >= resultSlotY && my <= resultSlotY + resSize) {
             ItemStack res = getCraftingResult();
             if (res != null && !res.isEmpty()) {
-                no.minecraft.sound.SoundManager.getInstance().play("click");
-                if (carriedItem.isEmpty()) {
-                    carriedItem.setType(res.getType());
-                    carriedItem.setCount(res.getCount());
-                    for (ItemStack s : craftSlots) {
-                        if (!s.isEmpty()) s.add(-1);
+                if (isShiftDown) {
+                    int craftedCount = 0;
+                    BlockType targetType = res.getType();
+                    while (true) {
+                        ItemStack craftRes = getCraftingResult();
+                        if (craftRes == null || craftRes.isEmpty() || craftRes.getType() != targetType) break;
+                        if (!player.getInventory().hasSpaceFor(craftRes.getType(), craftRes.getCount())) break;
+                        player.getInventory().addItem(craftRes.getType(), craftRes.getCount());
+                        craftedCount += craftRes.getCount();
+                        for (ItemStack s : craftSlots) {
+                            if (!s.isEmpty()) s.add(-1);
+                        }
                     }
-                } else if (carriedItem.getType() == res.getType() && carriedItem.getCount() + res.getCount() <= no.minecraft.player.Inventory.MAX_STACK_SIZE) {
-                    carriedItem.add(res.getCount());
-                    for (ItemStack s : craftSlots) {
-                        if (!s.isEmpty()) s.add(-1);
+                    if (craftedCount > 0) {
+                        no.minecraft.sound.SoundManager.getInstance().play("click");
+                    }
+                } else {
+                    no.minecraft.sound.SoundManager.getInstance().play("click");
+                    if (carriedItem.isEmpty()) {
+                        carriedItem.setType(res.getType());
+                        carriedItem.setCount(res.getCount());
+                        for (ItemStack s : craftSlots) {
+                            if (!s.isEmpty()) s.add(-1);
+                        }
+                    } else if (carriedItem.getType() == res.getType() && carriedItem.getCount() + res.getCount() <= no.minecraft.player.Inventory.MAX_STACK_SIZE) {
+                        carriedItem.add(res.getCount());
+                        for (ItemStack s : craftSlots) {
+                            if (!s.isEmpty()) s.add(-1);
+                        }
                     }
                 }
             }
@@ -855,6 +900,61 @@ public class HUD {
         }
 
         return true;
+    }
+
+    public boolean handleInventoryKeyPress(int key, double mx, double my, Player player, int windowWidth, int windowHeight) {
+        if (!inventoryOpen && !craftingTableOpen) return false;
+        if (key < GLFW_KEY_1 || key > GLFW_KEY_9) return false;
+        int hotbarIndex = key - GLFW_KEY_1;
+        if (!player.getInventory().getSlot(hotbarIndex).isEmpty()) {
+            return false; // Bare dersom den er ledig da
+        }
+
+        float scale = 2.4f;
+        float invW = 176.0f * scale;
+        float invH = 166.0f * scale;
+        float ix = (windowWidth - invW) / 2.0f;
+        float iy = (windowHeight - invH) / 2.0f;
+
+        if (craftingTableOpen) {
+            float resX = ix + 124.0f * scale;
+            float resY = iy + 31.0f * scale;
+            float resSize = 24.0f * scale;
+            if (mx >= resX && mx <= resX + resSize && my >= resY && my <= resY + resSize) {
+                ItemStack res = get3x3CraftingResult();
+                if (res != null && !res.isEmpty()) {
+                    player.getInventory().getSlot(hotbarIndex).setType(res.getType());
+                    player.getInventory().getSlot(hotbarIndex).setCount(res.getCount());
+                    for (ItemStack s : benchSlots) {
+                        if (!s.isEmpty()) s.add(-1);
+                    }
+                    no.minecraft.sound.SoundManager.getInstance().play("click");
+                    if (res.getType() == BlockType.WOODEN_SWORD || res.getType() == BlockType.STONE_SWORD) {
+                        no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.TIME_TO_STRIKE);
+                    } else if (res.getType() == BlockType.FURNACE) {
+                        no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.HOT_TOPIC);
+                    }
+                    return true;
+                }
+            }
+        } else {
+            float resultSlotX = ix + 152.0f * scale;
+            float resultSlotY = iy + 26.0f * scale;
+            float resSize = 20.0f * scale;
+            if (mx >= resultSlotX && mx <= resultSlotX + resSize && my >= resultSlotY && my <= resultSlotY + resSize) {
+                ItemStack res = getCraftingResult();
+                if (res != null && !res.isEmpty()) {
+                    player.getInventory().getSlot(hotbarIndex).setType(res.getType());
+                    player.getInventory().getSlot(hotbarIndex).setCount(res.getCount());
+                    for (ItemStack s : craftSlots) {
+                        if (!s.isEmpty()) s.add(-1);
+                    }
+                    no.minecraft.sound.SoundManager.getInstance().play("click");
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public void render(int windowWidth, int windowHeight, float mouseX, float mouseY, Player player, TextureAtlas atlas, no.minecraft.world.World world, no.minecraft.chat.ChatManager chatManager) {
