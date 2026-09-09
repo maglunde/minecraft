@@ -344,17 +344,8 @@ public class HUD {
                     carriedItem.clear();
                 }
             } else if (slot.getType() == carriedItem.getType()) {
-                if (button == GLFW_MOUSE_BUTTON_RIGHT) {
-                    if (slot.getCount() < no.minecraft.player.Inventory.MAX_STACK_SIZE) {
-                        slot.add(1);
-                        carriedItem.add(-1);
-                    }
-                } else {
-                    int space = no.minecraft.player.Inventory.MAX_STACK_SIZE - slot.getCount();
-                    int add = Math.min(space, carriedItem.getCount());
-                    slot.add(add);
-                    carriedItem.add(-add);
-                }
+                no.minecraft.player.Inventory.mergeStacks(carriedItem, slot,
+                        button == GLFW_MOUSE_BUTTON_RIGHT ? 1 : carriedItem.getCount());
             } else {
                 if (button == GLFW_MOUSE_BUTTON_LEFT) {
                     BlockType tempType = slot.getType();
@@ -382,9 +373,7 @@ public class HUD {
                 s.setCount(perSlot);
                 carriedItem.add(-perSlot);
             } else if (s.getType() == carriedItem.getType()) {
-                int toAdd = Math.min(perSlot, no.minecraft.player.Inventory.MAX_STACK_SIZE - s.getCount());
-                s.add(toAdd);
-                carriedItem.add(-toAdd);
+                no.minecraft.player.Inventory.mergeStacks(carriedItem, s, perSlot);
             }
         }
     }
@@ -398,9 +387,7 @@ public class HUD {
             slot.setCount(1);
             carriedItem.add(-1);
             return true;
-        } else if (slot.getType() == carriedItem.getType() && slot.getCount() < no.minecraft.player.Inventory.MAX_STACK_SIZE) {
-            slot.add(1);
-            carriedItem.add(-1);
+        } else if (no.minecraft.player.Inventory.mergeStacks(carriedItem, slot, 1)) {
             return true;
         }
         return false;
@@ -681,10 +668,7 @@ public class HUD {
                 slot.clear();
                 no.minecraft.sound.SoundManager.getInstance().play("click");
                 return;
-            } else if (in.getType() == slot.getType() && in.getCount() < no.minecraft.player.Inventory.MAX_STACK_SIZE) {
-                int move = Math.min(slot.getCount(), no.minecraft.player.Inventory.MAX_STACK_SIZE - in.getCount());
-                in.add(move);
-                slot.add(-move);
+            } else if (no.minecraft.player.Inventory.mergeStacks(slot, in, slot.getCount())) {
                 no.minecraft.sound.SoundManager.getInstance().play("click");
                 return;
             }
@@ -698,10 +682,7 @@ public class HUD {
                 slot.clear();
                 no.minecraft.sound.SoundManager.getInstance().play("click");
                 return;
-            } else if (fl.getType() == slot.getType() && fl.getCount() < no.minecraft.player.Inventory.MAX_STACK_SIZE) {
-                int move = Math.min(slot.getCount(), no.minecraft.player.Inventory.MAX_STACK_SIZE - fl.getCount());
-                fl.add(move);
-                slot.add(-move);
+            } else if (no.minecraft.player.Inventory.mergeStacks(slot, fl, slot.getCount())) {
                 no.minecraft.sound.SoundManager.getInstance().play("click");
                 return;
             }
@@ -718,24 +699,12 @@ public class HUD {
             if (currentIdx < 9) {
                 for (int i = 9; i < 36; i++) {
                     ItemStack target = player.getInventory().getSlot(i);
-                    if (target.isEmpty() || (target.getType() == slot.getType() && target.getCount() < 64)) {
-                        int move = Math.min(slot.getCount(), 64 - target.getCount());
-                        target.setType(slot.getType());
-                        target.add(move);
-                        slot.add(-move);
-                        if (slot.isEmpty()) break;
-                    }
+                    if (no.minecraft.player.Inventory.mergeStacks(slot, target, slot.getCount()) && slot.isEmpty()) break;
                 }
             } else {
                 for (int i = 0; i < 9; i++) {
                     ItemStack target = player.getInventory().getSlot(i);
-                    if (target.isEmpty() || (target.getType() == slot.getType() && target.getCount() < 64)) {
-                        int move = Math.min(slot.getCount(), 64 - target.getCount());
-                        target.setType(slot.getType());
-                        target.add(move);
-                        slot.add(-move);
-                        if (slot.isEmpty()) break;
-                    }
+                    if (no.minecraft.player.Inventory.mergeStacks(slot, target, slot.getCount()) && slot.isEmpty()) break;
                 }
             }
             no.minecraft.sound.SoundManager.getInstance().play("click");

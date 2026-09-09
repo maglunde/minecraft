@@ -103,4 +103,22 @@ public class Inventory {
         }
         return true;
     }
+
+    /**
+     * Moves up to {@code amount} items from {@code from} into {@code to},
+     * respecting MAX_STACK_SIZE and type compatibility. Returns true if anything moved.
+     */
+    public static boolean mergeStacks(ItemStack from, ItemStack to, int amount) {
+        if (amount <= 0 || from == null || to == null || from == to || from.isEmpty()) return false;
+        if (!to.isEmpty() && to.getType() != from.getType()) return false;
+        if (to.getCount() >= MAX_STACK_SIZE) return false;
+        int move = Math.min(Math.min(amount, from.getCount()), MAX_STACK_SIZE - to.getCount());
+        if (move <= 0) return false;
+        if (to.isEmpty()) {
+            to.setType(from.getType());
+        }
+        to.add(move);
+        from.add(-move);
+        return true;
+    }
 }
