@@ -37,6 +37,14 @@ public class Mob {
     // Rotation
     private float yaw = 0.0f;
 
+    // Wandering AI state
+    private float wanderTimer = 0.0f;
+    private float wanderYaw = 0.0f;
+    private boolean isWanderingMoving = false;
+
+    // Animation state
+    private float walkTime = 0.0f;
+
     private final Random random = new Random();
 
     private Boat ridingBoat = null;
@@ -89,31 +97,28 @@ public class Mob {
         float moveX = 0;
         float moveZ = 0;
 
-        if (distToPlayer < 24.0f) {
+        boolean canTargetPlayer = player.getGameMode() != no.minecraft.player.GameMode.CREATIVE
+                && player.getHealth() > 0
+                && distToPlayer < 32.0f;
+
+        if (type == MobType.ENDER_DRAGON) {
+            updateDragonAI(dt, world, player);
+            return;
+        } else if (type == MobType.END_CRYSTAL) {
+            return;
+        }
+
+        if (canTargetPlayer && !type.isPassive()) {
             float dx = player.getPosition().x - position.x;
             float dz = player.getPosition().z - position.z;
-            yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
-
             float len = (float) Math.sqrt(dx * dx + dz * dz);
             if (len > 0.001f) {
                 dx /= len;
                 dz /= len;
             }
 
-            if (type.isPassive()) {
-                if (hurtTimer > 0) {
-                    // Panic and sprint away from player when attacked!
-                    moveX = -dx * type.getMoveSpeed() * 1.8f;
-                    moveZ = -dz * type.getMoveSpeed() * 1.8f;
-                    yaw = (float) Math.toDegrees(Math.atan2(-dz, -dx));
-                } else {
-                    // Peaceful wandering
-                    float wanderAngle = (float) ((System.currentTimeMillis() + position.x * 37) * 0.001);
-                    moveX = (float) Math.cos(wanderAngle) * (type.getMoveSpeed() * 0.4f);
-                    moveZ = (float) Math.sin(wanderAngle) * (type.getMoveSpeed() * 0.4f);
-                    yaw = (float) Math.toDegrees(Math.atan2(moveZ, moveX));
-                }
-            } else if (type == MobType.CREEPER) {
+            if (type == MobType.CREEPER) {
+                yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
                 if (distToPlayer < 3.2f) {
                     if (!ignited) {
                         no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.0f);
@@ -131,6 +136,7 @@ public class Mob {
                     moveZ = dz * type.getMoveSpeed();
                 }
             } else if (type == MobType.SKELETON) {
+                yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
                 // Skeleton keeps distance (around 8-12 blocks) and shoots
                 if (distToPlayer > 10.0f) {
                     moveX = dx * type.getMoveSpeed();
@@ -150,16 +156,16 @@ public class Mob {
                     world.spawnArrow(position.x, position.y + type.getHeight() * 0.7f, position.z, arrowVx, arrowVy, arrowVz);
                 }
             } else if (type == MobType.SPIDER) {
+                yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
                 moveX = dx * type.getMoveSpeed();
                 moveZ = dz * type.getMoveSpeed();
-                // Spider climbs walls if horizontal velocity is blocked
                 if (position.distance(player.getPosition()) < 1.6f && attackCooldown <= 0) {
                     player.damage(type.getAttackDamage());
                     no.minecraft.sound.SoundManager.getInstance().play("spider_say", 0.85f);
                     attackCooldown = 1.0f;
                 }
             } else if (type == MobType.BLAZE) {
-                // Blaze hovers and shoots fireballs/arrows at player
+                yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
                 if (distToPlayer > 8.0f) {
                     moveX = dx * type.getMoveSpeed();
                     moveZ = dz * type.getMoveSpeed();
@@ -167,7 +173,6 @@ public class Mob {
                     moveX = -dx * type.getMoveSpeed();
                     moveZ = -dz * type.getMoveSpeed();
                 }
-                // Hover gently around player height + 2
                 float targetY = player.getPosition().y + 1.5f;
                 velocity.y += (targetY - position.y) * 2.0f * dt;
                 velocity.y *= 0.85f;
@@ -182,7 +187,6 @@ public class Mob {
                     world.spawnArrow(position.x, position.y + 0.8f, position.z, vx, vy, vz);
                 }
             } else if (type == MobType.ENDERMAN) {
-                // Check if player makes direct eye contact with Enderman
                 if (!aggressive && distToPlayer < 40.0f) {
                     org.joml.Vector3f pEye = player.getEyePosition();
                     org.joml.Vector3f toHead = new org.joml.Vector3f(
@@ -195,7 +199,6 @@ public class Mob {
                         toHead.normalize();
                         org.joml.Vector3f lookDir = player.getCamera().getForward();
                         float dot = lookDir.dot(toHead);
-                        // If crosshair is aligned within ~12 degrees of looking at head
                         if (dot > 0.978f) {
                             no.minecraft.player.Raycast.HitResult los = no.minecraft.player.Raycast.raycast(world, pEye, toHead, dLen);
                             if (los == null) {
@@ -206,17 +209,7 @@ public class Mob {
                     }
                 }
 
-                if (!aggressive) {
-                    // Peaceful wandering / lingering
-                    float wanderAngle = (float) ((System.currentTimeMillis() + position.x * 37) * 0.0007);
-                    moveX = (float) Math.cos(wanderAngle) * (type.getMoveSpeed() * 0.25f);
-                    moveZ = (float) Math.sin(wanderAngle) * (type.getMoveSpeed() * 0.25f);
-                    yaw = (float) Math.toDegrees(Math.atan2(moveZ, moveX));
-                    if (random.nextFloat() < 0.001f) {
-                        teleportRandom(world);
-                    }
-                } else {
-                    // Aggressive charge & attack
+                if (aggressive) {
                     moveX = dx * (type.getMoveSpeed() * 1.35f);
                     moveZ = dz * (type.getMoveSpeed() * 1.35f);
                     yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
@@ -227,14 +220,27 @@ public class Mob {
                     if (random.nextFloat() < 0.015f) {
                         teleportRandom(world);
                     }
+                } else {
+                    wanderTimer -= dt;
+                    if (wanderTimer <= 0) {
+                        wanderTimer = 2.0f + random.nextFloat() * 4.0f;
+                        isWanderingMoving = random.nextFloat() < 0.6f;
+                        if (isWanderingMoving) {
+                            wanderYaw = random.nextFloat() * 360.0f;
+                        }
+                    }
+                    if (isWanderingMoving) {
+                        float rad = (float) Math.toRadians(wanderYaw);
+                        moveX = (float) Math.cos(rad) * (type.getMoveSpeed() * 0.25f);
+                        moveZ = (float) Math.sin(rad) * (type.getMoveSpeed() * 0.25f);
+                        yaw = wanderYaw;
+                    }
+                    if (random.nextFloat() < 0.001f) {
+                        teleportRandom(world);
+                    }
                 }
-            } else if (type == MobType.ENDER_DRAGON) {
-                updateDragonAI(dt, world, player);
-                return; // Dragon handles its own movement/flight entirely
-            } else if (type == MobType.END_CRYSTAL) {
-                // Crystal stays stationary, pulses/heals nearby dragon
-                return;
             } else { // ZOMBIE
+                yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
                 moveX = dx * type.getMoveSpeed();
                 moveZ = dz * type.getMoveSpeed();
                 if (distToPlayer < 1.4f && attackCooldown <= 0) {
@@ -243,11 +249,44 @@ public class Mob {
                     attackCooldown = 1.0f;
                 }
             }
-        } else if ((type.isPassive() || (type == MobType.ENDERMAN && !aggressive)) && distToPlayer < 48.0f) {
-            float wanderAngle = (float) ((System.currentTimeMillis() + position.x * 37) * 0.001);
-            moveX = (float) Math.cos(wanderAngle) * (type.getMoveSpeed() * 0.35f);
-            moveZ = (float) Math.sin(wanderAngle) * (type.getMoveSpeed() * 0.35f);
-            yaw = (float) Math.toDegrees(Math.atan2(moveZ, moveX));
+        } else {
+            // Idle wandering or panic flee
+            if (type == MobType.CREEPER) {
+                ignited = false;
+                fuseTime = Math.max(0.0f, fuseTime - dt * 0.5f);
+            }
+
+            if (type.isPassive() && hurtTimer > 0) {
+                // Panic and sprint away from player when attacked!
+                float dx = player.getPosition().x - position.x;
+                float dz = player.getPosition().z - position.z;
+                float len = (float) Math.sqrt(dx * dx + dz * dz);
+                if (len > 0.001f) {
+                    dx /= len;
+                    dz /= len;
+                }
+                moveX = -dx * type.getMoveSpeed() * 1.8f;
+                moveZ = -dz * type.getMoveSpeed() * 1.8f;
+                yaw = (float) Math.toDegrees(Math.atan2(-dz, -dx));
+            } else {
+                wanderTimer -= dt;
+                if (wanderTimer <= 0) {
+                    wanderTimer = 2.0f + random.nextFloat() * 4.0f;
+                    isWanderingMoving = random.nextFloat() < 0.6f;
+                    if (isWanderingMoving) {
+                        wanderYaw = random.nextFloat() * 360.0f;
+                    }
+                }
+                if (isWanderingMoving) {
+                    float rad = (float) Math.toRadians(wanderYaw);
+                    moveX = (float) Math.cos(rad) * (type.getMoveSpeed() * 0.35f);
+                    moveZ = (float) Math.sin(rad) * (type.getMoveSpeed() * 0.35f);
+                    yaw = wanderYaw;
+                }
+                if (type == MobType.ENDERMAN && random.nextFloat() < 0.001f) {
+                    teleportRandom(world);
+                }
+            }
         }
 
         // Apply movement and gravity
@@ -260,12 +299,56 @@ public class Mob {
         velocity.x = moveX;
         velocity.z = moveZ;
 
+        if (Math.abs(moveX) > 0.01f || Math.abs(moveZ) > 0.01f) {
+            walkTime += dt;
+        }
+
         // Auto-jump over 1-block obstacles or spider climbing
         if (onGround && (moveX != 0 || moveZ != 0)) {
-            float forwardCheckX = position.x + Math.signum(moveX) * (type.getWidth() * 0.6f + 0.1f);
-            float forwardCheckZ = position.z + Math.signum(moveZ) * (type.getWidth() * 0.6f + 0.1f);
-            BlockType frontBlock = world.getBlock((int) Math.floor(forwardCheckX), (int) Math.floor(position.y + 0.5f), (int) Math.floor(forwardCheckZ));
-            if (frontBlock != BlockType.AIR && frontBlock.isSolid()) {
+            boolean obstacleAhead = false;
+            float checkDist = type.getWidth() * 0.5f + 0.35f;
+
+            // Check X obstacle
+            if (Math.abs(moveX) > 0.01f) {
+                float targetX = position.x + Math.signum(moveX) * checkDist;
+                int bx = (int) Math.floor(targetX);
+                int by = (int) Math.floor(position.y + 0.5f);
+                int bz = (int) Math.floor(position.z);
+                BlockType lower = world.getBlock(bx, by, bz);
+                BlockType upper = world.getBlock(bx, by + 1, bz);
+                if (lower != BlockType.AIR && lower.isSolid() && (upper == BlockType.AIR || !upper.isSolid())) {
+                    obstacleAhead = true;
+                }
+            }
+
+            // Check Z obstacle
+            if (!obstacleAhead && Math.abs(moveZ) > 0.01f) {
+                float targetZ = position.z + Math.signum(moveZ) * checkDist;
+                int bx = (int) Math.floor(position.x);
+                int by = (int) Math.floor(position.y + 0.5f);
+                int bz = (int) Math.floor(targetZ);
+                BlockType lower = world.getBlock(bx, by, bz);
+                BlockType upper = world.getBlock(bx, by + 1, bz);
+                if (lower != BlockType.AIR && lower.isSolid() && (upper == BlockType.AIR || !upper.isSolid())) {
+                    obstacleAhead = true;
+                }
+            }
+
+            // Check diagonal obstacle
+            if (!obstacleAhead && Math.abs(moveX) > 0.01f && Math.abs(moveZ) > 0.01f) {
+                float targetX = position.x + Math.signum(moveX) * checkDist;
+                float targetZ = position.z + Math.signum(moveZ) * checkDist;
+                int bx = (int) Math.floor(targetX);
+                int by = (int) Math.floor(position.y + 0.5f);
+                int bz = (int) Math.floor(targetZ);
+                BlockType lower = world.getBlock(bx, by, bz);
+                BlockType upper = world.getBlock(bx, by + 1, bz);
+                if (lower != BlockType.AIR && lower.isSolid() && (upper == BlockType.AIR || !upper.isSolid())) {
+                    obstacleAhead = true;
+                }
+            }
+
+            if (obstacleAhead) {
                 velocity.y = (type == MobType.SPIDER) ? 9.5f : 8.0f; // Jump
                 onGround = false;
             }
@@ -445,6 +528,8 @@ public class Mob {
     }
 
     private void moveWithCollision(World world, float dx, float dy, float dz) {
+        float origDx = dx;
+        float origDz = dz;
         AABB box = getBoundingBox();
 
         // Y Collision
@@ -491,6 +576,22 @@ public class Mob {
             }
         }
         position.z += dz;
+
+        // If mob was on ground and horizontally blocked by an obstacle, jump if headroom exists
+        if (onGround && ((Math.abs(origDx) > 0.001f && Math.abs(dx) < Math.abs(origDx) * 0.5f) ||
+                         (Math.abs(origDz) > 0.001f && Math.abs(dz) < Math.abs(origDz) * 0.5f))) {
+            int mx = (int) Math.floor(position.x);
+            int my = (int) Math.floor(position.y + type.getHeight() + 0.5f);
+            int mz = (int) Math.floor(position.z);
+            BlockType headBlock = world.getBlock(mx, my, mz);
+            if (headBlock == BlockType.AIR || !headBlock.isSolid()) {
+                velocity.y = (type == MobType.SPIDER) ? 9.5f : 8.0f;
+                onGround = false;
+            }
+            if (isWanderingMoving) {
+                wanderTimer = 0.0f;
+            }
+        }
     }
 
     private List<AABB> getSurroundingBoxes(World world, AABB q) {
@@ -529,4 +630,5 @@ public class Mob {
     public boolean isAggressive() { return aggressive; }
     public Boat getRidingBoat() { return ridingBoat; }
     public void setRidingBoat(Boat boat) { this.ridingBoat = boat; }
+    public float getWalkTime() { return walkTime; }
 }

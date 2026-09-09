@@ -121,15 +121,58 @@ public class MobRenderer {
                 float cg = creeperFlash ? 1.0f : (hurt ? 0.2f : 0.72f);
                 float cb = creeperFlash ? 1.0f : (hurt ? 0.2f : 0.18f);
 
+                float yaw = mob.getYaw();
+                float scale = 1.0f + (mob.isIgnited() ? mob.getFuseRatio() * 0.22f : 0.0f);
+
                 // Head
-                addBox(verts, x - 0.24f, y + 1.2f, z - 0.24f, 0.48f, 0.48f, 0.48f, cr, cg, cb);
-                // Body
-                addBox(verts, x - 0.22f, y + 0.45f, z - 0.14f, 0.44f, 0.75f, 0.28f, cr * 0.9f, cg * 0.9f, cb * 0.9f);
-                // 4 Feet
-                addBox(verts, x - 0.24f, y, z - 0.24f, 0.2f, 0.45f, 0.2f, cr * 0.8f, cg * 0.8f, cb * 0.8f);
-                addBox(verts, x + 0.04f, y, z - 0.24f, 0.2f, 0.45f, 0.2f, cr * 0.8f, cg * 0.8f, cb * 0.8f);
-                addBox(verts, x - 0.24f, y, z + 0.04f, 0.2f, 0.45f, 0.2f, cr * 0.8f, cg * 0.8f, cb * 0.8f);
-                addBox(verts, x + 0.04f, y, z + 0.04f, 0.2f, 0.45f, 0.2f, cr * 0.8f, cg * 0.8f, cb * 0.8f);
+                float headW = 0.48f * scale;
+                float headH = 0.48f * scale;
+                float headD = 0.48f * scale;
+                float headY = 1.20f * scale;
+                addRotatedBox(verts, x, y, z, 0, headY, 0, headW, headH, headD, yaw, cr, cg, cb);
+
+                // Iconic Creeper Face (front face of head)
+                float fr = creeperFlash ? 1.0f : 0.08f;
+                float fg = creeperFlash ? 1.0f : 0.08f;
+                float fb = creeperFlash ? 1.0f : 0.08f;
+                float faceZ = (headD * 0.5f) + 0.005f;
+                float faceD = 0.015f * scale;
+
+                // Eyes (black rectangles)
+                addRotatedBox(verts, x, y, z, -0.10f * scale, (headY + 0.26f * scale), faceZ, 0.09f * scale, 0.09f * scale, faceD, yaw, fr, fg, fb);
+                addRotatedBox(verts, x, y, z, 0.10f * scale, (headY + 0.26f * scale), faceZ, 0.09f * scale, 0.09f * scale, faceD, yaw, fr, fg, fb);
+
+                // Nose bridge
+                addRotatedBox(verts, x, y, z, 0, (headY + 0.16f * scale), faceZ, 0.08f * scale, 0.12f * scale, faceD, yaw, fr, fg, fb);
+
+                // Mouth upper horizontal bar
+                addRotatedBox(verts, x, y, z, 0, (headY + 0.10f * scale), faceZ, 0.22f * scale, 0.06f * scale, faceD, yaw, fr, fg, fb);
+
+                // Mouth outer corners (frown dropping down)
+                addRotatedBox(verts, x, y, z, -0.10f * scale, (headY + 0.04f * scale), faceZ, 0.08f * scale, 0.08f * scale, faceD, yaw, fr, fg, fb);
+                addRotatedBox(verts, x, y, z, 0.10f * scale, (headY + 0.04f * scale), faceZ, 0.08f * scale, 0.08f * scale, faceD, yaw, fr, fg, fb);
+
+                // Body (Torso)
+                float bodyW = 0.44f * scale;
+                float bodyH = 0.75f * scale;
+                float bodyD = 0.28f * scale;
+                addRotatedBox(verts, x, y, z, 0, 0.45f * scale, 0, bodyW, bodyH, bodyD, yaw, cr * 0.9f, cg * 0.9f, cb * 0.9f);
+
+                // 4 Feet with leg swing animation
+                boolean isWalking = (mob.getVelocity().x * mob.getVelocity().x + mob.getVelocity().z * mob.getVelocity().z) > 0.002f;
+                float legSwing = isWalking ? (float) Math.sin(mob.getWalkTime() * 8.0f) * 0.10f : 0.0f;
+                float legW = 0.19f * scale;
+                float legH = 0.45f * scale;
+                float legD = 0.19f * scale;
+
+                // Front-left
+                addRotatedBox(verts, x, y, z, -0.12f * scale, 0, (0.13f + legSwing) * scale, legW, legH, legD, yaw, cr * 0.8f, cg * 0.8f, cb * 0.8f);
+                // Front-right
+                addRotatedBox(verts, x, y, z, 0.12f * scale, 0, (0.13f - legSwing) * scale, legW, legH, legD, yaw, cr * 0.8f, cg * 0.8f, cb * 0.8f);
+                // Back-left
+                addRotatedBox(verts, x, y, z, -0.12f * scale, 0, (-0.13f - legSwing) * scale, legW, legH, legD, yaw, cr * 0.8f, cg * 0.8f, cb * 0.8f);
+                // Back-right
+                addRotatedBox(verts, x, y, z, 0.12f * scale, 0, (-0.13f + legSwing) * scale, legW, legH, legD, yaw, cr * 0.8f, cg * 0.8f, cb * 0.8f);
 
             } else if (mt == MobType.SKELETON) {
                 float sr = hurt ? 1.0f : 0.82f;

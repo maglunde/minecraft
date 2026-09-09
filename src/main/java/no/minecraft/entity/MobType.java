@@ -63,10 +63,10 @@ public enum MobType {
     }
 
     public boolean isPassive() {
-        return attackDamage == 0 && this != END_CRYSTAL;
+        return attackDamage == 0 && this != END_CRYSTAL && this != CREEPER;
     }
 
     public boolean isHostile() {
-        return attackDamage > 0;
+        return attackDamage > 0 || this == CREEPER;
     }
 }

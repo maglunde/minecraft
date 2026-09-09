@@ -1553,6 +1553,9 @@ public class World {
     }
 
     public void cleanup() {
+        mobs.clear();
+        droppedItems.clear();
+        arrows.clear();
         fallingBlocks.clear();
         pendingFallingBlocks.clear();
         furnaces.clear();
