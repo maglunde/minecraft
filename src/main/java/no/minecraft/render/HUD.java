@@ -33,24 +33,24 @@ public class HUD {
     private boolean craftingTableOpen = false;
     private boolean furnaceOpen = false;
     private no.minecraft.world.FurnaceData activeFurnace = null;
-    private boolean recipeBookOpen = false;
-    private int recipeScrollRow = 0;
-    private String recipeSearchText = "";
-    private boolean recipeSearchFocused = false;
+    boolean recipeBookOpen = false;
+    int recipeScrollRow = 0;
+    String recipeSearchText = "";
+    boolean recipeSearchFocused = false;
     private boolean showDebugInfo = false;
     private int lastFps = 60;
     private no.minecraft.player.Raycast.HitResult lastTargetedHit = null;
     private final List<CraftingRecipe> recipes = CraftingRecipe.getDefaultRecipes();
 
-    private final ItemStack[] craftSlots = new ItemStack[4];
-    private final ItemStack[] benchSlots = new ItemStack[9];
-    private final ItemStack carriedItem = new ItemStack(BlockType.AIR, 0);
-    private float mouseX, mouseY;
+    final ItemStack[] craftSlots = new ItemStack[4];
+    final ItemStack[] benchSlots = new ItemStack[9];
+    final ItemStack carriedItem = new ItemStack(BlockType.AIR, 0);
+    float mouseX, mouseY;
 
     // Mouse drag distribution state
-    private boolean isLeftDragging = false;
-    private boolean isRightDragging = false;
-    private final Set<ItemStack> draggedSlots = new LinkedHashSet<>();
+    boolean isLeftDragging = false;
+    boolean isRightDragging = false;
+    final Set<ItemStack> draggedSlots = new LinkedHashSet<>();
     private ItemStack startDragSlot = null;
 
     private static final String VERTEX_SHADER = """
@@ -608,30 +608,6 @@ public class HUD {
         return draggedSlots;
     }
 
-    private void renderSlotItem(List<Float> tex, List<Float> overlayGeom, ItemStack stack, float sx, float sy, float p) {
-        if (isLeftDragging && draggedSlots.contains(stack) && draggedSlots.size() > 1 && !carriedItem.isEmpty()) {
-            int perSlot = carriedItem.getCount() / draggedSlots.size();
-            BlockType type = carriedItem.getType();
-            int count = (stack.isEmpty() ? 0 : stack.getCount()) + perSlot;
-            if (count > 0) {
-                int tId = type.getItemTexture();
-                float[] uv = TextureAtlas.getUVs(tId);
-                addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 0.85f);
-                drawMinecraftNumber(overlayGeom, count, sx + 17.0f * p, sy + 17.0f * p, p * 0.95f);
-            }
-            addRect(overlayGeom, sx + p, sy + p, 16.0f * p, 16.0f * p, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 0.25f);
-            return;
-        }
-
-        if (!stack.isEmpty()) {
-            int tId = stack.getType().getItemTexture();
-            float[] uv = TextureAtlas.getUVs(tId);
-            addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 1.0f);
-            if (stack.getCount() > 0) {
-                drawMinecraftNumber(overlayGeom, stack.getCount(), sx + 17.0f * p, sy + 17.0f * p, p * 0.95f);
-            }
-        }
-    }
 
     public ItemStack get3x3CraftingResult() {
         return CraftingRecipe.matchGrid(benchSlots, 3, 3);
@@ -1568,14 +1544,6 @@ public class HUD {
         // 3f. Scrolling Combat Text (damage dealt to mobs in hearts)
         renderCombatTexts(overlayGeom, windowWidth, windowHeight, player);
 
-        // 4. Minecraft Inventory & Crafting GUI
-        if (craftingTableOpen) {
-            renderCraftingTableGUI(geom, tex, overlayGeom, windowWidth, windowHeight, player, atlas);
-        } else if (furnaceOpen && activeFurnace != null) {
-            renderFurnaceGUI(geom, tex, overlayGeom, windowWidth, windowHeight, player, atlas);
-        } else if (inventoryOpen) {
-            renderMinecraftInventoryGUI(geom, tex, overlayGeom, windowWidth, windowHeight, player, atlas);
-        }
 
         // Render Geometry pass (background panels, health, hotbar base)
         hudShader.setUniform("uUseTexture", 0);
@@ -1588,6 +1556,42 @@ public class HUD {
         atlas.unbind();
 
         // Render Overlay Geometry pass (stack count numbers, active selection on top of icons)
+        hudShader.setUniform("uUseTexture", 0);
+        drawVertices(overlayGeom);
+
+        hudShader.unbind();
+
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_CULL_FACE);
+        glDisable(GL_BLEND);
+    }
+
+    /**
+     * Runs the three HUD shader passes (untextured, textured, overlay) over
+     * geometry emitted by a container screen (inventory / crafting table /
+     * furnace). The screens only build vertex lists; the GL work lives here
+     * so the dark container backdrop covers the hotbar etc. exactly like the
+     * legacy single-render HUD.
+     */
+    public void drawScreenGeometry(int windowWidth, int windowHeight, TextureAtlas atlas,
+                                   List<Float> geom, List<Float> tex, List<Float> overlayGeom) {
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        Matrix4f ortho = new Matrix4f().ortho(0, windowWidth, windowHeight, 0, -1, 1);
+        hudShader.bind();
+        hudShader.setUniform("uOrtho", ortho);
+
+        hudShader.setUniform("uUseTexture", 0);
+        drawVertices(geom);
+
+        hudShader.setUniform("uUseTexture", 1);
+        atlas.bind();
+        drawVertices(tex);
+        atlas.unbind();
+
         hudShader.setUniform("uUseTexture", 0);
         drawVertices(overlayGeom);
 
@@ -1704,366 +1708,8 @@ public class HUD {
         }
     }
 
-    private void renderMinecraftInventoryGUI(List<Float> geom, List<Float> tex, List<Float> overlayGeom, int windowWidth, int windowHeight, Player player, TextureAtlas atlas) {
-        float p = getGuiScale(windowWidth, windowHeight); // Scale
-        float invW = 176.0f * p;
-        float invH = 166.0f * p;
-        float ix = (windowWidth - invW) / 2.0f;
-        float iy = (windowHeight - invH) / 2.0f;
 
-        ItemStack hoveredStack = null;
 
-        // 1. Dark background overlay
-        addRect(geom, 0, 0, windowWidth, windowHeight, 0, 0, 0, 0, 0, 0, 0, 0.65f);
-
-        // 2. Main Window Panel (Gray with 3D Bevel)
-        drawMinecraftWindowFrame(geom, ix, iy, invW, invH, p);
-
-        // 3. Armor Slots (4 vertical slots on left)
-        float armorX = ix + 8.0f * p;
-        for (int i = 0; i < 4; i++) {
-            float armorY = iy + (8.0f + i * 18.0f) * p;
-            drawPixelSlot(geom, armorX, armorY, 18.0f * p, p);
-            drawArmorSilhouette(geom, armorX + 2.0f * p, armorY + 2.0f * p, i, p);
-        }
-
-        // 4. Player Preview Box (Black box with 2D Steve character)
-        float playerBoxX = ix + 26.0f * p;
-        float playerBoxY = iy + 8.0f * p;
-        float playerBoxW = 51.0f * p;
-        float playerBoxH = 70.0f * p;
-
-        // Dark player viewport with inset border
-        addRect(geom, playerBoxX, playerBoxY, playerBoxW, playerBoxH, 0, 0, 0, 0, 0.05f, 0.05f, 0.05f, 1.0f);
-        drawInsetBorder(geom, playerBoxX, playerBoxY, playerBoxW, playerBoxH, p);
-
-        // Draw Steve figure inside viewport
-        drawPixelSteve(geom, playerBoxX + 16.0f * p, playerBoxY + 8.0f * p, p);
-
-        // 5. Shield Slot (Off-hand)
-        float shieldX = ix + 77.0f * p;
-        float shieldY = iy + 62.0f * p;
-        drawPixelSlot(geom, shieldX, shieldY, 18.0f * p, p);
-        drawShieldSilhouette(geom, shieldX + 3.0f * p, shieldY + 3.0f * p, p);
-
-        // 6. Crafting Title
-        drawPixelCraftingTitle(geom, ix + 97.0f * p, iy + 6.0f * p, p);
-
-        // 7. 2x2 Crafting Grid
-        float craftGridX = ix + 98.0f * p;
-        float craftGridY = iy + 18.0f * p;
-        for (int r = 0; r < 2; r++) {
-            for (int c = 0; c < 2; c++) {
-                int slotIdx = r * 2 + c;
-                float sx = craftGridX + c * 18.0f * p;
-                float sy = craftGridY + r * 18.0f * p;
-                drawPixelSlot(geom, sx, sy, 18.0f * p, p);
-
-                ItemStack stack = craftSlots[slotIdx];
-                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
-                    if (!stack.isEmpty()) hoveredStack = stack;
-                }
-                renderSlotItem(tex, overlayGeom, stack, sx, sy, p);
-            }
-        }
-
-        // 8. Crafting Arrow ➔
-        float arrowX = ix + 135.0f * p;
-        float arrowY = iy + 28.0f * p;
-        drawPixelCraftingArrow(geom, arrowX, arrowY, p);
-
-        // 9. Crafting Result Slot
-        float resultSlotX = ix + 152.0f * p;
-        float resultSlotY = iy + 26.0f * p;
-        drawPixelSlot(geom, resultSlotX, resultSlotY, 20.0f * p, p);
-
-        // ONLY show result if 2x2 grid contains a valid recipe!
-        ItemStack craftResult = getCraftingResult();
-        if (craftResult != null && !craftResult.isEmpty()) {
-            if (mouseX >= resultSlotX && mouseX <= resultSlotX + 20.0f * p && mouseY >= resultSlotY && mouseY <= resultSlotY + 20.0f * p) {
-                hoveredStack = craftResult;
-            }
-            BlockType outBlock = craftResult.getType();
-            int tileId = outBlock.getItemTexture();
-            float[] uv = TextureAtlas.getUVs(tileId);
-            addRect(tex, resultSlotX + 3.0f * p, resultSlotY + 3.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
-            if (craftResult.getCount() > 0) {
-                drawMinecraftNumber(overlayGeom, craftResult.getCount(), resultSlotX + 19.0f * p, resultSlotY + 19.0f * p, p * 0.95f);
-            }
-        }
-
-        // 10. Recipe Book Button (Green Book Icon)
-        float rbX = ix + 104.0f * p;
-        float rbY = iy + 61.0f * p;
-        drawPixelRecipeBookButton(geom, rbX, rbY, 20.0f * p, p);
-
-        // 11. Main Inventory Grid (3 rows x 9 columns)
-        float mainInvX = ix + 8.0f * p;
-        float mainInvY = iy + 84.0f * p;
-
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 9; col++) {
-                int slotIndex = 9 + row * 9 + col;
-                float sx = mainInvX + col * 18.0f * p;
-                float sy = mainInvY + row * 18.0f * p;
-                drawPixelSlot(geom, sx, sy, 18.0f * p, p);
-
-                ItemStack stack = player.getInventory().getSlot(slotIndex);
-                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
-                    if (!stack.isEmpty()) hoveredStack = stack;
-                }
-                renderSlotItem(tex, overlayGeom, stack, sx, sy, p);
-            }
-        }
-
-        // 12. Hotbar Grid in Inventory (1 row x 9 columns)
-        float hotbarInvY = iy + 142.0f * p;
-        for (int col = 0; col < 9; col++) {
-            float sx = mainInvX + col * 18.0f * p;
-            drawPixelSlot(geom, sx, hotbarInvY, 18.0f * p, p);
-
-            ItemStack stack = player.getInventory().getSlot(col);
-            if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= hotbarInvY && mouseY <= hotbarInvY + 18.0f * p) {
-                if (!stack.isEmpty()) hoveredStack = stack;
-            }
-            renderSlotItem(tex, overlayGeom, stack, sx, hotbarInvY, p);
-        }
-
-        // 13. Pop-out Recipe Book panel if toggled
-        if (recipeBookOpen) {
-            float popW = 126.0f * p;
-            float popX = ix - popW - 6.0f;
-            ItemStack rbHover = renderRecipeBookPanel(geom, tex, overlayGeom, popX, iy, popW, invH, p, player);
-            if (rbHover != null) {
-                hoveredStack = rbHover;
-            }
-        }
-
-        // 14. Carried item on mouse cursor
-        if (!carriedItem.isEmpty()) {
-            int tId = carriedItem.getType().getItemTexture();
-            float[] uv = TextureAtlas.getUVs(tId);
-            float cx = mouseX - 8.0f * p;
-            float cy = mouseY - 8.0f * p;
-            addRect(tex, cx, cy, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 1.0f);
-            int displayCount = getCarriedDisplayCount();
-            if (displayCount > 0) {
-                drawMinecraftNumber(overlayGeom, displayCount, cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
-            }
-        }
-
-        // 15. Item tooltip popup on hover
-        if (carriedItem.isEmpty() && hoveredStack != null && !hoveredStack.isEmpty()) {
-            renderItemTooltip(overlayGeom, hoveredStack, mouseX, mouseY, windowWidth, windowHeight);
-        }
-    }
-
-    private void renderCraftingTableGUI(List<Float> geom, List<Float> tex, List<Float> overlayGeom, int windowWidth, int windowHeight, Player player, TextureAtlas atlas) {
-        float p = getGuiScale(windowWidth, windowHeight); // Scale
-        float invW = 176.0f * p;
-        float invH = 166.0f * p;
-        float ix = (windowWidth - invW) / 2.0f;
-        float iy = (windowHeight - invH) / 2.0f;
-
-        ItemStack hoveredStack = null;
-
-        // 1. Dark background overlay
-        addRect(geom, 0, 0, windowWidth, windowHeight, 0, 0, 0, 0, 0, 0, 0, 0.65f);
-
-        // 2. Main Window Panel
-        drawMinecraftWindowFrame(geom, ix, iy, invW, invH, p);
-
-        // 3. Title: "Arbeidsbenk" / Crafting Table
-        drawPixelCraftingTitle(geom, ix + 28.0f * p, iy + 6.0f * p, p);
-
-        // 4. 3x3 Crafting Grid
-        float gridX = ix + 30.0f * p;
-        float gridY = iy + 17.0f * p;
-        for (int r = 0; r < 3; r++) {
-            for (int c = 0; c < 3; c++) {
-                int slotIdx = r * 3 + c;
-                float sx = gridX + c * 18.0f * p;
-                float sy = gridY + r * 18.0f * p;
-                drawPixelSlot(geom, sx, sy, 18.0f * p, p);
-
-                ItemStack stack = benchSlots[slotIdx];
-                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
-                    if (!stack.isEmpty()) hoveredStack = stack;
-                }
-                renderSlotItem(tex, overlayGeom, stack, sx, sy, p);
-            }
-        }
-
-        // 5. Crafting Arrow ➔
-        float arrowX = ix + 90.0f * p;
-        float arrowY = iy + 35.0f * p;
-        drawPixelCraftingArrow(geom, arrowX, arrowY, p);
-
-        // 6. Crafting Result Slot
-        float resX = ix + 124.0f * p;
-        float resY = iy + 31.0f * p;
-        drawPixelSlot(geom, resX, resY, 24.0f * p, p);
-
-        // ONLY show result when 3x3 grid ingredients form a valid recipe!
-        ItemStack craftResult = get3x3CraftingResult();
-        if (craftResult != null && !craftResult.isEmpty()) {
-            if (mouseX >= resX && mouseX <= resX + 24.0f * p && mouseY >= resY && mouseY <= resY + 24.0f * p) {
-                hoveredStack = craftResult;
-            }
-            BlockType outBlock = craftResult.getType();
-            int tileId = outBlock.getItemTexture();
-            float[] uv = TextureAtlas.getUVs(tileId);
-            addRect(tex, resX + 4.0f * p, resY + 4.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
-            if (craftResult.getCount() > 0) {
-                drawMinecraftNumber(overlayGeom, craftResult.getCount(), resX + 22.0f * p, resY + 22.0f * p, p * 0.95f);
-            }
-        }
-
-        // 7. Recipe Book Button (Green Book Icon)
-        float rbX = ix + 8.0f * p;
-        float rbY = iy + 35.0f * p;
-        drawPixelRecipeBookButton(geom, rbX, rbY, 20.0f * p, p);
-
-        // 8. Main Inventory Grid (3 rows x 9 columns)
-        float mainInvX = ix + 8.0f * p;
-        float mainInvY = iy + 84.0f * p;
-
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 9; col++) {
-                int slotIndex = 9 + row * 9 + col;
-                float sx = mainInvX + col * 18.0f * p;
-                float sy = mainInvY + row * 18.0f * p;
-                drawPixelSlot(geom, sx, sy, 18.0f * p, p);
-
-                ItemStack stack = player.getInventory().getSlot(slotIndex);
-                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
-                    if (!stack.isEmpty()) hoveredStack = stack;
-                }
-                renderSlotItem(tex, overlayGeom, stack, sx, sy, p);
-            }
-        }
-
-        // 9. Hotbar Grid in Inventory (1 row x 9 columns)
-        float hotbarInvY = iy + 142.0f * p;
-        for (int col = 0; col < 9; col++) {
-            float sx = mainInvX + col * 18.0f * p;
-            drawPixelSlot(geom, sx, hotbarInvY, 18.0f * p, p);
-
-            ItemStack stack = player.getInventory().getSlot(col);
-            if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= hotbarInvY && mouseY <= hotbarInvY + 18.0f * p) {
-                if (!stack.isEmpty()) hoveredStack = stack;
-            }
-            renderSlotItem(tex, overlayGeom, stack, sx, hotbarInvY, p);
-        }
-
-        // 10. Pop-out Recipe Book panel if toggled
-        if (recipeBookOpen) {
-            float popW = 126.0f * p;
-            float popX = ix - popW - 6.0f;
-            ItemStack rbHover = renderRecipeBookPanel(geom, tex, overlayGeom, popX, iy, popW, invH, p, player);
-            if (rbHover != null) {
-                hoveredStack = rbHover;
-            }
-        }
-
-        // 11. Carried item on mouse cursor
-        if (!carriedItem.isEmpty()) {
-            int tId = carriedItem.getType().getItemTexture();
-            float[] uv = TextureAtlas.getUVs(tId);
-            float cx = mouseX - 8.0f * p;
-            float cy = mouseY - 8.0f * p;
-            addRect(tex, cx, cy, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 1.0f);
-            int displayCount = getCarriedDisplayCount();
-            if (displayCount > 0) {
-                drawMinecraftNumber(overlayGeom, displayCount, cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
-            }
-        }
-
-        // 12. Item tooltip popup on hover
-        if (carriedItem.isEmpty() && hoveredStack != null && !hoveredStack.isEmpty()) {
-            renderItemTooltip(overlayGeom, hoveredStack, mouseX, mouseY, windowWidth, windowHeight);
-        }
-    }
-
-    private void renderItemTooltip(List<Float> overlayGeom, ItemStack item, float mx, float my, int windowWidth, int windowHeight) {
-        if (item == null || item.isEmpty()) return;
-
-        BlockType bt = item.getType();
-        List<String> lines = new ArrayList<>();
-        List<float[]> colors = new ArrayList<>();
-
-        // Title: Item name (White)
-        lines.add(bt.getName());
-        colors.add(new float[]{1.0f, 1.0f, 1.0f});
-
-        // Food info
-        if (bt.isFood()) {
-            float hearts = bt.getFoodValue() / 2.0f;
-            String heartStr = (hearts == (int) hearts) ? String.valueOf((int) hearts) : String.format(java.util.Locale.ROOT, "%.1f", hearts);
-            lines.add("+" + heartStr + " MAT");
-            colors.add(new float[]{0.70f, 0.70f, 0.70f});
-        }
-
-        // Attack damage
-        int attackDmg = bt.getAttackDamage();
-        if (attackDmg > 1) {
-            lines.add("+" + attackDmg + " ANGREPSSKADE");
-            colors.add(new float[]{0.35f, 0.85f, 0.35f});
-        }
-
-        // Durability
-        if (bt.isDamageable()) {
-            int maxDur = bt.getMaxDurability();
-            int currentDur = maxDur - item.getDamage();
-            lines.add("HOLDBARHET: " + currentDur + " / " + maxDur);
-            colors.add(new float[]{0.75f, 0.75f, 0.75f});
-        }
-
-        float p = getGuiScale(windowWidth, windowHeight);
-        float textScale = p * 0.55f;
-        float charW = 6.0f * textScale;
-        float lineH = 10.0f * textScale;
-
-        float maxW = 0.0f;
-        for (String line : lines) {
-            float w = line.length() * charW;
-            if (w > maxW) maxW = w;
-        }
-
-        float padX = 2.5f * p;
-        float padY = 2.0f * p;
-        float boxW = maxW + padX * 2.0f;
-        float boxH = lines.size() * lineH + padY * 2.0f;
-
-        float tx = mx + 5.0f * p;
-        float ty = my - 5.0f * p;
-
-        if (tx + boxW > windowWidth - 4.0f) {
-            tx = mx - boxW - 3.0f * p;
-        }
-        if (tx < 4.0f) tx = 4.0f;
-
-        if (ty + boxH > windowHeight - 4.0f) {
-            ty = windowHeight - 4.0f - boxH;
-        }
-        if (ty < 4.0f) ty = 4.0f;
-
-        float border = Math.max(1.0f, p * 0.5f);
-        // Outer dark border
-        addRect(overlayGeom, tx - border, ty - border, boxW + border * 2.0f, boxH + border * 2.0f, 0, 0, 0, 0, 0.05f, 0.05f, 0.05f, 0.96f);
-        // Purple border (Minecraft tooltip)
-        addRect(overlayGeom, tx, ty, boxW, boxH, 0, 0, 0, 0, 0.28f, 0.05f, 0.65f, 0.96f);
-        // Dark inner background
-        addRect(overlayGeom, tx + border, ty + border, boxW - border * 2.0f, boxH - border * 2.0f, 0, 0, 0, 0, 0.08f, 0.04f, 0.12f, 0.94f);
-
-        // Draw lines
-        for (int i = 0; i < lines.size(); i++) {
-            String text = lines.get(i);
-            float[] col = colors.get(i);
-            float ly = ty + padY + i * lineH;
-            drawHudText(overlayGeom, text, tx + padX, ly, textScale, col[0], col[1], col[2], 1.0f);
-        }
-    }
 
     // --- Pixel Helper Rendering Methods ---
 
@@ -2100,380 +1746,17 @@ public class HUD {
         addRect(g, x + 2 * p, y + h - 3 * p, w - 4 * p, p, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 1.0f);
     }
 
-    private void drawPixelSlot(List<Float> g, float x, float y, float size, float p) {
-        // Slot border & inset bevel
-        addRect(g, x, y, size, size, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
-        addRect(g, x, y, size, p, 0, 0, 0, 0, 0.22f, 0.22f, 0.22f, 1.0f);
-        addRect(g, x, y, p, size, 0, 0, 0, 0, 0.22f, 0.22f, 0.22f, 1.0f);
-        addRect(g, x, y + size - p, size, p, 0, 0, 0, 0, 0.95f, 0.95f, 0.95f, 1.0f);
-        addRect(g, x + size - p, y, p, size, 0, 0, 0, 0, 0.95f, 0.95f, 0.95f, 1.0f);
-    }
 
-    private void drawMinecraftWindowFrame(List<Float> g, float x, float y, float w, float h, float p) {
-        // Outer border
-        addRect(g, x, y, w, h, 0, 0, 0, 0, 0.12f, 0.12f, 0.12f, 1.0f);
-        // Base panel
-        addRect(g, x + p, y + p, w - 2 * p, h - 2 * p, 0, 0, 0, 0, 0.776f, 0.776f, 0.776f, 1.0f);
-        // Light Bevel (Top & Left)
-        addRect(g, x + p, y + p, w - 2 * p, 2 * p, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 1.0f);
-        addRect(g, x + p, y + p, 2 * p, h - 2 * p, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 1.0f);
-        // Dark Bevel (Bottom & Right)
-        addRect(g, x + p, y + h - 3 * p, w - 2 * p, 2 * p, 0, 0, 0, 0, 0.33f, 0.33f, 0.33f, 1.0f);
-        addRect(g, x + w - 3 * p, y + p, 2 * p, h - 2 * p, 0, 0, 0, 0, 0.33f, 0.33f, 0.33f, 1.0f);
-    }
 
-    private void drawInsetBorder(List<Float> g, float x, float y, float w, float h, float p) {
-        addRect(g, x, y, w, p, 0, 0, 0, 0, 0.15f, 0.15f, 0.15f, 1.0f);
-        addRect(g, x, y, p, h, 0, 0, 0, 0, 0.15f, 0.15f, 0.15f, 1.0f);
-        addRect(g, x, y + h - p, w, p, 0, 0, 0, 0, 0.85f, 0.85f, 0.85f, 1.0f);
-        addRect(g, x + w - p, y, p, h, 0, 0, 0, 0, 0.85f, 0.85f, 0.85f, 1.0f);
-    }
 
-    private void drawPixelSteve(List<Float> g, float x, float y, float p) {
-        // Head (8x8 px)
-        addRect(g, x + 4 * p, y, 8 * p, 8 * p, 0, 0, 0, 0, 0.72f, 0.48f, 0.34f, 1.0f); // Skin
-        addRect(g, x + 4 * p, y, 8 * p, 3 * p, 0, 0, 0, 0, 0.29f, 0.18f, 0.09f, 1.0f); // Hair
-        // Eyes
-        addRect(g, x + 5 * p, y + 4 * p, p, p, 0, 0, 0, 0, 1, 1, 1, 1);
-        addRect(g, x + 6 * p, y + 4 * p, p, p, 0, 0, 0, 0, 0.1f, 0.2f, 0.8f, 1);
-        addRect(g, x + 9 * p, y + 4 * p, p, p, 0, 0, 0, 0, 1, 1, 1, 1);
-        addRect(g, x + 10 * p, y + 4 * p, p, p, 0, 0, 0, 0, 0.1f, 0.2f, 0.8f, 1);
 
-        // Body (Torso: Cyan shirt 8x12 px)
-        addRect(g, x + 4 * p, y + 8 * p, 8 * p, 12 * p, 0, 0, 0, 0, 0.0f, 0.65f, 0.65f, 1.0f);
 
-        // Arms (4x12 px each)
-        addRect(g, x, y + 8 * p, 4 * p, 4 * p, 0, 0, 0, 0, 0.0f, 0.65f, 0.65f, 1.0f);
-        addRect(g, x, y + 12 * p, 4 * p, 8 * p, 0, 0, 0, 0, 0.72f, 0.48f, 0.34f, 1.0f);
-        addRect(g, x + 12 * p, y + 8 * p, 4 * p, 4 * p, 0, 0, 0, 0, 0.0f, 0.65f, 0.65f, 1.0f);
-        addRect(g, x + 12 * p, y + 12 * p, 4 * p, 8 * p, 0, 0, 0, 0, 0.72f, 0.48f, 0.34f, 1.0f);
 
-        // Legs (Blue pants 8x12 px)
-        addRect(g, x + 4 * p, y + 20 * p, 8 * p, 12 * p, 0, 0, 0, 0, 0.16f, 0.16f, 0.48f, 1.0f);
-        // Shoes (Gray 8x2 px)
-        addRect(g, x + 4 * p, y + 32 * p, 8 * p, 2 * p, 0, 0, 0, 0, 0.25f, 0.25f, 0.25f, 1.0f);
-    }
 
-    private void drawArmorSilhouette(List<Float> g, float x, float y, int type, float p) {
-        // Outline silhouette of armor in empty slots
-        float c = 0.42f;
-        if (type == 0) { // Helmet
-            addRect(g, x + 3 * p, y + 2 * p, 8 * p, 7 * p, 0, 0, 0, 0, c, c, c, 0.5f);
-            addRect(g, x + 5 * p, y + 5 * p, 4 * p, 4 * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
-        } else if (type == 1) { // Chestplate
-            addRect(g, x + 2 * p, y + 2 * p, 10 * p, 9 * p, 0, 0, 0, 0, c, c, c, 0.5f);
-        } else if (type == 2) { // Leggings
-            addRect(g, x + 3 * p, y + 2 * p, 8 * p, 10 * p, 0, 0, 0, 0, c, c, c, 0.5f);
-            addRect(g, x + 6 * p, y + 5 * p, 2 * p, 7 * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
-        } else if (type == 3) { // Boots
-            addRect(g, x + 3 * p, y + 4 * p, 3 * p, 6 * p, 0, 0, 0, 0, c, c, c, 0.5f);
-            addRect(g, x + 8 * p, y + 4 * p, 3 * p, 6 * p, 0, 0, 0, 0, c, c, c, 0.5f);
-        }
-    }
 
-    private void drawShieldSilhouette(List<Float> g, float x, float y, float p) {
-        addRect(g, x + 2 * p, y + 2 * p, 8 * p, 8 * p, 0, 0, 0, 0, 0.42f, 0.42f, 0.42f, 0.5f);
-    }
 
-    private void drawPixelCraftingTitle(List<Float> g, float x, float y, float p) {
-        // "Crafting" text label in Minecraft font style
-        addRect(g, x, y, 42 * p, 6 * p, 0, 0, 0, 0, 0.25f, 0.25f, 0.25f, 0.8f);
-    }
 
-    private void drawPixelCraftingArrow(List<Float> g, float x, float y, float p) {
-        // ➔ Crafting arrow with 3D bevel
-        addRect(g, x, y + 4 * p, 12 * p, 4 * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
-        addRect(g, x + 8 * p, y + 1 * p, 3 * p, 3 * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
-        addRect(g, x + 8 * p, y + 8 * p, 3 * p, 3 * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
-        addRect(g, x + 11 * p, y + 3 * p, 2 * p, 6 * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
-    }
 
-    private ItemStack renderRecipeBookPanel(List<Float> geom, List<Float> tex, List<Float> overlayGeom,
-                                            float popX, float popY, float popW, float invH, float p, Player player) {
-        drawMinecraftWindowFrame(geom, popX, popY, popW, invH, p);
-
-        // Search bar at the top
-        float searchX = popX + 10.0f * p;
-        float searchY = popY + 6.0f * p;
-        float searchW = popW - 20.0f * p;
-        float searchH = 11.0f * p;
-
-        // Dark inset search bar background
-        addRect(geom, searchX, searchY, searchW, searchH, 0, 0, 0, 0, 0.09f, 0.09f, 0.09f, 1.0f);
-        if (recipeSearchFocused) {
-            drawInsetBorder(geom, searchX, searchY, searchW, searchH, p * 0.6f);
-            addRect(geom, searchX, searchY, searchW, p * 0.6f, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 0.85f);
-            addRect(geom, searchX, searchY + searchH - p * 0.6f, searchW, p * 0.6f, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 0.85f);
-            addRect(geom, searchX, searchY, p * 0.6f, searchH, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 0.85f);
-            addRect(geom, searchX + searchW - p * 0.6f, searchY, p * 0.6f, searchH, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 0.85f);
-        } else {
-            drawInsetBorder(geom, searchX, searchY, searchW, searchH, p * 0.6f);
-        }
-
-        // Search text / placeholder
-        if (recipeSearchText.isEmpty()) {
-            if (!recipeSearchFocused) {
-                drawHudText(overlayGeom, "SOK...", searchX + 3.0f * p, searchY + 2.5f * p, p * 0.42f, 0.45f, 0.45f, 0.45f);
-            } else {
-                boolean blink = (System.currentTimeMillis() % 1000) < 500;
-                if (blink) {
-                    drawHudText(overlayGeom, "_", searchX + 3.0f * p, searchY + 2.5f * p, p * 0.42f, 1.0f, 1.0f, 1.0f);
-                }
-            }
-        } else {
-            boolean blink = recipeSearchFocused && (System.currentTimeMillis() % 1000) < 500;
-            String displayTxt = recipeSearchText + (blink ? "_" : "");
-            drawHudText(overlayGeom, displayTxt, searchX + 3.0f * p, searchY + 2.5f * p, p * 0.42f, 1.0f, 1.0f, 1.0f);
-
-            // Clear 'X' button
-            float clearX = searchX + searchW - 8.5f * p;
-            float clearY = searchY + 2.0f * p;
-            boolean hClear = (mouseX >= clearX - p && mouseX <= clearX + 7.0f * p && mouseY >= clearY - p && mouseY <= clearY + 8.0f * p);
-            drawHudText(overlayGeom, "X", clearX, clearY, p * 0.45f, hClear ? 1.0f : 0.60f, hClear ? 0.35f : 0.60f, hClear ? 0.35f : 0.60f);
-        }
-
-        float slotW = 22.0f * p;
-        float slotStep = 26.0f * p;
-        float startGridX = popX + 11.0f * p;
-        float startGridY = popY + 20.0f * p;
-
-        List<CraftingRecipe> activeRecipes = getFilteredRecipes();
-        int totalRows = (activeRecipes.size() + 3) / 4;
-        int maxScroll = Math.max(0, totalRows - 5);
-        recipeScrollRow = Math.max(0, Math.min(maxScroll, recipeScrollRow));
-
-        if (activeRecipes.isEmpty()) {
-            drawHudText(overlayGeom, "INGEN TREFF", popX + 22.0f * p, popY + 55.0f * p, p * 0.48f, 0.50f, 0.50f, 0.50f);
-        }
-
-        int startIdx = recipeScrollRow * 4;
-        int endIdx = Math.min(activeRecipes.size(), startIdx + 5 * 4);
-        ItemStack hovered = null;
-
-        for (int i = startIdx; i < endIdx; i++) {
-            int visualRow = (i - startIdx) / 4;
-            int col = (i - startIdx) % 4;
-            float sx = startGridX + col * slotStep;
-            float sy = startGridY + visualRow * slotStep;
-
-            CraftingRecipe r = activeRecipes.get(i);
-            boolean canCraft = r.canCraft(player.getInventory());
-
-            if (mouseX >= sx && mouseX <= sx + slotW && mouseY >= sy && mouseY <= sy + slotW) {
-                hovered = r.getOutput();
-            }
-
-            // Slot background
-            drawPixelSlot(geom, sx, sy, slotW, p);
-
-            // Highlight border if craftable
-            if (canCraft) {
-                addRect(geom, sx, sy, slotW, p, 0, 0, 0, 0, 0.30f, 0.88f, 0.30f, 1.0f);
-                addRect(geom, sx, sy + slotW - p, slotW, p, 0, 0, 0, 0, 0.20f, 0.65f, 0.20f, 1.0f);
-                addRect(geom, sx, sy, p, slotW, 0, 0, 0, 0, 0.30f, 0.88f, 0.30f, 1.0f);
-                addRect(geom, sx + slotW - p, sy, p, slotW, 0, 0, 0, 0, 0.20f, 0.65f, 0.20f, 1.0f);
-            }
-
-            // Item icon
-            int tId = r.getOutput().getType().getItemTexture();
-            float[] uv = TextureAtlas.getUVs(tId);
-            float bright = canCraft ? 1.0f : 0.45f;
-            float alpha = canCraft ? 1.0f : 0.55f;
-            addRect(tex, sx + 3.0f * p, sy + 3.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], bright, bright, bright, alpha);
-
-            // Stack count if > 1
-            if (r.getOutput().getCount() > 1) {
-                drawMinecraftNumber(overlayGeom, r.getOutput().getCount(), sx + 20.5f * p, sy + 20.5f * p, p * 0.95f);
-            }
-        }
-
-        // Scrollbar on the right side
-        if (maxScroll > 0) {
-            float sbX = popX + popW - 10.0f * p;
-            float sbY = startGridY;
-            float sbW = 5.0f * p;
-            float sbH = 5 * slotStep - 4.0f * p;
-            // Track
-            addRect(geom, sbX, sbY, sbW, sbH, 0, 0, 0, 0, 0.15f, 0.15f, 0.15f, 1.0f);
-            // Thumb
-            float thumbH = Math.max(16.0f * p, sbH * (5.0f / totalRows));
-            float thumbY = sbY + (sbH - thumbH) * ((float) recipeScrollRow / maxScroll);
-            addRect(geom, sbX, thumbY, sbW, thumbH, 0, 0, 0, 0, 0.65f, 0.65f, 0.65f, 1.0f);
-            drawInsetBorder(geom, sbX, thumbY, sbW, thumbH, p * 0.5f);
-        }
-
-        return hovered;
-    }
-
-    private void renderFurnaceGUI(List<Float> geom, List<Float> tex, List<Float> overlayGeom,
-                                  int windowWidth, int windowHeight, Player player, TextureAtlas atlas) {
-        if (activeFurnace == null) return;
-
-        float p = getGuiScale(windowWidth, windowHeight); // Scale
-        float invW = 176.0f * p;
-        float invH = 166.0f * p;
-        float ix = (windowWidth - invW) / 2.0f;
-        float iy = (windowHeight - invH) / 2.0f;
-
-        ItemStack hoveredStack = null;
-
-        // 1. Dark background overlay
-        addRect(geom, 0, 0, windowWidth, windowHeight, 0, 0, 0, 0, 0, 0, 0, 0.65f);
-
-        // 2. Main Window Panel
-        drawMinecraftWindowFrame(geom, ix, iy, invW, invH, p);
-
-        // 3. Titles: "OVN" and "INVENTAR"
-        drawHudText(overlayGeom, "OVN", ix + 64.0f * p, iy + 6.0f * p, p * 0.48f, 0.25f, 0.25f, 0.25f);
-        drawHudText(overlayGeom, "INVENTAR", ix + 8.0f * p, iy + 73.0f * p, p * 0.48f, 0.25f, 0.25f, 0.25f);
-
-        // 4. Input Slot (Top)
-        float inX = ix + 56.0f * p;
-        float inY = iy + 17.0f * p;
-        drawPixelSlot(geom, inX, inY, 18.0f * p, p);
-        ItemStack inStack = activeFurnace.getInput();
-        if (mouseX >= inX && mouseX <= inX + 18.0f * p && mouseY >= inY && mouseY <= inY + 18.0f * p) {
-            if (!inStack.isEmpty()) hoveredStack = inStack;
-        }
-        renderSlotItem(tex, overlayGeom, inStack, inX, inY, p);
-
-        // 5. Burning Flame Icon (Between Input and Fuel)
-        float flameX = ix + 58.0f * p;
-        float flameY = iy + 37.0f * p;
-        drawFurnaceFlame(geom, flameX, flameY, 14.0f * p, 12.0f * p, activeFurnace.getBurnTime(), activeFurnace.getMaxBurnTime(), p);
-
-        // 6. Fuel Slot (Bottom)
-        float fuelX = ix + 56.0f * p;
-        float fuelY = iy + 53.0f * p;
-        drawPixelSlot(geom, fuelX, fuelY, 18.0f * p, p);
-        ItemStack fuelStack = activeFurnace.getFuel();
-        if (mouseX >= fuelX && mouseX <= fuelX + 18.0f * p && mouseY >= fuelY && mouseY <= fuelY + 18.0f * p) {
-            if (!fuelStack.isEmpty()) hoveredStack = fuelStack;
-        }
-        renderSlotItem(tex, overlayGeom, fuelStack, fuelX, fuelY, p);
-
-        // 7. Cooking Progress Arrow (pointing to output)
-        float arrowX = ix + 79.0f * p;
-        float arrowY = iy + 35.0f * p;
-        drawFurnaceArrow(geom, arrowX, arrowY, activeFurnace.getCookTime(), no.minecraft.world.FurnaceData.COOK_TIME_TOTAL, p);
-
-        // 8. Output Slot (Right, 24x24 slot)
-        float outX = ix + 116.0f * p;
-        float outY = iy + 31.0f * p;
-        drawPixelSlot(geom, outX, outY, 24.0f * p, p);
-        ItemStack outStack = activeFurnace.getOutput();
-        if (!outStack.isEmpty()) {
-            if (mouseX >= outX && mouseX <= outX + 24.0f * p && mouseY >= outY && mouseY <= outY + 24.0f * p) {
-                hoveredStack = outStack;
-            }
-            int tId = outStack.getType().getItemTexture();
-            float[] uv = TextureAtlas.getUVs(tId);
-            addRect(tex, outX + 4.0f * p, outY + 4.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
-            if (outStack.getCount() > 0) {
-                drawMinecraftNumber(overlayGeom, outStack.getCount(), outX + 22.0f * p, outY + 22.0f * p, p * 0.95f);
-            }
-        }
-
-        // 9. Main Inventory Grid (3 rows x 9 columns)
-        float mainInvX = ix + 8.0f * p;
-        float mainInvY = iy + 84.0f * p;
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 9; col++) {
-                int slotIndex = 9 + row * 9 + col;
-                float sx = mainInvX + col * 18.0f * p;
-                float sy = mainInvY + row * 18.0f * p;
-                drawPixelSlot(geom, sx, sy, 18.0f * p, p);
-
-                ItemStack stack = player.getInventory().getSlot(slotIndex);
-                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
-                    if (!stack.isEmpty()) hoveredStack = stack;
-                }
-                renderSlotItem(tex, overlayGeom, stack, sx, sy, p);
-            }
-        }
-
-        // 10. Hotbar Grid (1 row x 9 columns)
-        float hotbarInvY = iy + 142.0f * p;
-        for (int col = 0; col < 9; col++) {
-            float sx = mainInvX + col * 18.0f * p;
-            drawPixelSlot(geom, sx, hotbarInvY, 18.0f * p, p);
-
-            ItemStack stack = player.getInventory().getSlot(col);
-            if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= hotbarInvY && mouseY <= hotbarInvY + 18.0f * p) {
-                if (!stack.isEmpty()) hoveredStack = stack;
-            }
-            renderSlotItem(tex, overlayGeom, stack, sx, hotbarInvY, p);
-        }
-
-        // 11. Carried item on cursor
-        if (!carriedItem.isEmpty()) {
-            int tId = carriedItem.getType().getItemTexture();
-            float[] uv = TextureAtlas.getUVs(tId);
-            float cx = mouseX - 8.0f * p;
-            float cy = mouseY - 8.0f * p;
-            addRect(tex, cx, cy, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 1.0f);
-            int displayCount = getCarriedDisplayCount();
-            if (displayCount > 0) {
-                drawMinecraftNumber(overlayGeom, displayCount, cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
-            }
-        }
-
-        // 12. Hover tooltip popup
-        if (carriedItem.isEmpty() && hoveredStack != null && !hoveredStack.isEmpty()) {
-            renderItemTooltip(overlayGeom, hoveredStack, mouseX, mouseY, windowWidth, windowHeight);
-        }
-    }
-
-    private void drawFurnaceFlame(List<Float> g, float x, float y, float w, float h, float burnTime, float maxBurnTime, float p) {
-        // Dark outline of flame
-        addRect(g, x, y, w, h, 0, 0, 0, 0, 0.35f, 0.35f, 0.35f, 0.6f);
-        if (burnTime > 0.0f && maxBurnTime > 0.0f) {
-            float frac = Math.clamp(burnTime / maxBurnTime, 0.0f, 1.0f);
-            float activeH = h * frac;
-            float activeY = y + (h - activeH);
-            // Fiery orange base
-            addRect(g, x + p, activeY, w - 2 * p, activeH, 0, 0, 0, 0, 0.95f, 0.45f, 0.08f, 1.0f);
-            // Bright yellow inner core
-            if (activeH > 2 * p) {
-                addRect(g, x + 3 * p, activeY + p, w - 6 * p, activeH - p, 0, 0, 0, 0, 1.0f, 0.90f, 0.20f, 1.0f);
-            }
-        }
-    }
-
-    private void drawFurnaceArrow(List<Float> g, float x, float y, float cookTime, float totalCookTime, float p) {
-        float aw = 22 * p;
-        float ah = 15 * p;
-        // Base arrow shape
-        addRect(g, x, y + 4 * p, 14 * p, 7 * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
-        addRect(g, x + 14 * p, y + 1 * p, 4 * p, 13 * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
-        addRect(g, x + 18 * p, y + 4 * p, 4 * p, 7 * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
-
-        // Inset border
-        drawInsetBorder(g, x, y, aw, ah, p * 0.5f);
-
-        // Progress fill (left to right)
-        if (cookTime > 0.0f) {
-            float frac = Math.clamp(cookTime / totalCookTime, 0.0f, 1.0f);
-            float progressW = aw * frac;
-            addRect(g, x + p, y + 4 * p, Math.min(progressW, 14 * p), 7 * p, 0, 0, 0, 0, 0.90f, 0.90f, 0.90f, 1.0f);
-            if (progressW > 14 * p) {
-                float headW = Math.min(progressW - 14 * p, 8 * p);
-                addRect(g, x + 14 * p, y + 1 * p, Math.min(headW, 4 * p), 13 * p, 0, 0, 0, 0, 0.90f, 0.90f, 0.90f, 1.0f);
-                if (headW > 4 * p) {
-                    addRect(g, x + 18 * p, y + 4 * p, headW - 4 * p, 7 * p, 0, 0, 0, 0, 0.90f, 0.90f, 0.90f, 1.0f);
-                }
-            }
-        }
-    }
-
-    private void drawPixelRecipeBookButton(List<Float> g, float x, float y, float size, float p) {
-        // Minecraft Green Recipe Book Button
-        addRect(g, x, y, size, size, 0, 0, 0, 0, 0.12f, 0.12f, 0.12f, 1.0f);
-        addRect(g, x + p, y + p, size - 2 * p, size - 2 * p, 0, 0, 0, 0, 0.776f, 0.776f, 0.776f, 1.0f);
-        // Green book graphic
-        addRect(g, x + 4 * p, y + 4 * p, 12 * p, 11 * p, 0, 0, 0, 0, 0.18f, 0.65f, 0.25f, 1.0f);
-        addRect(g, x + 5 * p, y + 14 * p, 10 * p, 2 * p, 0, 0, 0, 0, 0.95f, 0.95f, 0.95f, 1.0f); // pages
-    }
 
     private void drawMinecraftButton(List<Float> g, float x, float y, float w, float h, boolean enabled, float p) {
         float r = enabled ? 0.35f : 0.25f;
@@ -2695,7 +1978,7 @@ public class HUD {
         addRect(geom, cx - 1.0f, cy - 1.0f, 2.0f, 2.0f, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 1.0f);
     }
 
-    private void drawMinecraftNumber(List<Float> g, int number, float rightX, float bottomY, float s) {
+    void drawMinecraftNumber(List<Float> g, int number, float rightX, float bottomY, float s) {
         String numStr = String.valueOf(number);
         int charWidth = 5;
         int charHeight = 7;
@@ -2881,11 +2164,11 @@ public class HUD {
         drawHudText(overlayGeom, hint, (windowWidth - hint.length() * (6.0f * scale3)) / 2.0f, ty + 50.0f * p, scale3, 0.7f, 0.7f, 0.7f);
     }
 
-    private void drawHudText(List<Float> g, String text, float startX, float startY, float s, float r, float gr, float b) {
+    void drawHudText(List<Float> g, String text, float startX, float startY, float s, float r, float gr, float b) {
         drawHudText(g, text, startX, startY, s, r, gr, b, 1.0f);
     }
 
-    private void drawHudText(List<Float> g, String text, float startX, float startY, float s, float r, float gr, float b, float a) {
+    void drawHudText(List<Float> g, String text, float startX, float startY, float s, float r, float gr, float b, float a) {
         for (int i = 0; i < text.length(); i++) {
             float px = startX + i * (6.0f * s);
             char c = Character.toUpperCase(text.charAt(i));

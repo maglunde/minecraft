@@ -12,6 +12,9 @@ import org.joml.Vector3f;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.opengl.GL;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.system.MemoryUtil.NULL;
@@ -38,6 +41,14 @@ public class Main {
     private MainMenu mainMenu;
     private no.minecraft.render.PauseMenu pauseMenu;
     private no.minecraft.chat.ChatManager chatManager = new no.minecraft.chat.ChatManager();
+
+    // Screens: the main menu and pause menu live on the stack as GuiScreen adapters
+    private final ScreenStack screenStack = new ScreenStack();
+    private InventoryScreen inventoryScreen;
+    private CraftingTableScreen craftingTableScreen;
+    private FurnaceScreen furnaceScreen;
+    private MainMenuScreen mainMenuScreen;
+    private PauseMenuScreen pauseMenuScreen;
 
     private boolean cursorLocked = false;
     private double lastMouseX, lastMouseY;
@@ -204,8 +215,18 @@ public class Main {
         Vector3f spawn = world.getSpawnPoint();
         player = new Player(world, spawn.x, spawn.y, spawn.z);
 
+        // Adapter screens wrapping the legacy menus (constructed after the game state they forward)
+        mainMenuScreen = new MainMenuScreen(mainMenu, () -> width, () -> height, () -> world, () -> player);
+        pauseMenuScreen = new PauseMenuScreen(pauseMenu, () -> width, () -> height);
+        inventoryScreen = new InventoryScreen(hud, () -> player, () -> width, () -> height);
+        craftingTableScreen = new CraftingTableScreen(hud, () -> player, () -> width, () -> height);
+        furnaceScreen = new FurnaceScreen(hud, () -> player, () -> width, () -> height);
+
         // Wire input callbacks only after all game state exists (callbacks dereference it immediately)
         setupInput();
+
+        // Start on the title screen
+        screenStack.push(mainMenuScreen);
 
         // Show cursor in menu
         setCursorLocked(false);
@@ -223,6 +244,123 @@ public class Main {
         return glfwGetKey(window, key) == GLFW_PRESS;
     }
 
+    // --- Stack-driven UI state helpers (replace the legacy menu flag checks) ---
+
+    /** Whether the title/main menu is open (its adapter screen is on the stack). */
+    private boolean inMenu() {
+        return mainMenuScreen.isOpen();
+    }
+
+    /** Whether the game loop is paused by an open screen (main menu or pause menu). */
+    private boolean isPaused() {
+        return screenStack.anyPausesGame();
+    }
+
+    /** Whether any UI blocks game input: menus, pause, inventory containers or chat. */
+    private boolean inGui() {
+        return isPaused() || hud.isInventoryOpen() || chatManager.isOpen();
+    }
+
+    /**
+     * Keeps the stack in sync with the legacy menus after a screen consumed an
+     * input event. The legacy menus close themselves internally (ESC, Back to
+     * Game, world start, Save & Quit to Title) while their adapter screens stay
+     * pushed, so pop them here and mirror the legacy post-menu side effects:
+     * world saving on quit-to-title, re-opening the title screen, cursor locking
+     * and the window close / open-options requests.
+     */
+    private void reconcileScreens() {
+        boolean pauseWasOpen = pauseMenuScreen.isOpen();
+
+        // The pause menu closed itself (ESC, Back to Game, Done, Save & Quit): pop its screen.
+        if (pauseMenuScreen.isOpen() && !pauseMenu.isOpen()) {
+            screenStack.pop();
+        }
+        // The main menu closed itself (a world was started): pop its screen and lock the cursor.
+        if (mainMenuScreen.isOpen() && !mainMenu.isInMenu()) {
+            screenStack.pop();
+            setCursorLocked(true);
+        }
+
+        if (pauseMenu.isQuitToTitleRequested()) {
+            pauseMenu.clearQuitToTitleRequested();
+            // Legacy "Save and Quit to Title": save the world, show the title screen, unlock the cursor.
+            if (mainMenu.getActiveWorldInfo() != null) {
+                no.minecraft.world.save.WorldSaveManager.saveWorld(world, player, mainMenu.getActiveWorldInfo());
+            }
+            if (!mainMenuScreen.isOpen()) {
+                screenStack.push(mainMenuScreen); // onOpen() -> setInMenu(true) (title screen + world refresh)
+            }
+            setCursorLocked(false);
+        } else if (mainMenu.isQuitRequested()) {
+            // "Quit" on the title screen: close the window.
+            mainMenu.clearQuitRequested();
+            glfwSetWindowShouldClose(window, true);
+        } else if (mainMenu.isOpenOptionsRequested()) {
+            // "Options" on the title screen: open the pause menu's options screen on top of it.
+            mainMenu.clearOpenOptionsRequested();
+            screenStack.push(pauseMenuScreen); // onOpen() -> pauseMenu.open()
+            pauseMenu.openOptionsFromTitle();
+        }
+
+        // Legacy cursor rule: leaving the pause menu with the game still running relocks the cursor.
+        if (pauseWasOpen && !pauseMenuScreen.isOpen() && !mainMenuScreen.isOpen()) {
+            setCursorLocked(true);
+        }
+    }
+
+    /**
+     * Keeps the stack in sync with the HUD's container state, which remains
+     * the single source of truth for what is open (E key, ESC and world
+     * interaction all route through the legacy HUD state methods). Container
+     * screens only exist to carry the container rendering and clicks; they
+     * are pushed and popped here whenever that state changes.
+     */
+    private void syncContainerScreens() {
+        GuiScreen desired;
+        if (hud.isCraftingTableOpen()) {
+            desired = craftingTableScreen;
+        } else if (hud.isFurnaceOpen()) {
+            desired = furnaceScreen;
+        } else if (hud.isInventoryOpen()) {
+            desired = inventoryScreen;
+        } else {
+            desired = null;
+        }
+        GuiScreen top = screenStack.getTop();
+        if (top == desired) {
+            return;
+        }
+        if (top == inventoryScreen || top == craftingTableScreen || top == furnaceScreen) {
+            screenStack.pop();
+        }
+        if (desired != null) {
+            screenStack.push(desired);
+        }
+    }
+
+    /**
+     * Draws the open container screen (inventory / crafting table / furnace)
+     * above the game HUD. The screens only emit vertex lists; the GL passes
+     * run through the HUD shader so the container backdrop covers the hotbar
+     * etc., exactly like the legacy single-pass HUD rendering.
+     */
+    private void renderContainerScreens(int windowWidth, int windowHeight) {
+        List<Float> geom = new ArrayList<>();
+        List<Float> tex = new ArrayList<>();
+        List<Float> overlayGeom = new ArrayList<>();
+        if (hud.isCraftingTableOpen()) {
+            craftingTableScreen.renderGui(geom, tex, overlayGeom, windowWidth, windowHeight, player, atlas);
+        } else if (hud.isFurnaceOpen() && hud.getActiveFurnace() != null) {
+            furnaceScreen.renderGui(geom, tex, overlayGeom, windowWidth, windowHeight, player, atlas);
+        } else if (hud.isInventoryOpen()) {
+            inventoryScreen.renderGui(geom, tex, overlayGeom, windowWidth, windowHeight, player, atlas);
+        } else {
+            return;
+        }
+        hud.drawScreenGeometry(windowWidth, windowHeight, atlas, geom, tex, overlayGeom);
+    }
+
     private void setupInput() {
         // Cursor movement
         glfwSetCursorPosCallback(window, (win, xpos, ypos) -> {
@@ -231,7 +369,7 @@ public class Main {
             double fbMouseX = xpos * scaleX;
             double fbMouseY = ypos * scaleY;
 
-            if (hud.isInventoryOpen() || mainMenu.isInMenu() || pauseMenu.isOpen() || chatManager.isOpen() || !cursorLocked) {
+            if (hud.isInventoryOpen() || !screenStack.isEmpty() || chatManager.isOpen() || !cursorLocked) {
                 lastMouseX = fbMouseX;
                 lastMouseY = fbMouseY;
                 lastScreenX = xpos;
@@ -265,60 +403,37 @@ public class Main {
 
         // Mouse clicks for mining, combat, placing and crafting
         glfwSetMouseButtonCallback(window, (win, button, action, mods) -> {
-            if (pauseMenu.isOpen()) {
-                if (action == GLFW_PRESS) {
-                    pauseMenu.handleClick(lastMouseX, lastMouseY, button, width, height);
-                    if (pauseMenu.isQuitToTitleRequested()) {
-                        pauseMenu.clearQuitToTitleRequested();
-                        pauseMenu.close();
-                        if (mainMenu.getActiveWorldInfo() != null) {
-                            no.minecraft.world.save.WorldSaveManager.saveWorld(world, player, mainMenu.getActiveWorldInfo());
-                        }
-                        mainMenu.setInMenu(true);
-                        mainMenu.setCurrentScreen(MainMenu.Screen.TITLE);
-                        setCursorLocked(false);
-                    } else if (!pauseMenu.isOpen()) {
-                        if (!mainMenu.isInMenu()) {
-                            setCursorLocked(true);
-                        }
-                    }
+            if (action == GLFW_PRESS) {
+                boolean isShiftDown = (mods & GLFW_MOD_SHIFT) != 0 || keyPressed[GLFW_KEY_LEFT_SHIFT] || keyPressed[GLFW_KEY_RIGHT_SHIFT];
+                // Menus (and other screens) receive clicks through the stack first;
+                // only clicks no open screen consumed reach the game world below.
+                if (screenStack.handleMouseClick(lastMouseX, lastMouseY, button, isShiftDown)) {
+                    reconcileScreens();
+                    return;
                 }
-                return;
-            }
-
-            if (mainMenu.isInMenu()) {
-                if (action == GLFW_PRESS) {
-                    if (mainMenu.handleClick(lastMouseX, lastMouseY, button, width, height, world, player)) {
-                        setCursorLocked(true);
-                    } else if (mainMenu.isOpenOptionsRequested()) {
-                        mainMenu.clearOpenOptionsRequested();
-                        pauseMenu.openOptionsFromTitle();
-                    } else if (mainMenu.isQuitRequested()) {
-                        glfwSetWindowShouldClose(window, true);
-                    }
-                }
-                return;
-            }
-
-            if (hud.isInventoryOpen()) {
-                if (action == GLFW_PRESS) {
-                    boolean isShiftDown = (mods & GLFW_MOD_SHIFT) != 0 || keyPressed[GLFW_KEY_LEFT_SHIFT] || keyPressed[GLFW_KEY_RIGHT_SHIFT];
+                if (hud.isInventoryOpen()) {
                     hud.handleMouseClick(lastMouseX, lastMouseY, button, isShiftDown, player, width, height);
-                } else if (action == GLFW_RELEASE) {
-                    hud.handleMouseRelease(lastMouseX, lastMouseY, button, player, width, height);
+                    syncContainerScreens();
+                    return;
                 }
-                return;
-            }
-
-            if (chatManager.isOpen()) {
-                return;
-            }
-
-            if (!cursorLocked) {
-                if (action == GLFW_PRESS) {
+                if (chatManager.isOpen()) {
+                    return;
+                }
+                if (!cursorLocked) {
                     setCursorLocked(true);
+                    return;
                 }
-                return;
+            } else if (action == GLFW_RELEASE) {
+                if (hud.isInventoryOpen()) {
+                    hud.handleMouseRelease(lastMouseX, lastMouseY, button, player, width, height);
+                    return;
+                }
+                if (chatManager.isOpen()) {
+                    return;
+                }
+                if (!cursorLocked) {
+                    return;
+                }
             }
 
             if (button == GLFW_MOUSE_BUTTON_LEFT) {
@@ -430,14 +545,18 @@ public class Main {
 
         // Scroll for hotbar / GUI
         glfwSetScrollCallback(window, (win, xoffset, yoffset) -> {
-            if (mainMenu.isInMenu()) {
-                mainMenu.handleScroll(yoffset);
+            // The main menu screen scrolls its world-select list; while the pause
+            // menu covers it (options from title) nothing scrolls, as in legacy.
+            if (mainMenuScreen.isOpen()) {
+                screenStack.handleScroll(xoffset, yoffset);
                 return;
             }
             if (hud.isInventoryOpen()) {
                 hud.handleScroll(xoffset, yoffset);
                 return;
             }
+            // Legacy: with no menu or inventory open the scroll wheel changes the
+            // hotbar selection (this also applied while the pause menu was open).
             if (yoffset > 0) {
                 player.scrollSlot(-1);
             } else if (yoffset < 0) {
@@ -458,10 +577,27 @@ public class Main {
             no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
 
             if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-                if (mainMenu.isInMenu()) {
-                    if (mainMenu.handleKey(key, action)) {
-                        return;
+                // Screens receive key events through the stack first (top screen only)
+                if (screenStack.handleKey(key, action)) {
+                    reconcileScreens();
+                    return;
+                }
+                // Unconsumed keys while a screen is open keep the legacy swallow rules:
+                // the pause menu swallowed everything, the main menu everything but
+                // the title-screen ESC that resumes a running game (its handleKey
+                // already ran through the stack without consuming that key).
+                if (pauseMenuScreen.isOpen()) {
+                    return;
+                }
+                if (mainMenuScreen.isOpen()) {
+                    if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE && mainMenu.isGameStarted()
+                            && mainMenu.getCurrentScreen() == MainMenu.Screen.TITLE) {
+                        // Resume game if already in progress
+                        no.minecraft.sound.SoundManager.getInstance().play("click");
+                        screenStack.pop(); // onClose() -> setInMenu(false)
+                        setCursorLocked(true);
                     }
+                    return;
                 }
                 if (hud.isRecipeSearchFocused()) {
                     if (key == GLFW_KEY_BACKSPACE) {
@@ -469,7 +605,7 @@ public class Main {
                         return;
                     }
                 }
-                if ((key == GLFW_KEY_Q || key == gs.keyDrop) && !pauseMenu.isOpen() && !mainMenu.isInMenu() && !chatManager.isOpen()) {
+                if ((key == GLFW_KEY_Q || key == gs.keyDrop) && !isPaused() && !chatManager.isOpen()) {
                     boolean isCtrl = (mods & (GLFW_MOD_CONTROL | GLFW_MOD_SUPER)) != 0
                             || keyPressed[GLFW_KEY_LEFT_CONTROL] || keyPressed[GLFW_KEY_RIGHT_CONTROL];
                     if (hud.isInventoryOpen()) {
@@ -500,28 +636,6 @@ public class Main {
                     }
                     return;
                 }
-                if (pauseMenu.isOpen()) {
-                    pauseMenu.handleKey(key, action);
-                    if (!pauseMenu.isOpen()) {
-                        if (!mainMenu.isInMenu()) {
-                            setCursorLocked(true);
-                        }
-                    }
-                    return;
-                }
-
-                if (mainMenu.isInMenu()) {
-                    if (mainMenu.handleKey(key, action)) {
-                        return;
-                    }
-                    if (key == GLFW_KEY_ESCAPE && mainMenu.isGameStarted() && mainMenu.getCurrentScreen() == MainMenu.Screen.TITLE) {
-                        // Resume game if already in progress
-                        no.minecraft.sound.SoundManager.getInstance().play("click");
-                        mainMenu.setInMenu(false);
-                        setCursorLocked(true);
-                    }
-                    return;
-                }
 
                 if (chatManager.isOpen()) {
                     if (key == GLFW_KEY_ESCAPE) {
@@ -542,13 +656,13 @@ public class Main {
                     return;
                 }
 
-                if (key == GLFW_KEY_T && !hud.isInventoryOpen() && !pauseMenu.isOpen()) {
+                if (key == GLFW_KEY_T && !hud.isInventoryOpen() && !pauseMenuScreen.isOpen()) {
                     // Open Chat empty (prevent 't' from char callback)
                     ignoreNextChar = true;
                     chatManager.openChat("");
                     setCursorLocked(false);
                     return;
-                } else if (key == GLFW_KEY_SLASH && !hud.isInventoryOpen() && !pauseMenu.isOpen()) {
+                } else if (key == GLFW_KEY_SLASH && !hud.isInventoryOpen() && !pauseMenuScreen.isOpen()) {
                     // Open Chat with prefilled "/" for quick commands (prevent redundant '/' from char callback)
                     ignoreNextChar = true;
                     chatManager.openChat("/");
@@ -568,29 +682,31 @@ public class Main {
                     if (hud.isInventoryOpen()) {
                         hud.closeInventory(player);
                         setCursorLocked(true);
+                        syncContainerScreens();
                     } else {
                         // Open dedicated Pause Menu
-                        pauseMenu.open();
+                        screenStack.push(pauseMenuScreen); // onOpen() -> pauseMenu.open()
                         setCursorLocked(false);
                     }
-                } else if (key == GLFW_KEY_M && !hud.isInventoryOpen() && !pauseMenu.isOpen()) {
-                    mainMenu.setInMenu(true);
+                } else if (key == GLFW_KEY_M && !hud.isInventoryOpen() && !pauseMenuScreen.isOpen()) {
+                    screenStack.push(mainMenuScreen); // onOpen() -> setInMenu(true) (title screen)
                     setCursorLocked(false);
-                } else if (!mainMenu.isInMenu() && !pauseMenu.isOpen() && key == gs.keyInventory) {
+                } else if (!isPaused() && key == gs.keyInventory) {
                     // Toggle Inventory / Crafting GUI
                     hud.toggleInventory(player);
                     setCursorLocked(!hud.isInventoryOpen());
-                } else if (!mainMenu.isInMenu() && !pauseMenu.isOpen() && (key == GLFW_KEY_F3 || key == gs.keyToggleDebug)) {
+                    syncContainerScreens();
+                } else if (!isPaused() && (key == GLFW_KEY_F3 || key == gs.keyToggleDebug)) {
                     // Toggle F3 Debug Screen
                     hud.toggleDebugInfo();
-                } else if (!mainMenu.isInMenu() && !pauseMenu.isOpen() && (key == GLFW_KEY_F5 || key == gs.keyTogglePerspective)) {
+                } else if (!isPaused() && (key == GLFW_KEY_F5 || key == gs.keyTogglePerspective)) {
                     // Toggle F5 Camera Perspective (First Person -> Third Person Back -> Third Person Front)
                     player.getCamera().cyclePerspective();
                     no.minecraft.sound.SoundManager.getInstance().play("click", 0.8f);
-                } else if (!mainMenu.isInMenu() && !pauseMenu.isOpen() && key == GLFW_KEY_G) {
+                } else if (!isPaused() && key == GLFW_KEY_G) {
                     // Toggle GameMode (Survival / Creative)
                     player.toggleGameMode();
-                } else if (!mainMenu.isInMenu() && !pauseMenu.isOpen() && key == GLFW_KEY_F) {
+                } else if (!isPaused() && key == GLFW_KEY_F) {
                     player.toggleFlying();
                 } else if (key == GLFW_KEY_P) {
                     // Reset position to ground at spawn
@@ -607,7 +723,7 @@ public class Main {
                     player.setSelectedSlot(key - GLFW_KEY_1);
                 } else if (key == gs.keyJump) {
                     // Double-tap Space detection for flying in Creative mode (0 gravity)
-                    if (!hud.isInventoryOpen() && !pauseMenu.isOpen()) {
+                    if (!hud.isInventoryOpen() && !pauseMenuScreen.isOpen()) {
                         double now = glfwGetTime();
                         if (now - lastSpacePressTime < 0.35) {
                             if (player.getGameMode() == GameMode.CREATIVE) {
@@ -639,9 +755,11 @@ public class Main {
                 ignoreNextChar = false;
                 return;
             }
-            if (mainMenu.isInMenu()) {
-                mainMenu.handleChar((char) codepoint);
-                return;
+            // The top screen receives typed characters first (the main menu's
+            // world-name field, later container-screen search fields, ...)
+            screenStack.handleChar((char) codepoint);
+            if (!screenStack.isEmpty()) {
+                return; // legacy: characters never reached chat/GUI code while a menu was open
             }
             if (chatManager.isOpen()) {
                 chatManager.addChar((char) codepoint);
@@ -771,6 +889,7 @@ public class Main {
                     setCursorLocked(false);
                     isLeftMouseDown = false;
                     isRightMouseDown = false;
+                    syncContainerScreens();
                     return true;
                 }
                 if (clickedBlock == BlockType.FURNACE) {
@@ -778,6 +897,7 @@ public class Main {
                     setCursorLocked(false);
                     isLeftMouseDown = false;
                     isRightMouseDown = false;
+                    syncContainerScreens();
                     return true;
                 }
             }
@@ -858,7 +978,7 @@ public class Main {
             no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
 
             // Per-frame raycast for the block outline; the simulation tick uses the latest result
-            if (mainMenu.isInMenu() || pauseMenu.isOpen() || hud.isInventoryOpen() || chatManager.isOpen()) {
+            if (inGui()) {
                 targetedHit = null;
             } else {
                 targetedHit = Raycast.raycast(
@@ -944,7 +1064,7 @@ public class Main {
             mobRenderer.render(world.getMobs(), world.getArrows(), world.getBoats(), projection, view, sunLight);
 
             // 4.5 Render 3D Player character model (if in 3rd person mode)
-            if (!mainMenu.isInMenu() && player.getCamera().getPerspective() != no.minecraft.player.Perspective.FIRST_PERSON) {
+            if (!inMenu() && player.getCamera().getPerspective() != no.minecraft.player.Perspective.FIRST_PERSON) {
                 playerRenderer.render(player, projection, view, dynamicSunLight, atlas);
             }
 
@@ -960,21 +1080,25 @@ public class Main {
             }
 
             // 6.5 Render First-Person Hand & Held Item (only in first-person mode)
-            if (!mainMenu.isInMenu() && player.getCamera().getPerspective() == no.minecraft.player.Perspective.FIRST_PERSON) {
+            if (!inMenu() && player.getCamera().getPerspective() == no.minecraft.player.Perspective.FIRST_PERSON) {
                 atlas.bind();
                 handRenderer.render(player, dynamicSunLight, dt, isLeftMouseDown && !hud.isInventoryOpen(), width, height);
                 atlas.unbind();
             }
 
             // 7. Render 2D HUD or Main Menu or Pause Menu
-            if (mainMenu.isInMenu()) {
+            if (inMenu()) {
                 mainMenu.render(width, height, (float) lastMouseX, (float) lastMouseY, atlas);
-                if (pauseMenu.isOpen()) {
+                if (pauseMenuScreen.isOpen()) {
                     pauseMenu.render(width, height, (float) lastMouseX, (float) lastMouseY, atlas);
                 }
             } else {
                 hud.render(width, height, (float) lastMouseX, (float) lastMouseY, player, atlas, world, chatManager, currentFps, targetedHit);
-                if (pauseMenu.isOpen()) {
+                if (!pauseMenuScreen.isOpen()) {
+                    // Container screens draw on top of the HUD, after its three passes
+                    renderContainerScreens(width, height);
+                }
+                if (pauseMenuScreen.isOpen()) {
                     pauseMenu.render(width, height, (float) lastMouseX, (float) lastMouseY, atlas);
                 }
             }
@@ -985,7 +1109,7 @@ public class Main {
     }
 
     private void tick(float dt) {
-        if (!mainMenu.isInMenu() && mainMenu.getActiveWorldInfo() != null) {
+        if (!inMenu() && mainMenu.getActiveWorldInfo() != null) {
             autoSaveTimer += dt;
             if (autoSaveTimer >= 60.0f) {
                 autoSaveTimer = 0.0f;
@@ -994,9 +1118,8 @@ public class Main {
         }
 
         no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
-        boolean isPaused = mainMenu.isInMenu() || pauseMenu.isOpen();
-        boolean inGui = isPaused || hud.isInventoryOpen() || chatManager.isOpen();
-        if (inGui) {
+        boolean paused = isPaused();
+        if (inGui()) {
             isLeftMouseDown = false;
             isRightMouseDown = false;
         }
@@ -1004,11 +1127,11 @@ public class Main {
         chatManager.update(dt);
 
         // Input handling (multi-key simultaneous support)
-        boolean fwd = !inGui && isKeyDown(gs.keyForward);
-        boolean bwd = !inGui && isKeyDown(gs.keyBackward);
-        boolean left = !inGui && isKeyDown(gs.keyLeft);
-        boolean right = !inGui && isKeyDown(gs.keyRight);
-        boolean jump = !inGui && isKeyDown(gs.keyJump);
+        boolean fwd = !inGui() && isKeyDown(gs.keyForward);
+        boolean bwd = !inGui() && isKeyDown(gs.keyBackward);
+        boolean left = !inGui() && isKeyDown(gs.keyLeft);
+        boolean right = !inGui() && isKeyDown(gs.keyRight);
+        boolean jump = !inGui() && isKeyDown(gs.keyJump);
 
         // Sprinting via double-tap W, Left Shift, Tab, R, or Left/Right Control
         boolean sprintKey = isKeyDown(GLFW_KEY_LEFT_SHIFT) ||
@@ -1020,12 +1143,12 @@ public class Main {
         boolean sprint = (doubleTapSprint || sprintKey) && fwd;
         sprintActive = sprint;
 
-        boolean sneak = !inGui && (isKeyDown(gs.keySneak) ||
+        boolean sneak = !inGui() && (isKeyDown(gs.keySneak) ||
                         isKeyDown(GLFW_KEY_RIGHT_SHIFT) ||
                         isKeyDown(GLFW_KEY_C) ||
                         isKeyDown(GLFW_KEY_LEFT_ALT));
 
-        if (!isPaused) {
+        if (!paused) {
             player.update(dt, fwd, bwd, left, right, jump, sneak, sprint);
             world.update(dt, player);
             CombatTextManager.getInstance().update(dt);
@@ -1150,7 +1273,7 @@ public class Main {
         }
 
         // Continuous Block Placement Logic (Right Click hold down)
-        if (isRightMouseDown && !inGui) {
+        if (isRightMouseDown && !inGui()) {
             rightClickTimer -= dt;
             if (rightClickTimer <= 0.0f) {
                 if (tryPlaceBlock()) {
@@ -1167,7 +1290,7 @@ public class Main {
 
     private void cleanup() {
         // Emergency save: runs on normal exit AND on exceptions, so pending world state is not lost
-        if (mainMenu != null && !mainMenu.isInMenu() && mainMenu.getActiveWorldInfo() != null) {
+        if (mainMenuScreen != null && !inMenu() && mainMenu.getActiveWorldInfo() != null) {
             try {
                 no.minecraft.world.save.WorldSaveManager.saveWorld(world, player, mainMenu.getActiveWorldInfo());
             } catch (Exception e) {
