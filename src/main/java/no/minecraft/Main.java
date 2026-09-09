@@ -5,6 +5,7 @@ import no.minecraft.player.Player;
 import no.minecraft.player.Raycast;
 import no.minecraft.render.*;
 import no.minecraft.world.BlockType;
+import no.minecraft.world.Chunk;
 import no.minecraft.world.World;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -1245,7 +1246,9 @@ public class Main {
             worldShader.setUniform("uSunLight", dynamicSunLight);
 
             atlas.bind();
-            world.updateAndRender();
+            int playerCx = Math.floorDiv((int) Math.floor(player.getPosition().x), Chunk.SIZE_X);
+            int playerCz = Math.floorDiv((int) Math.floor(player.getPosition().z), Chunk.SIZE_Z);
+            world.updateAndRender(playerCx, playerCz, gs.getRenderDistance());
 
             // 3. Render 3D Dropped Items on ground (spinning & bobbing)
             itemRenderer.render(world.getDroppedItems(), worldShader, view, projection, atlas);

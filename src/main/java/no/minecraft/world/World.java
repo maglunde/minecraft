@@ -30,12 +30,23 @@ public class World {
     private final Random rand = new Random();
     private boolean shouldClearHostileMobs = false;
 
-    public static final float DAY_LENGTH_SECONDS = 240.0f;
+    public static final float DAY_LENGTH_SECONDS = 480.0f;
     private float worldTime = 20.0f;
 
     // Victory state when Dragon is slain
     private boolean gameWon = false;
     private Vector3f spawnPoint = null;
+
+    private int lastCenterCx = 0;
+    private int lastCenterCz = 0;
+    private int lastUpdateCx = Integer.MIN_VALUE;
+    private int lastUpdateCz = Integer.MIN_VALUE;
+    private int lastUpdateRd = -1;
+    private int renderedChunkCount = 0;
+
+    public int getRenderedChunkCount() {
+        return renderedChunkCount;
+    }
 
     public World() {
         this(new Random().nextLong());
@@ -461,6 +472,9 @@ public class World {
         mobs.clear();
         arrows.clear();
         droppedItems.clear();
+        this.lastUpdateCx = Integer.MIN_VALUE;
+        this.lastUpdateCz = Integer.MIN_VALUE;
+        this.lastUpdateRd = -1;
 
         if (newDim == Dimension.NETHER) {
             // Save location where player entered from Overworld
@@ -856,11 +870,18 @@ public class World {
     }
 
     public void updateLoadedChunks(int centerCx, int centerCz) {
+        this.lastCenterCx = centerCx;
+        this.lastCenterCz = centerCz;
         int rd = no.minecraft.settings.GameSettings.getInstance().getRenderDistance();
-        int unloadDist = rd + 2;
+        if (centerCx == lastUpdateCx && centerCz == lastUpdateCz && rd == lastUpdateRd) {
+            return;
+        }
+        lastUpdateCx = centerCx;
+        lastUpdateCz = centerCz;
+        lastUpdateRd = rd;
 
+        int unloadDist = rd + 2;
         Map<Long, Chunk> activeChunks = getActiveChunks();
-        Set<Long> activeGenerated = getActiveGenerated();
 
         for (int dx = -rd; dx <= rd; dx++) {
             for (int dz = -rd; dz <= rd; dz++) {
@@ -876,7 +897,9 @@ public class World {
             Chunk chunk = entry.getValue();
             int dist = Math.max(Math.abs(chunk.getChunkX() - centerCx), Math.abs(chunk.getChunkZ() - centerCz));
             if (dist > unloadDist) {
-                chunk.unloadMesh();
+                if (chunk.hasMesh()) {
+                    chunk.unloadMesh();
+                }
             }
         }
     }
@@ -1506,11 +1529,29 @@ public class World {
         return (int) Math.clamp(height, 5, Chunk.SIZE_Y - 7);
     }
 
-    public void updateAndRender() {
-        for (Chunk chunk : getActiveChunks().values()) {
-            chunk.updateMeshIfNeeded();
-            chunk.render();
+    public void updateAndRender(int centerCx, int centerCz, int renderDistance) {
+        this.lastCenterCx = centerCx;
+        this.lastCenterCz = centerCz;
+        Map<Long, Chunk> activeChunks = getActiveChunks();
+        renderedChunkCount = 0;
+
+        for (int dx = -renderDistance; dx <= renderDistance; dx++) {
+            for (int dz = -renderDistance; dz <= renderDistance; dz++) {
+                int cx = centerCx + dx;
+                int cz = centerCz + dz;
+                Chunk chunk = activeChunks.get(chunkKey(cx, cz));
+                if (chunk != null) {
+                    chunk.updateMeshIfNeeded();
+                    chunk.render();
+                    renderedChunkCount++;
+                }
+            }
         }
+    }
+
+    public void updateAndRender() {
+        int rd = no.minecraft.settings.GameSettings.getInstance().getRenderDistance();
+        updateAndRender(lastCenterCx, lastCenterCz, rd);
     }
 
     public int getLoadedChunkCount() {

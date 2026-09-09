@@ -3629,8 +3629,8 @@ public class HUD {
         leftLines.add(String.format("Biome: %s", world.getBiomeName(bx, by, bz)));
         leftLines.add(String.format(java.util.Locale.ROOT, "Light: %d (%d sky, %d block)", light, skyLight, 0));
         leftLines.add(String.format(java.util.Locale.ROOT, "Day %d (%s, sun: %.2f)", day, timeStr, world.getSunLightLevel()));
-        leftLines.add(String.format(java.util.Locale.ROOT, "Chunks: %d loaded | Mobs: %d | Drops: %d",
-                world.getLoadedChunkCount(), world.getMobs().size(), world.getDroppedItems().size()));
+        leftLines.add(String.format(java.util.Locale.ROOT, "Chunks: %d rendered, %d loaded | Mobs: %d | Drops: %d",
+                world.getRenderedChunkCount(), world.getLoadedChunkCount(), world.getMobs().size(), world.getDroppedItems().size()));
 
         for (int i = 0; i < leftLines.size(); i++) {
             String line = leftLines.get(i);

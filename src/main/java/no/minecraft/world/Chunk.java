@@ -72,12 +72,16 @@ public class Chunk {
         }
     }
 
+    public boolean hasMesh() {
+        return vaoId != 0;
+    }
+
     public void setDirty(boolean dirty) {
         this.isDirty = dirty;
     }
 
     public void updateMeshIfNeeded() {
-        if (isDirty) {
+        if (isDirty || vaoId == 0) {
             rebuildMesh();
             isDirty = false;
         }
@@ -398,7 +402,7 @@ public class Chunk {
     }
 
     public void render() {
-        if (vertexCount == 0) return;
+        if (vertexCount == 0 || vaoId == 0) return;
         glBindVertexArray(vaoId);
         glDrawArrays(GL_TRIANGLES, 0, vertexCount);
         glBindVertexArray(0);
@@ -418,7 +422,7 @@ public class Chunk {
 
     public void unloadMesh() {
         cleanup();
-        isDirty = true;
+        isDirty = false;
     }
 
     public byte[] getBlocks() {
