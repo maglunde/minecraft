@@ -53,4 +53,26 @@ public class Raycast {
 
         return null;
     }
+
+    public static float getCameraDistance(World world, Vector3f origin, Vector3f direction, float maxDistance) {
+        float step = 0.08f;
+        Vector3f currentPos = new Vector3f(origin);
+        Vector3f rayStep = new Vector3f(direction).mul(step);
+        float distanceTraveled = 0.0f;
+
+        while (distanceTraveled + step <= maxDistance) {
+            currentPos.add(rayStep);
+            distanceTraveled += step;
+
+            int bx = (int) Math.floor(currentPos.x);
+            int by = (int) Math.floor(currentPos.y);
+            int bz = (int) Math.floor(currentPos.z);
+
+            BlockType type = world.getBlock(bx, by, bz);
+            if (type != null && type.isSolid()) {
+                return Math.max(0.3f, distanceTraveled - 0.2f);
+            }
+        }
+        return maxDistance;
+    }
 }

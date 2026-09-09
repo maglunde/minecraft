@@ -27,6 +27,7 @@ public class Mob {
     private static final float FUSE_MAX = 1.5f;
     private boolean ignited = false;
 
+
     // Rotation
     private float yaw = 0.0f;
 
@@ -43,6 +44,7 @@ public class Mob {
 
         if (hurtTimer > 0) hurtTimer -= dt;
         if (attackCooldown > 0) attackCooldown -= dt;
+
 
         float distToPlayer = position.distance(player.getPosition());
 
@@ -61,7 +63,20 @@ public class Mob {
                 dz /= len;
             }
 
-            if (type == MobType.CREEPER) {
+            if (type.isPassive()) {
+                if (hurtTimer > 0) {
+                    // Panic and sprint away from player when attacked!
+                    moveX = -dx * type.getMoveSpeed() * 1.8f;
+                    moveZ = -dz * type.getMoveSpeed() * 1.8f;
+                    yaw = (float) Math.toDegrees(Math.atan2(-dz, -dx));
+                } else {
+                    // Peaceful wandering
+                    float wanderAngle = (float) ((System.currentTimeMillis() + position.x * 37) * 0.001);
+                    moveX = (float) Math.cos(wanderAngle) * (type.getMoveSpeed() * 0.4f);
+                    moveZ = (float) Math.sin(wanderAngle) * (type.getMoveSpeed() * 0.4f);
+                    yaw = (float) Math.toDegrees(Math.atan2(moveZ, moveX));
+                }
+            } else if (type == MobType.CREEPER) {
                 if (distToPlayer < 3.2f) {
                     if (!ignited) {
                         no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.0f);
@@ -155,6 +170,11 @@ public class Mob {
                     attackCooldown = 1.0f;
                 }
             }
+        } else if (type.isPassive() && distToPlayer < 48.0f) {
+            float wanderAngle = (float) ((System.currentTimeMillis() + position.x * 37) * 0.001);
+            moveX = (float) Math.cos(wanderAngle) * (type.getMoveSpeed() * 0.35f);
+            moveZ = (float) Math.sin(wanderAngle) * (type.getMoveSpeed() * 0.35f);
+            yaw = (float) Math.toDegrees(Math.atan2(moveZ, moveX));
         }
 
         // Apply movement and gravity

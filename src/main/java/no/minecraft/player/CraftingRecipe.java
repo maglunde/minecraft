@@ -158,8 +158,50 @@ public class CraftingRecipe {
         // 30. Obsidian: 4 Stein + 4 Brostein -> 2 Obsidian
         list.add(new CraftingRecipe("Obsidian", Map.of(BlockType.STONE, 4, BlockType.COBBLESTONE, 4), new ItemStack(BlockType.OBSIDIAN, 2)));
 
-        // 31. Ildstål: 1 Stein + 1 Krutt -> 1 Ildstål
-        list.add(new CraftingRecipe("Ildstål", Map.of(BlockType.STONE, 1, BlockType.GUNPOWDER, 1), new ItemStack(BlockType.FLINT_AND_STEEL, 1)));
+        // 31. Ildstål: 1 Jernbarre + 1 Krutt -> 1 Ildstål
+        list.add(new CraftingRecipe("Ildstål", Map.of(BlockType.IRON_INGOT, 1, BlockType.GUNPOWDER, 1), new ItemStack(BlockType.FLINT_AND_STEEL, 1)));
+
+        // 32. Fakkel: 1 Kull + 1 Pinne -> 4 Fakler
+        list.add(new CraftingRecipe("Fakkel", Map.of(BlockType.COAL, 1, BlockType.STICK, 1), new ItemStack(BlockType.TORCH, 4)));
+
+        // 33. Jernhakke: 3 Jernbarre + 2 Pinner -> 1 Jernhakke
+        list.add(new CraftingRecipe("Jernhakke", Map.of(BlockType.IRON_INGOT, 3, BlockType.STICK, 2), new ItemStack(BlockType.IRON_PICKAXE, 1)));
+
+        // 34. Jernsverd: 2 Jernbarre + 1 Pinne -> 1 Jernsverd
+        list.add(new CraftingRecipe("Jernsverd", Map.of(BlockType.IRON_INGOT, 2, BlockType.STICK, 1), new ItemStack(BlockType.IRON_SWORD, 1)));
+
+        // 35. Jernøks: 3 Jernbarre + 2 Pinner -> 1 Jernøks
+        list.add(new CraftingRecipe("Jernøks", Map.of(BlockType.IRON_INGOT, 3, BlockType.STICK, 2), new ItemStack(BlockType.IRON_AXE, 1)));
+
+        // 36. Jernspade: 1 Jernbarre + 2 Pinner -> 1 Jernspade
+        list.add(new CraftingRecipe("Jernspade", Map.of(BlockType.IRON_INGOT, 1, BlockType.STICK, 2), new ItemStack(BlockType.IRON_SHOVEL, 1)));
+
+        // 37. Diamanthakke: 3 Diamanter + 2 Pinner -> 1 Diamanthakke
+        list.add(new CraftingRecipe("Diamanthakke", Map.of(BlockType.DIAMOND, 3, BlockType.STICK, 2), new ItemStack(BlockType.DIAMOND_PICKAXE, 1)));
+
+        // 38. Diamantsverd: 2 Diamanter + 1 Pinne -> 1 Diamantsverd
+        list.add(new CraftingRecipe("Diamantsverd", Map.of(BlockType.DIAMOND, 2, BlockType.STICK, 1), new ItemStack(BlockType.DIAMOND_SWORD, 1)));
+
+        // 39. Diamantøks: 3 Diamanter + 2 Pinner -> 1 Diamantøks
+        list.add(new CraftingRecipe("Diamantøks", Map.of(BlockType.DIAMOND, 3, BlockType.STICK, 2), new ItemStack(BlockType.DIAMOND_AXE, 1)));
+
+        // 40. Diamantspade: 1 Diamant + 2 Pinner -> 1 Diamantspade
+        list.add(new CraftingRecipe("Diamantspade", Map.of(BlockType.DIAMOND, 1, BlockType.STICK, 2), new ItemStack(BlockType.DIAMOND_SHOVEL, 1)));
+
+        // 41. Smelting: Jernsmelting (1 Jernmalm + 1 Kull -> 1 Jernbarre)
+        list.add(new CraftingRecipe("Smelt Jernbarre", Map.of(BlockType.IRON_ORE, 1, BlockType.COAL, 1), new ItemStack(BlockType.IRON_INGOT, 1)));
+
+        // 42. Smelting: Gullsmelting (1 Gullmalm + 1 Kull -> 1 Gullbarre)
+        list.add(new CraftingRecipe("Smelt Gullbarre", Map.of(BlockType.GOLD_ORE, 1, BlockType.COAL, 1), new ItemStack(BlockType.GOLD_INGOT, 1)));
+
+        // 43. Steking: Biff (1 Rått Storfekjøtt + 1 Kull -> 1 Stekt Biff)
+        list.add(new CraftingRecipe("Stek Biff", Map.of(BlockType.BEEF, 1, BlockType.COAL, 1), new ItemStack(BlockType.COOKED_BEEF, 1)));
+
+        // 44. Steking: Svinekjøtt (1 Rått Svinekjøtt + 1 Kull -> 1 Stekt Svinekjøtt)
+        list.add(new CraftingRecipe("Stek Svinekjøtt", Map.of(BlockType.PORKCHOP, 1, BlockType.COAL, 1), new ItemStack(BlockType.COOKED_PORKCHOP, 1)));
+
+        // 45. Steking: Kylling (1 Rå Kylling + 1 Kull -> 1 Stekt Kylling)
+        list.add(new CraftingRecipe("Stek Kylling", Map.of(BlockType.CHICKEN_MEAT, 1, BlockType.COAL, 1), new ItemStack(BlockType.COOKED_CHICKEN, 1)));
 
         return list;
     }

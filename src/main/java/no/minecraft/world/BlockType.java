@@ -67,7 +67,34 @@ public enum BlockType {
     SANDSTONE((byte) 63, "Sandstein", true, false, 77, 79, 78),
     SNOW_BLOCK((byte) 64, "Snøblokk", true, false, 80, 80, 80),
     GRAVEL((byte) 65, "Grus", true, false, 81, 81, 81),
-    CACTUS((byte) 66, "Kaktus", true, false, 82, 82, 83);
+    CACTUS((byte) 66, "Kaktus", true, false, 82, 82, 83),
+    COAL_ORE((byte) 67, "Kullmalm", true, false, 84, 84, 84),
+    COAL((byte) 68, "Kull", false, true, 85, 85, 85),
+    IRON_ORE((byte) 69, "Jernmalm", true, false, 86, 86, 86),
+    IRON_INGOT((byte) 70, "Jernbarre", false, true, 87, 87, 87),
+    GOLD_ORE((byte) 71, "Gullmalm", true, false, 88, 88, 88),
+    GOLD_INGOT((byte) 72, "Gullbarre", false, true, 89, 89, 89),
+    DIAMOND_ORE((byte) 73, "Diamantmalm", true, false, 90, 90, 90),
+    DIAMOND((byte) 74, "Diamant", false, true, 91, 91, 91),
+    TORCH((byte) 75, "Fakkel", false, true, 92, 92, 92),
+    IRON_PICKAXE((byte) 76, "Jernhakke", false, true, 93, 93, 93),
+    IRON_SWORD((byte) 77, "Jernsverd", false, true, 94, 94, 94),
+    IRON_AXE((byte) 78, "Jernøks", false, true, 95, 95, 95),
+    IRON_SHOVEL((byte) 79, "Jernspade", false, true, 96, 96, 96),
+    DIAMOND_PICKAXE((byte) 80, "Diamanthakke", false, true, 97, 97, 97),
+    DIAMOND_SWORD((byte) 81, "Diamantsverd", false, true, 98, 98, 98),
+    DIAMOND_AXE((byte) 82, "Diamantøks", false, true, 99, 99, 99),
+    DIAMOND_SHOVEL((byte) 83, "Diamantspade", false, true, 100, 100, 100),
+    PORKCHOP((byte) 84, "Rått Svinekjøtt", false, true, 101, 101, 101),
+    COOKED_PORKCHOP((byte) 85, "Stekt Svinekjøtt", false, true, 102, 102, 102),
+    BEEF((byte) 86, "Rått Storfekjøtt", false, true, 103, 103, 103),
+    COOKED_BEEF((byte) 87, "Stekt Biff", false, true, 104, 104, 104),
+    CHICKEN_MEAT((byte) 88, "Rå Kylling", false, true, 105, 105, 105),
+    COOKED_CHICKEN((byte) 89, "Stekt Kylling", false, true, 106, 106, 106),
+    APPLE((byte) 90, "Eple", false, true, 107, 107, 107),
+    BREAD((byte) 91, "Brød", false, true, 108, 108, 108),
+    LEATHER((byte) 92, "Lær", false, true, 109, 109, 109),
+    FEATHER((byte) 93, "Fjær", false, true, 110, 110, 110);
 
     public enum ToolType {
         NONE, PICKAXE, AXE, SHOVEL, SWORD
@@ -97,7 +124,7 @@ public enum BlockType {
             case OBSIDIAN -> 5.0f;
             case END_PORTAL_FRAME, END_PORTAL_FRAME_FILLED -> -1.0f;
             case END_STONE -> 3.0f;
-            case STONE, BASALT -> 1.5f;
+            case STONE, BASALT, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE -> 1.5f;
             case COBBLESTONE, BRICKS, FURNACE, NETHER_BRICKS -> 2.0f;
             case NETHER_QUARTZ_ORE -> 1.8f;
             case SPAWNER -> 5.0f;
@@ -111,13 +138,14 @@ public enum BlockType {
             case DIRT, GRASS -> 0.5f;
             case SAND, CACTUS -> 0.4f;
             case GLASS, LEAVES, SNOW_BLOCK -> 0.2f;
+            case TORCH -> 0.0f;
             default -> 0.1f;
         };
     }
 
     public ToolType getEffectiveTool() {
         return switch (this) {
-            case STONE, COBBLESTONE, BRICKS, FURNACE, OBSIDIAN, NETHERRACK, NETHER_BRICKS, END_STONE, NETHER_QUARTZ_ORE, BASALT, SPAWNER, SANDSTONE -> ToolType.PICKAXE;
+            case STONE, COBBLESTONE, BRICKS, FURNACE, OBSIDIAN, NETHERRACK, NETHER_BRICKS, END_STONE, NETHER_QUARTZ_ORE, BASALT, SPAWNER, SANDSTONE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE -> ToolType.PICKAXE;
             case WOOD, PLANKS, CHEST, CRAFTING_TABLE, WOODEN_DOOR, TRAPDOOR, FENCE, FENCE_GATE, WOODEN_STAIRS, WOODEN_SLAB, CACTUS -> ToolType.AXE;
             case DIRT, GRASS, SAND, SOUL_SAND, GRAVEL, SNOW_BLOCK -> ToolType.SHOVEL;
             case LEAVES -> ToolType.SWORD;
@@ -127,17 +155,29 @@ public enum BlockType {
 
     public boolean requiresToolForDrop() {
         return switch (this) {
-            case STONE, COBBLESTONE, BRICKS, FURNACE, OBSIDIAN, NETHERRACK, NETHER_BRICKS, END_STONE, NETHER_QUARTZ_ORE, BASALT, SANDSTONE -> true;
+            case STONE, COBBLESTONE, BRICKS, FURNACE, OBSIDIAN, NETHERRACK, NETHER_BRICKS, END_STONE, NETHER_QUARTZ_ORE, BASALT, SANDSTONE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE -> true;
             default -> false;
+        };
+    }
+
+    public boolean canHarvest(BlockType tool) {
+        if (!requiresToolForDrop()) return true;
+        if (tool == null) return false;
+        if (tool.getItemToolType() != getEffectiveTool()) return false;
+        return switch (this) {
+            case OBSIDIAN -> tool == DIAMOND_PICKAXE;
+            case DIAMOND_ORE, GOLD_ORE -> tool == IRON_PICKAXE || tool == DIAMOND_PICKAXE;
+            case IRON_ORE -> tool == STONE_PICKAXE || tool == IRON_PICKAXE || tool == DIAMOND_PICKAXE;
+            default -> true;
         };
     }
 
     public ToolType getItemToolType() {
         return switch (this) {
-            case WOODEN_PICKAXE, STONE_PICKAXE -> ToolType.PICKAXE;
-            case WOODEN_AXE, STONE_AXE -> ToolType.AXE;
-            case WOODEN_SHOVEL, STONE_SHOVEL -> ToolType.SHOVEL;
-            case WOODEN_SWORD, STONE_SWORD -> ToolType.SWORD;
+            case WOODEN_PICKAXE, STONE_PICKAXE, IRON_PICKAXE, DIAMOND_PICKAXE -> ToolType.PICKAXE;
+            case WOODEN_AXE, STONE_AXE, IRON_AXE, DIAMOND_AXE -> ToolType.AXE;
+            case WOODEN_SHOVEL, STONE_SHOVEL, IRON_SHOVEL, DIAMOND_SHOVEL -> ToolType.SHOVEL;
+            case WOODEN_SWORD, STONE_SWORD, IRON_SWORD, DIAMOND_SWORD -> ToolType.SWORD;
             default -> ToolType.NONE;
         };
     }
@@ -146,6 +186,12 @@ public enum BlockType {
         ToolType needed = block.getEffectiveTool();
         ToolType has = getItemToolType();
         if (needed != ToolType.NONE && needed == has) {
+            if (this == DIAMOND_PICKAXE || this == DIAMOND_AXE || this == DIAMOND_SHOVEL || this == DIAMOND_SWORD) {
+                return 8.0f;
+            }
+            if (this == IRON_PICKAXE || this == IRON_AXE || this == IRON_SHOVEL || this == IRON_SWORD) {
+                return 6.0f;
+            }
             if (this == STONE_PICKAXE || this == STONE_AXE || this == STONE_SHOVEL || this == STONE_SWORD) {
                 return 4.0f;
             }
@@ -156,8 +202,10 @@ public enum BlockType {
 
     public int getMaxDurability() {
         return switch (this) {
-            case WOODEN_PICKAXE, WOODEN_AXE, WOODEN_SHOVEL, WOODEN_SWORD, WOODEN_HOE -> 59;
+            case DIAMOND_PICKAXE, DIAMOND_AXE, DIAMOND_SHOVEL, DIAMOND_SWORD -> 1561;
+            case IRON_PICKAXE, IRON_AXE, IRON_SHOVEL, IRON_SWORD -> 250;
             case STONE_PICKAXE, STONE_AXE, STONE_SHOVEL, STONE_SWORD -> 131;
+            case WOODEN_PICKAXE, WOODEN_AXE, WOODEN_SHOVEL, WOODEN_SWORD, WOODEN_HOE -> 59;
             default -> 0;
         };
     }
@@ -168,13 +216,21 @@ public enum BlockType {
 
     public int getAttackDamage() {
         return switch (this) {
-            case WOODEN_SWORD -> 4;
+            case DIAMOND_SWORD -> 7;
+            case IRON_SWORD -> 6;
             case STONE_SWORD -> 5;
-            case WOODEN_AXE -> 3;
+            case WOODEN_SWORD -> 4;
+            case DIAMOND_AXE -> 6;
+            case IRON_AXE -> 5;
             case STONE_AXE -> 4;
-            case WOODEN_PICKAXE -> 2;
+            case WOODEN_AXE -> 3;
+            case DIAMOND_PICKAXE -> 5;
+            case IRON_PICKAXE -> 4;
             case STONE_PICKAXE -> 3;
-            case WOODEN_SHOVEL, STONE_SHOVEL -> 1;
+            case WOODEN_PICKAXE -> 2;
+            case DIAMOND_SHOVEL -> 4;
+            case IRON_SHOVEL -> 3;
+            case STONE_SHOVEL, WOODEN_SHOVEL -> 1;
             default -> 1; // Fists
         };
     }
@@ -207,15 +263,33 @@ public enum BlockType {
         return switch (this) {
             case GRASS -> DIRT;
             case STONE -> COBBLESTONE;
+            case COAL_ORE -> COAL;
+            case DIAMOND_ORE -> DIAMOND;
             case LAVA, WATER -> AIR;
             default -> this;
         };
     }
 
+    public int getFoodValue() {
+        return switch (this) {
+            case COOKED_PORKCHOP, COOKED_BEEF -> 8;
+            case COOKED_CHICKEN -> 6;
+            case BREAD -> 5;
+            case APPLE, ROTTEN_FLESH -> 4;
+            case PORKCHOP, BEEF -> 3;
+            case CHICKEN_MEAT -> 2;
+            default -> 0;
+        };
+    }
+
+    public boolean isFood() {
+        return getFoodValue() > 0;
+    }
+
     public String getDigSound() {
         return switch (this) {
-            case STONE, COBBLESTONE, BRICKS, BEDROCK, FURNACE, OBSIDIAN, NETHERRACK, NETHER_BRICKS, END_STONE, DRAGON_EGG, END_PORTAL_FRAME, END_PORTAL_FRAME_FILLED, NETHER_QUARTZ_ORE, BASALT, SANDSTONE -> "dig_stone";
-            case WOOD, PLANKS, CRAFTING_TABLE, CHEST, TRAPDOOR, FENCE, FENCE_GATE, WOODEN_SLAB, WOODEN_STAIRS, CACTUS -> "dig_wood";
+            case STONE, COBBLESTONE, BRICKS, BEDROCK, FURNACE, OBSIDIAN, NETHERRACK, NETHER_BRICKS, END_STONE, DRAGON_EGG, END_PORTAL_FRAME, END_PORTAL_FRAME_FILLED, NETHER_QUARTZ_ORE, BASALT, SANDSTONE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE -> "dig_stone";
+            case WOOD, PLANKS, CRAFTING_TABLE, CHEST, TRAPDOOR, FENCE, FENCE_GATE, WOODEN_SLAB, WOODEN_STAIRS, CACTUS, TORCH -> "dig_wood";
             case SAND, SOUL_SAND, GRAVEL -> "dig_sand";
             case DIRT, GRASS, LEAVES, SNOW_BLOCK -> "dig_grass";
             case GLOWSTONE -> "dig_stone";
@@ -225,8 +299,8 @@ public enum BlockType {
 
     public String getBreakSound() {
         return switch (this) {
-            case STONE, COBBLESTONE, BRICKS, BEDROCK, FURNACE, OBSIDIAN, NETHERRACK, NETHER_BRICKS, END_STONE, DRAGON_EGG, END_PORTAL_FRAME, END_PORTAL_FRAME_FILLED, NETHER_QUARTZ_ORE, BASALT, SANDSTONE -> "break_stone";
-            case WOOD, PLANKS, CRAFTING_TABLE, CHEST, TRAPDOOR, FENCE, FENCE_GATE, WOODEN_SLAB, WOODEN_STAIRS, CACTUS -> "break_wood";
+            case STONE, COBBLESTONE, BRICKS, BEDROCK, FURNACE, OBSIDIAN, NETHERRACK, NETHER_BRICKS, END_STONE, DRAGON_EGG, END_PORTAL_FRAME, END_PORTAL_FRAME_FILLED, NETHER_QUARTZ_ORE, BASALT, SANDSTONE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE -> "break_stone";
+            case WOOD, PLANKS, CRAFTING_TABLE, CHEST, TRAPDOOR, FENCE, FENCE_GATE, WOODEN_SLAB, WOODEN_STAIRS, CACTUS, TORCH -> "break_wood";
             case DIRT, GRASS, LEAVES, SAND, SOUL_SAND, GRAVEL, SNOW_BLOCK -> "break_grass";
             case GLOWSTONE -> "break_stone";
             default -> "break_stone";

@@ -27,6 +27,7 @@ public class Main {
     private BlockOutline blockOutline;
     private ItemRenderer itemRenderer;
     private HandRenderer handRenderer;
+    private PlayerRenderer playerRenderer;
     private MobRenderer mobRenderer;
     private MiningOverlay miningOverlay;
     private SkyRenderer skyRenderer;
@@ -159,6 +160,7 @@ public class Main {
         blockOutline = new BlockOutline();
         itemRenderer = new ItemRenderer();
         handRenderer = new HandRenderer();
+        playerRenderer = new PlayerRenderer();
         mobRenderer = new MobRenderer();
         miningOverlay = new MiningOverlay();
         skyRenderer = new SkyRenderer();
@@ -276,10 +278,11 @@ public class Main {
             if (button == GLFW_MOUSE_BUTTON_LEFT) {
                 if (action == GLFW_PRESS) {
                     isLeftMouseDown = true;
+                    player.swing();
                     handRenderer.swing();
 
                     // 1. Check if attacking a mob with sword / tool / fist
-                    Vector3f eye = player.getCamera().getPosition();
+                    Vector3f eye = player.getEyePosition();
                     Vector3f fwd = player.getCamera().getForward();
                     no.minecraft.entity.Mob hitMob = null;
                     float minMobDist = 4.0f;
@@ -301,6 +304,7 @@ public class Main {
                         BlockType tool = player.getSelectedBlock();
                         int dmg = tool != null ? tool.getAttackDamage() : 1;
                         hitMob.takeDamage(dmg, fwd.x, fwd.z, world);
+                        no.minecraft.sound.SoundManager.getInstance().play("hurt", 0.9f);
                         float mobH = hitMob.getType().getHeight();
                         CombatTextManager.getInstance().add(
                                 hitMob.getPosition().x,
@@ -323,6 +327,7 @@ public class Main {
             } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
                 if (action == GLFW_PRESS) {
                     isRightMouseDown = true;
+                    player.swing();
                     handRenderer.use();
                     if (handleRightClickAction()) {
                         rightClickTimer = 0.22f;
@@ -414,6 +419,7 @@ public class Main {
                     return;
                 }
 
+
                 if (key == GLFW_KEY_ESCAPE) {
                     if (hud.isInventoryOpen()) {
                         hud.closeInventory(player);
@@ -433,6 +439,10 @@ public class Main {
                 } else if (!mainMenu.isInMenu() && !pauseMenu.isOpen() && (key == GLFW_KEY_F3 || key == gs.keyToggleDebug)) {
                     // Toggle F3 Debug Screen
                     hud.toggleDebugInfo();
+                } else if (!mainMenu.isInMenu() && !pauseMenu.isOpen() && (key == GLFW_KEY_F5 || key == gs.keyTogglePerspective)) {
+                    // Toggle F5 Camera Perspective (First Person -> Third Person Back -> Third Person Front)
+                    player.getCamera().cyclePerspective();
+                    no.minecraft.sound.SoundManager.getInstance().play("click", 0.8f);
                 } else if (!mainMenu.isInMenu() && !pauseMenu.isOpen() && key == GLFW_KEY_G) {
                     // Toggle GameMode (Survival / Creative)
                     player.toggleGameMode();
@@ -492,8 +502,19 @@ public class Main {
     }
 
     private boolean handleRightClickAction() {
-        // 1. Bow shooting (fires Arrow entity if player has arrows or is in Creative)
         BlockType held = player.getSelectedBlock();
+
+        // 0. Eating food
+        if (held != null && held.isFood()) {
+            if (player.eatFood(held)) {
+                if (player.getGameMode() != GameMode.CREATIVE) {
+                    player.useSelectedBlock();
+                }
+                return true;
+            }
+        }
+
+        // 1. Bow shooting (fires Arrow entity if player has arrows or is in Creative)
         if (held == BlockType.BOW) {
             boolean hasArrow = player.getGameMode() == GameMode.CREATIVE || player.getInventory().getItemCount(BlockType.ARROW) > 0;
             if (hasArrow) {
@@ -501,7 +522,7 @@ public class Main {
                     player.getInventory().removeItem(BlockType.ARROW, 1);
                     player.getInventory().getSlot(player.getSelectedSlot()).damageTool(1);
                 }
-                Vector3f eye = player.getCamera().getPosition();
+                Vector3f eye = player.getEyePosition();
                 Vector3f fwd = player.getCamera().getForward();
                 world.spawnArrow(eye.x, eye.y, eye.z, fwd.x * 24.0f, fwd.y * 24.0f, fwd.z * 24.0f);
                 no.minecraft.sound.SoundManager.getInstance().play("bow_shoot", 1.0f);
@@ -511,7 +532,7 @@ public class Main {
 
         // 2. Eye of Ender throwing towards Stronghold (48, 14, 48)
         if (held == BlockType.EYE_OF_ENDER) {
-            Raycast.HitResult target = Raycast.raycast(world, player.getCamera().getPosition(), player.getCamera().getForward(), 5.0f);
+            Raycast.HitResult target = Raycast.raycast(world, player.getEyePosition(), player.getCamera().getForward(), 5.0f);
             boolean aimingAtFrame = target != null && world.getBlock(target.hitX, target.hitY, target.hitZ) == BlockType.END_PORTAL_FRAME;
             if (!aimingAtFrame) {
                 // Throw towards Stronghold
@@ -522,7 +543,7 @@ public class Main {
                     dx /= len;
                     dz /= len;
                 }
-                Vector3f eye = player.getCamera().getPosition();
+                Vector3f eye = player.getEyePosition();
                 world.spawnArrow(eye.x, eye.y, eye.z, dx * 16.0f, 6.0f, dz * 16.0f);
                 no.minecraft.sound.SoundManager.getInstance().play("pop", 1.0f);
                 no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.EYE_SPY);
@@ -539,7 +560,7 @@ public class Main {
     private boolean tryPlaceBlock() {
         Raycast.HitResult hit = Raycast.raycast(
                 world,
-                player.getCamera().getPosition(),
+                player.getEyePosition(),
                 player.getCamera().getForward(),
                 5.5f
         );
@@ -578,8 +599,8 @@ public class Main {
             // Place block only if player has it in inventory
             if (player.canPlaceSelectedBlock()) {
                 BlockType toPlace = player.getSelectedBlock();
-                if (toPlace != null && toPlace.isSolid()) {
-                    boolean roomAvailable = player.isFlying() || !player.getBoundingBox().intersects(
+                if (toPlace != null && toPlace != BlockType.AIR) {
+                    boolean roomAvailable = !toPlace.isSolid() || player.isFlying() || !player.getBoundingBox().intersects(
                             new no.minecraft.player.AABB(hit.placeX, hit.placeY, hit.placeZ,
                                     hit.placeX + 1, hit.placeY + 1, hit.placeZ + 1));
                     if (roomAvailable) {
@@ -820,7 +841,7 @@ public class Main {
             if (!inGui) {
                 targetedHit = Raycast.raycast(
                         world,
-                        player.getCamera().getPosition(),
+                        player.getEyePosition(),
                         player.getCamera().getForward(),
                         5.5f
                 );
@@ -868,10 +889,7 @@ public class Main {
                             world.setBlock(hx, hy, hz, BlockType.AIR);
                             no.minecraft.sound.SoundManager.getInstance().play(targetBlock.getBreakSound(), 1.0f);
                             // Drop item if harvested correctly
-                            boolean toolRequired = targetBlock.requiresToolForDrop();
-                            boolean hasCorrectTool = tool != null && tool.getItemToolType() == targetBlock.getEffectiveTool();
-
-                            if (!toolRequired || hasCorrectTool) {
+                            if (targetBlock.canHarvest(tool)) {
                                 world.spawnItemDrop(hx + 0.5f, hy + 0.5f, hz + 0.5f, targetBlock.getDrop(), 1);
                             }
 
@@ -1032,6 +1050,11 @@ public class Main {
             // 4. Render 3D Mobs (Zombie, Creeper, Spider, Skeleton, Blaze, Enderman, Ender Dragon, End Crystal) & Arrows
             mobRenderer.render(world.getMobs(), world.getArrows(), projection, view, sunLight);
 
+            // 4.5 Render 3D Player character model (if in 3rd person mode)
+            if (!mainMenu.isInMenu() && player.getCamera().getPerspective() != no.minecraft.player.Perspective.FIRST_PERSON) {
+                playerRenderer.render(player, projection, view, dynamicSunLight, atlas);
+            }
+
             // 5. Render Mining crack animation if actively mining
             if (!hud.isInventoryOpen() && isLeftMouseDown && miningDamage > 0.0f && miningBlockX != Integer.MIN_VALUE) {
                 int stage = Math.clamp((int) (miningDamage * 10), 0, 9);
@@ -1043,8 +1066,8 @@ public class Main {
                 blockOutline.render(projection, view, targetedHit.hitX, targetedHit.hitY, targetedHit.hitZ);
             }
 
-            // 6.5 Render First-Person Hand & Held Item (if in game)
-            if (!mainMenu.isInMenu()) {
+            // 6.5 Render First-Person Hand & Held Item (only in first-person mode)
+            if (!mainMenu.isInMenu() && player.getCamera().getPerspective() == no.minecraft.player.Perspective.FIRST_PERSON) {
                 atlas.bind();
                 handRenderer.render(player, dynamicSunLight, dt, isLeftMouseDown && !hud.isInventoryOpen(), width, height);
                 atlas.unbind();
@@ -1080,6 +1103,9 @@ public class Main {
         itemRenderer.cleanup();
         if (handRenderer != null) {
             handRenderer.cleanup();
+        }
+        if (playerRenderer != null) {
+            playerRenderer.cleanup();
         }
         blockOutline.cleanup();
         worldShader.cleanup();

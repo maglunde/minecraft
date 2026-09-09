@@ -10,7 +10,11 @@ public enum MobType {
     BLAZE("Blaze", 20, 0.6f, 1.8f, 2.0f, 4, BlockType.BLAZE_ROD),
     ENDERMAN("Enderman", 40, 0.6f, 2.9f, 4.2f, 5, BlockType.ENDER_PEARL),
     ENDER_DRAGON("Ender Dragon", 200, 4.0f, 2.5f, 5.5f, 8, BlockType.DRAGON_EGG),
-    END_CRYSTAL("End Crystal", 1, 1.0f, 1.5f, 0.0f, 0, BlockType.AIR);
+    END_CRYSTAL("End Crystal", 1, 1.0f, 1.5f, 0.0f, 0, BlockType.AIR),
+    PIG("Gris", 10, 0.9f, 0.9f, 1.8f, 0, BlockType.PORKCHOP),
+    COW("Ku", 10, 0.9f, 1.4f, 1.6f, 0, BlockType.BEEF),
+    SHEEP("Sau", 8, 0.9f, 1.3f, 1.8f, 0, BlockType.FEATHER),
+    CHICKEN("Kylling", 4, 0.4f, 0.7f, 2.0f, 0, BlockType.CHICKEN_MEAT);
 
     private final String name;
     private final int maxHealth;
@@ -56,5 +60,13 @@ public enum MobType {
 
     public BlockType getDropItem() {
         return dropItem;
+    }
+
+    public boolean isPassive() {
+        return attackDamage == 0 && this != END_CRYSTAL;
+    }
+
+    public boolean isHostile() {
+        return attackDamage > 0;
     }
 }

@@ -623,6 +623,269 @@ public class TextureAtlas {
             return rgba((int) (g * 0.35f), g, (int) (g * 0.25f), 255);
         });
 
+        // 84: Coal Ore
+        loadOrPaint(pixelData, 84, "coal_ore.png", (x, y, rand) -> {
+            boolean coal = (x >= 3 && x <= 6 && y >= 3 && y <= 6) ||
+                           (x >= 9 && x <= 13 && y >= 7 && y <= 11) ||
+                           (x >= 4 && x <= 8 && y >= 11 && y <= 14);
+            if (coal) {
+                int c = 20 + rand.nextInt(25);
+                return rgba(c, c, c, 255);
+            }
+            int v = 110 + rand.nextInt(35);
+            return rgba(v, v, v, 255);
+        });
+
+        // 85: Coal Item
+        loadOrPaint(pixelData, 85, "coal.png", (x, y, rand) -> {
+            float dx = x - 7.5f, dy = y - 7.5f;
+            if (dx * dx + dy * dy <= 22) {
+                int c = 18 + rand.nextInt(28);
+                if (x + y <= 11) c += 35; // highlight
+                return rgba(c, c, c, 255);
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 86: Iron Ore
+        loadOrPaint(pixelData, 86, "iron_ore.png", (x, y, rand) -> {
+            boolean iron = (x >= 4 && x <= 7 && y >= 3 && y <= 6) ||
+                           (x >= 8 && x <= 12 && y >= 8 && y <= 12) ||
+                           (x >= 3 && x <= 6 && y >= 10 && y <= 13);
+            if (iron) {
+                int b = 175 + rand.nextInt(30);
+                return rgba(b, (int)(b * 0.88f), (int)(b * 0.76f), 255);
+            }
+            int v = 110 + rand.nextInt(35);
+            return rgba(v, v, v, 255);
+        });
+
+        // 87: Iron Ingot
+        loadOrPaint(pixelData, 87, "iron_ingot.png", (x, y, rand) -> {
+            if (x >= 3 && x <= 12 && y >= 5 && y <= 10) {
+                int base = (y == 5 || x == 3) ? 235 : ((y == 10 || x == 12) ? 140 : 195);
+                base += rand.nextInt(15);
+                return rgba(base, base, (int)(base * 1.05f), 255);
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 88: Gold Ore
+        loadOrPaint(pixelData, 88, "gold_ore.png", (x, y, rand) -> {
+            boolean gold = (x >= 4 && x <= 7 && y >= 4 && y <= 7) ||
+                           (x >= 9 && x <= 12 && y >= 8 && y <= 11) ||
+                           (x >= 3 && x <= 6 && y >= 11 && y <= 13);
+            if (gold) {
+                int r = 240 + rand.nextInt(15);
+                int g = 190 + rand.nextInt(35);
+                return rgba(r, g, 40, 255);
+            }
+            int v = 110 + rand.nextInt(35);
+            return rgba(v, v, v, 255);
+        });
+
+        // 89: Gold Ingot
+        loadOrPaint(pixelData, 89, "gold_ingot.png", (x, y, rand) -> {
+            if (x >= 3 && x <= 12 && y >= 5 && y <= 10) {
+                int r = (y == 5 || x == 3) ? 255 : ((y == 10 || x == 12) ? 180 : 230);
+                int g = (int)(r * 0.82f);
+                return rgba(r, g, 30, 255);
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 90: Diamond Ore
+        loadOrPaint(pixelData, 90, "diamond_ore.png", (x, y, rand) -> {
+            boolean dia = (x >= 4 && x <= 7 && y >= 3 && y <= 6) ||
+                          (x >= 9 && x <= 13 && y >= 8 && y <= 12) ||
+                          (x >= 3 && x <= 6 && y >= 10 && y <= 13);
+            if (dia) {
+                int g = 210 + rand.nextInt(40);
+                return rgba((int)(g * 0.40f), g, 255, 255);
+            }
+            int v = 110 + rand.nextInt(35);
+            return rgba(v, v, v, 255);
+        });
+
+        // 91: Diamond Gem Item
+        loadOrPaint(pixelData, 91, "diamond.png", (x, y, rand) -> {
+            float dx = Math.abs(x - 7.5f), dy = Math.abs(y - 7.5f);
+            if (dx + dy <= 5.5f && y >= 4 && y <= 12) {
+                int g = (y < 7) ? 245 : 190 + rand.nextInt(35);
+                int r = (y < 7) ? 120 : (int)(g * 0.35f);
+                return rgba(r, g, 255, 255);
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 92: Torch (Stick + fire flame)
+        loadOrPaint(pixelData, 92, "torch.png", (x, y, rand) -> {
+            if (x >= 7 && x <= 8 && y >= 5 && y <= 14) {
+                return rgba(130, 90, 50, 255); // Wood stick
+            }
+            if (x >= 6 && x <= 9 && y >= 1 && y <= 5) {
+                if (x >= 7 && x <= 8 && y >= 2 && y <= 4) return rgba(255, 255, 200, 255); // Core flame
+                return rgba(255, 140 + rand.nextInt(50), 20, 255); // Outer flame
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 93: Iron Pickaxe
+        loadOrPaint(pixelData, 93, "iron_pickaxe.png", (x, y, rand) -> {
+            if (Math.abs(x - y) <= 0.5f && x >= 3 && x <= 10) return rgba(130, 90, 50, 255); // Handle
+            if (x >= 9 && y >= 1 && (x + y <= 16) && (x + y >= 12)) return rgba(220, 220, 235, 255); // Iron head
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 94: Iron Sword
+        loadOrPaint(pixelData, 94, "iron_sword.png", (x, y, rand) -> {
+            if (x == y && x >= 5 && x <= 14) return rgba(225, 225, 240, 255); // Blade
+            if (x == y + 1 || x == y - 1) {
+                if (x >= 5 && x <= 13) return rgba(195, 195, 215, 255);
+                if (x == 4) return rgba(100, 100, 110, 255); // Crossguard
+            }
+            if (x <= 3 && y <= 3 && Math.abs(x - y) <= 0.5f) return rgba(120, 80, 40, 255); // Hilt
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 95: Iron Axe
+        loadOrPaint(pixelData, 95, "iron_axe.png", (x, y, rand) -> {
+            if (Math.abs(x - y) <= 0.5f && x >= 2 && x <= 11) return rgba(130, 90, 50, 255);
+            if (x >= 8 && x <= 13 && y >= 2 && y <= 8) return rgba(220, 220, 235, 255);
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 96: Iron Shovel
+        loadOrPaint(pixelData, 96, "iron_shovel.png", (x, y, rand) -> {
+            if (Math.abs(x - y) <= 0.5f && x >= 2 && x <= 10) return rgba(130, 90, 50, 255);
+            if (x >= 10 && y >= 10 && x <= 13 && y <= 13) return rgba(225, 225, 240, 255);
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 97: Diamond Pickaxe
+        loadOrPaint(pixelData, 97, "diamond_pickaxe.png", (x, y, rand) -> {
+            if (Math.abs(x - y) <= 0.5f && x >= 3 && x <= 10) return rgba(130, 90, 50, 255);
+            if (x >= 9 && y >= 1 && (x + y <= 16) && (x + y >= 12)) return rgba(75, 225, 235, 255); // Cyan head
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 98: Diamond Sword
+        loadOrPaint(pixelData, 98, "diamond_sword.png", (x, y, rand) -> {
+            if (x == y && x >= 5 && x <= 14) return rgba(95, 235, 245, 255); // Diamond blade
+            if (x == y + 1 || x == y - 1) {
+                if (x >= 5 && x <= 13) return rgba(50, 190, 205, 255);
+                if (x == 4) return rgba(35, 140, 150, 255);
+            }
+            if (x <= 3 && y <= 3 && Math.abs(x - y) <= 0.5f) return rgba(120, 80, 40, 255);
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 99: Diamond Axe
+        loadOrPaint(pixelData, 99, "diamond_axe.png", (x, y, rand) -> {
+            if (Math.abs(x - y) <= 0.5f && x >= 2 && x <= 11) return rgba(130, 90, 50, 255);
+            if (x >= 8 && x <= 13 && y >= 2 && y <= 8) return rgba(75, 225, 235, 255);
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 100: Diamond Shovel
+        loadOrPaint(pixelData, 100, "diamond_shovel.png", (x, y, rand) -> {
+            if (Math.abs(x - y) <= 0.5f && x >= 2 && x <= 10) return rgba(130, 90, 50, 255);
+            if (x >= 10 && y >= 10 && x <= 13 && y <= 13) return rgba(75, 225, 235, 255);
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 101: Raw Porkchop
+        loadOrPaint(pixelData, 101, "porkchop.png", (x, y, rand) -> {
+            float dx = x - 7.5f, dy = y - 7.5f;
+            if (dx * dx + dy * dy <= 24) {
+                if (x <= 5 || y <= 4) return rgba(240, 220, 220, 255); // White fat
+                return rgba(225, 120 + rand.nextInt(20), 130 + rand.nextInt(20), 255); // Pink meat
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 102: Cooked Porkchop
+        loadOrPaint(pixelData, 102, "cooked_porkchop.png", (x, y, rand) -> {
+            float dx = x - 7.5f, dy = y - 7.5f;
+            if (dx * dx + dy * dy <= 24) {
+                int b = (x % 3 == 0) ? 90 : 140 + rand.nextInt(25);
+                return rgba((int)(b * 1.25f), (int)(b * 0.75f), (int)(b * 0.40f), 255);
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 103: Raw Beef
+        loadOrPaint(pixelData, 103, "beef.png", (x, y, rand) -> {
+            float dx = x - 7.5f, dy = y - 7.5f;
+            if (dx * dx + dy * dy <= 24) {
+                if (x >= 9 && y <= 6) return rgba(230, 230, 220, 255); // Bone
+                return rgba(170 + rand.nextInt(25), 35 + rand.nextInt(15), 35 + rand.nextInt(15), 255); // Deep red
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 104: Cooked Beef (Steak)
+        loadOrPaint(pixelData, 104, "cooked_beef.png", (x, y, rand) -> {
+            float dx = x - 7.5f, dy = y - 7.5f;
+            if (dx * dx + dy * dy <= 24) {
+                int b = 95 + rand.nextInt(25);
+                return rgba((int)(b * 1.1f), (int)(b * 0.65f), (int)(b * 0.35f), 255);
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 105: Raw Chicken
+        loadOrPaint(pixelData, 105, "chicken.png", (x, y, rand) -> {
+            if (x >= 4 && x <= 11 && y >= 4 && y <= 11) return rgba(235, 175, 160, 255);
+            if (x >= 2 && x <= 4 && y >= 2 && y <= 4) return rgba(240, 240, 235, 255); // Bone
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 106: Cooked Chicken
+        loadOrPaint(pixelData, 106, "cooked_chicken.png", (x, y, rand) -> {
+            if (x >= 4 && x <= 11 && y >= 4 && y <= 11) return rgba(190, 110, 45, 255);
+            if (x >= 2 && x <= 4 && y >= 2 && y <= 4) return rgba(240, 240, 235, 255);
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 107: Apple
+        loadOrPaint(pixelData, 107, "apple.png", (x, y, rand) -> {
+            float dx = x - 7.5f, dy = y - 8.5f;
+            if (dx * dx + dy * dy <= 20) {
+                if (x == 6 && y == 7) return rgba(255, 180, 180, 255); // Shine
+                return rgba(215 + rand.nextInt(30), 20, 25, 255);
+            }
+            if (x == 7 && y >= 4 && y <= 5) return rgba(60, 130, 30, 255); // Stem
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 108: Bread
+        loadOrPaint(pixelData, 108, "bread.png", (x, y, rand) -> {
+            if (x >= 3 && x <= 12 && y >= 5 && y <= 10) {
+                if (y == 5 || (x % 3 == 0 && y == 6)) return rgba(150, 85, 30, 255); // Crust
+                return rgba(205, 150, 60, 255); // Bread loaf
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 109: Leather
+        loadOrPaint(pixelData, 109, "leather.png", (x, y, rand) -> {
+            float dx = Math.abs(x - 7.5f), dy = Math.abs(y - 7.5f);
+            if (dx <= 5 && dy <= 5 && (dx + dy <= 8)) {
+                return rgba(155 + rand.nextInt(20), 85 + rand.nextInt(15), 45, 255);
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
+        // 110: Feather
+        loadOrPaint(pixelData, 110, "feather.png", (x, y, rand) -> {
+            if (Math.abs(x - y) <= 1.0f && x >= 3 && x <= 12) {
+                if (x == y) return rgba(180, 180, 180, 255); // Shaft
+                return rgba(245, 245, 250, 255); // Feather vane
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
         for (int y = 0; y < ATLAS_SIZE; y++) {
             buffer.put(pixelData[y]);
         }

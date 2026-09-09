@@ -86,6 +86,17 @@ public class Chunk {
     public void rebuildMesh() {
         List<Float> vertices = new ArrayList<>();
 
+        List<int[]> torches = new ArrayList<>();
+        for (int y = 0; y < SIZE_Y; y++) {
+            for (int z = 0; z < SIZE_Z; z++) {
+                for (int x = 0; x < SIZE_X; x++) {
+                    if (getBlock(x, y, z) == BlockType.TORCH) {
+                        torches.add(new int[]{x, y, z});
+                    }
+                }
+            }
+        }
+
         for (int y = 0; y < SIZE_Y; y++) {
             for (int z = 0; z < SIZE_Z; z++) {
                 for (int x = 0; x < SIZE_X; x++) {
@@ -96,29 +107,36 @@ public class Chunk {
                     float wy = y;
                     float wz = getWorldStartZ() + z;
 
+                    if (type == BlockType.TORCH) {
+                        addTorch(vertices, wx, wy, wz);
+                        continue;
+                    }
+
+                    float boost = getTorchLightBoost(torches, x, y, z);
+
                     // Top (+Y)
                     if (shouldRenderFace(x, y + 1, z, type)) {
-                        addFace(vertices, wx, wy, wz, BlockType.Face.TOP, type, 1.0f);
+                        addFace(vertices, wx, wy, wz, BlockType.Face.TOP, type, Math.min(1.0f, 1.0f + boost));
                     }
                     // Bottom (-Y)
                     if (shouldRenderFace(x, y - 1, z, type)) {
-                        addFace(vertices, wx, wy, wz, BlockType.Face.BOTTOM, type, 0.5f);
+                        addFace(vertices, wx, wy, wz, BlockType.Face.BOTTOM, type, Math.min(1.0f, 0.5f + boost));
                     }
                     // North (-Z)
                     if (shouldRenderFace(x, y, z - 1, type)) {
-                        addFace(vertices, wx, wy, wz, BlockType.Face.NORTH, type, 0.7f);
+                        addFace(vertices, wx, wy, wz, BlockType.Face.NORTH, type, Math.min(1.0f, 0.7f + boost));
                     }
                     // South (+Z)
                     if (shouldRenderFace(x, y, z + 1, type)) {
-                        addFace(vertices, wx, wy, wz, BlockType.Face.SOUTH, type, 0.7f);
+                        addFace(vertices, wx, wy, wz, BlockType.Face.SOUTH, type, Math.min(1.0f, 0.7f + boost));
                     }
                     // West (-X)
                     if (shouldRenderFace(x - 1, y, z, type)) {
-                        addFace(vertices, wx, wy, wz, BlockType.Face.WEST, type, 0.8f);
+                        addFace(vertices, wx, wy, wz, BlockType.Face.WEST, type, Math.min(1.0f, 0.8f + boost));
                     }
                     // East (+X)
                     if (shouldRenderFace(x + 1, y, z, type)) {
-                        addFace(vertices, wx, wy, wz, BlockType.Face.EAST, type, 0.8f);
+                        addFace(vertices, wx, wy, wz, BlockType.Face.EAST, type, Math.min(1.0f, 0.8f + boost));
                     }
                 }
             }
@@ -229,6 +247,81 @@ public class Chunk {
                 addVertex(v, x + 1, y, z + 1, u0, v1, light);
             }
         }
+    }
+
+    private float getTorchLightBoost(List<int[]> torches, int x, int y, int z) {
+        float maxBoost = 0.0f;
+        for (int[] t : torches) {
+            int dx = x - t[0];
+            int dy = y - t[1];
+            int dz = z - t[2];
+            int distSq = dx * dx + dy * dy + dz * dz;
+            if (distSq <= 49) {
+                float dist = (float) Math.sqrt(distSq);
+                float boost = (1.0f - dist / 7.0f) * 0.6f;
+                if (boost > maxBoost) {
+                    maxBoost = boost;
+                }
+            }
+        }
+        return maxBoost;
+    }
+
+    private void addTorch(List<Float> v, float x, float y, float z) {
+        float x0 = x + 0.4f, x1 = x + 0.6f;
+        float y0 = y, y1 = y + 0.65f;
+        float z0 = z + 0.4f, z1 = z + 0.6f;
+        float[] uv = TextureAtlas.getUVs(BlockType.TORCH.getTexture(BlockType.Face.NORTH));
+        float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
+        float light = 1.0f;
+
+        // Top face
+        addVertex(v, x0, y1, z0, u0, v0, light);
+        addVertex(v, x0, y1, z1, u0, v1, light);
+        addVertex(v, x1, y1, z1, u1, v1, light);
+        addVertex(v, x0, y1, z0, u0, v0, light);
+        addVertex(v, x1, y1, z1, u1, v1, light);
+        addVertex(v, x1, y1, z0, u1, v0, light);
+
+        // Bottom face
+        addVertex(v, x0, y0, z0, u0, v0, light);
+        addVertex(v, x1, y0, z0, u1, v0, light);
+        addVertex(v, x1, y0, z1, u1, v1, light);
+        addVertex(v, x0, y0, z0, u0, v0, light);
+        addVertex(v, x1, y0, z1, u1, v1, light);
+        addVertex(v, x0, y0, z1, u0, v1, light);
+
+        // North (-Z)
+        addVertex(v, x0, y0, z0, u1, v1, light);
+        addVertex(v, x0, y1, z0, u1, v0, light);
+        addVertex(v, x1, y1, z0, u0, v0, light);
+        addVertex(v, x0, y0, z0, u1, v1, light);
+        addVertex(v, x1, y1, z0, u0, v0, light);
+        addVertex(v, x1, y0, z0, u0, v1, light);
+
+        // South (+Z)
+        addVertex(v, x0, y0, z1, u0, v1, light);
+        addVertex(v, x1, y0, z1, u1, v1, light);
+        addVertex(v, x1, y1, z1, u1, v0, light);
+        addVertex(v, x0, y0, z1, u0, v1, light);
+        addVertex(v, x1, y1, z1, u1, v0, light);
+        addVertex(v, x0, y1, z1, u0, v0, light);
+
+        // West (-X)
+        addVertex(v, x0, y0, z1, u1, v1, light);
+        addVertex(v, x0, y1, z1, u1, v0, light);
+        addVertex(v, x0, y1, z0, u0, v0, light);
+        addVertex(v, x0, y0, z1, u1, v1, light);
+        addVertex(v, x0, y1, z0, u0, v0, light);
+        addVertex(v, x0, y0, z0, u0, v1, light);
+
+        // East (+X)
+        addVertex(v, x1, y0, z0, u1, v1, light);
+        addVertex(v, x1, y1, z0, u1, v0, light);
+        addVertex(v, x1, y1, z1, u0, v0, light);
+        addVertex(v, x1, y0, z0, u1, v1, light);
+        addVertex(v, x1, y1, z1, u0, v0, light);
+        addVertex(v, x1, y0, z1, u0, v1, light);
     }
 
     private void addVertex(List<Float> v, float x, float y, float z, float u, float valV, float light) {

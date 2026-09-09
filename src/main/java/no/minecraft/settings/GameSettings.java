@@ -35,6 +35,7 @@ public class GameSettings {
     public int keySneak = GLFW_KEY_LEFT_SHIFT;
     public int keyInventory = GLFW_KEY_E;
     public int keyToggleDebug = GLFW_KEY_F3;
+    public int keyTogglePerspective = GLFW_KEY_F5;
 
     // Mouse Sensitivity (default 0.12f, displayed as 100%)
     private float mouseSensitivity = 0.12f;

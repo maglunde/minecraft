@@ -890,8 +890,8 @@ public class HUD {
             addRect(geom, 0, 0, windowWidth, windowHeight, 0, 0, 0, 0, 0.85f, 0.08f, 0.08f, alpha);
         }
 
-        // 2. Minecraft Crosshair in center (only when inventory is closed)
-        if (!isInventoryOpen()) {
+        // 2. Minecraft Crosshair in center (only when inventory is closed and not in front third person)
+        if (!isInventoryOpen() && player.getCamera().getPerspective() != no.minecraft.player.Perspective.THIRD_PERSON_FRONT) {
             float cx = windowWidth / 2.0f;
             float cy = windowHeight / 2.0f;
             if (showDebugInfo) {
@@ -981,9 +981,20 @@ public class HUD {
 
             // --- B. Hunger Bar (10 Drumsticks on right) ---
             float hungerY = hy - 18.0f * pScale;
+            int hungerVal = player.getHunger();
             for (int i = 0; i < 10; i++) {
                 float drumX = hx + hotbarW - (10 - i) * (8.0f * pScale) - 1.0f * pScale;
-                drawPixelDrumstick(geom, drumX, hungerY, pScale);
+                int state = 0;
+                int threshold = (i + 1) * 2;
+                if (hungerVal >= threshold) {
+                    state = 2; // Full
+                } else if (hungerVal == threshold - 1) {
+                    state = 1; // Half
+                }
+                // Low hunger shake
+                float shakeY = (hungerVal <= 6 && ((int)(System.currentTimeMillis() / 90) + i) % 3 == 0)
+                        ? (1.5f * pScale) : 0.0f;
+                drawPixelDrumstick(geom, drumX, hungerY + shakeY, pScale, state);
             }
 
             // --- C. Experience (XP) Bar in center ---
@@ -1598,8 +1609,8 @@ public class HUD {
         }
     }
 
-    private void drawPixelDrumstick(List<Float> g, float x, float y, float p) {
-        // 9x9 Pixel Drumstick matching Minecraft reference image 2
+    private void drawPixelDrumstick(List<Float> g, float x, float y, float p, int state) {
+        // 9x9 Pixel Drumstick matching Minecraft
         int[][] pat = {
                 {0,0,0,0,1,1,1,0,0},
                 {0,0,0,1,3,2,2,1,0},
@@ -1622,14 +1633,26 @@ public class HUD {
 
                 if (c == 1) {
                     addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.08f, 0.08f, 0.08f, 1.0f); // Border
-                } else if (c == 2) {
-                    addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.58f, 0.35f, 0.18f, 1.0f); // Meat brown
-                } else if (c == 3) {
-                    addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.88f, 0.35f, 0.35f, 1.0f); // Meat sheen / red
-                } else if (c == 4) {
-                    addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.38f, 0.22f, 0.10f, 1.0f); // Dark shadow
                 } else if (c == 5) {
                     addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.95f, 0.90f, 0.82f, 1.0f); // Bone white
+                } else {
+                    // Meat (c == 2, 3, 4)
+                    if (state == 0) {
+                        // Empty drumstick: dark background
+                        addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.18f, 0.12f, 0.08f, 0.35f);
+                    } else if (state == 1 && px < 4) {
+                        // Half drumstick: left half is empty
+                        addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.18f, 0.12f, 0.08f, 0.35f);
+                    } else {
+                        // Full or right half
+                        if (c == 2) {
+                            addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.58f, 0.35f, 0.18f, 1.0f); // Meat brown
+                        } else if (c == 3) {
+                            addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.88f, 0.35f, 0.35f, 1.0f); // Meat sheen
+                        } else if (c == 4) {
+                            addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.38f, 0.22f, 0.10f, 1.0f); // Dark shadow
+                        }
+                    }
                 }
             }
         }
@@ -2106,6 +2129,7 @@ public class HUD {
         leftLines.add(String.format(java.util.Locale.ROOT, "Block: %d %d %d", bx, by, bz));
         leftLines.add(String.format(java.util.Locale.ROOT, "Chunk: %d %d %d [%d %d %d in chunk]", cx, cy, cz, inCx, inCy, inCz));
         leftLines.add(String.format(java.util.Locale.ROOT, "Facing: %s (%s) (%.1f / %.1f)", facing, toward, yaw, pitch));
+        leftLines.add(String.format("Camera: %s", player.getCamera().getPerspective().name()));
         leftLines.add(String.format("Dimension: %s", world.getCurrentDimension().name().toLowerCase()));
         leftLines.add(String.format("Biome: %s", world.getBiomeName(bx, by, bz)));
         leftLines.add(String.format(java.util.Locale.ROOT, "Light: %d (%d sky, %d block)", light, skyLight, 0));

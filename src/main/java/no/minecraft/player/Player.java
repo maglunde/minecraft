@@ -11,11 +11,13 @@ public class Player {
     public static final float WIDTH = 0.6f;
     public static final float HEIGHT = 1.8f;
     public static final float EYE_HEIGHT = 1.62f;
+    public static final float SNEAK_EYE_HEIGHT = 1.42f;
 
     public static final float GRAVITY = -26.0f;
     public static final float JUMP_SPEED = 8.5f;
     public static final float WALK_SPEED = 4.8f;
     public static final float SPRINT_SPEED = 7.5f;
+    public static final float SNEAK_SPEED = 1.6f;
     public static final float FLY_SPEED = 12.0f;
 
     public static final int MAX_HEALTH = 20;
@@ -53,7 +55,17 @@ public class Player {
     private float jumpBufferTimer = 0.0f;
     private float coyoteTimer = 0.0f;
     private boolean isSprinting = false;
+    private boolean isSneaking = false;
+    private float walkAnimTime = 0.0f;
+    private float swingProgress = 0.0f;
     private float lavaBurnTimer = 0.0f;
+
+    // Hunger System
+    private int hunger = 20;
+    private float saturation = 5.0f;
+    private float exhaustion = 0.0f;
+    private float regenTimer = 0.0f;
+    private float starveTimer = 0.0f;
 
     public Player(World world, float startX, float startY, float startZ) {
         this.world = world;
@@ -65,8 +77,9 @@ public class Player {
 
     public void update(float dt, boolean forward, boolean backward, boolean left, boolean right,
                        boolean jump, boolean sneak, boolean sprint) {
-        this.isSprinting = sprint && forward;
-        float baseSpeed = isSprinting ? SPRINT_SPEED : WALK_SPEED;
+        this.isSneaking = sneak && !flying;
+        this.isSprinting = sprint && forward && !isSneaking;
+        float baseSpeed = isSneaking ? SNEAK_SPEED : (isSprinting ? SPRINT_SPEED : WALK_SPEED);
         // Soul Sand speed reduction
         int currX = (int) Math.floor(position.x);
         int currY = (int) Math.floor(position.y);
@@ -214,8 +227,61 @@ public class Player {
             die();
         }
 
-        // Keep camera at eye position
-        camera.getPosition().set(position.x, position.y + EYE_HEIGHT, position.z);
+        // Walk animation timer
+        float horizSpeed = (float) Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+        if (onGround && horizSpeed > 0.1f) {
+            walkAnimTime += dt * (isSprinting ? 12.0f : 7.0f);
+        }
+
+        // Swing animation timer
+        if (swingProgress > 0.0f) {
+            swingProgress += dt / 0.25f;
+            if (swingProgress >= 1.0f) {
+                swingProgress = 0.0f;
+            }
+        }
+
+        // Hunger & Exhaustion processing
+        if (isSprinting) {
+            exhaustion += 0.08f * dt;
+        }
+
+        if (exhaustion >= 4.0f) {
+            exhaustion -= 4.0f;
+            if (saturation > 0.0f) {
+                saturation = Math.max(0.0f, saturation - 1.0f);
+            } else if (gameMode == GameMode.SURVIVAL) {
+                hunger = Math.max(0, hunger - 1);
+            }
+        }
+
+        if (gameMode == GameMode.SURVIVAL) {
+            // Natural regeneration when hunger >= 18
+            if (health < MAX_HEALTH && hunger >= 18) {
+                regenTimer += dt;
+                if (regenTimer >= 4.0f) {
+                    regenTimer = 0.0f;
+                    health = Math.min(MAX_HEALTH, health + 1);
+                    exhaustion += 2.0f;
+                }
+            } else {
+                regenTimer = 0.0f;
+            }
+
+            // Starvation damage when hunger is 0
+            if (hunger <= 0) {
+                starveTimer += dt;
+                if (starveTimer >= 4.0f) {
+                    starveTimer = 0.0f;
+                    damage(1);
+                }
+            } else {
+                starveTimer = 0.0f;
+            }
+        }
+
+        // Update camera position
+        camera.updatePosition(world, position.x, position.y + getEyeHeight(), position.z);
     }
 
     public void damage(int amount) {
@@ -472,7 +538,7 @@ public class Player {
         this.position.set(x, y, z);
         this.velocity.set(0, 0, 0);
         this.health = MAX_HEALTH;
-        this.camera.getPosition().set(x, y + EYE_HEIGHT, z);
+        this.camera.updatePosition(world, x, y + getEyeHeight(), z);
         this.camera.updateVectors();
         this.inventory.clear();
         this.selectedSlot = 0;
@@ -490,7 +556,7 @@ public class Player {
             this.position.set(safe);
             this.spawnPosition.set(safe);
             this.velocity.set(0, 0, 0);
-            this.camera.getPosition().set(safe.x, safe.y + EYE_HEIGHT, safe.z);
+            this.camera.updatePosition(world, safe.x, safe.y + getEyeHeight(), safe.z);
             this.camera.updateVectors();
         }
     }
@@ -498,7 +564,51 @@ public class Player {
     public void teleportTo(float x, float y, float z) {
         this.position.set(x, y, z);
         this.velocity.set(0, 0, 0);
-        this.camera.getPosition().set(x, y + EYE_HEIGHT, z);
+        this.camera.updatePosition(world, x, y + getEyeHeight(), z);
         this.camera.updateVectors();
+    }
+
+    public float getEyeHeight() {
+        return isSneaking ? SNEAK_EYE_HEIGHT : EYE_HEIGHT;
+    }
+
+    public Vector3f getEyePosition() {
+        return camera.getEyePosition();
+    }
+
+    public boolean isSneaking() {
+        return isSneaking;
+    }
+
+    public void swing() {
+        if (swingProgress <= 0.0f) {
+            swingProgress = 0.001f;
+        }
+    }
+
+    public float getSwingProgress() {
+        return swingProgress;
+    }
+
+    public float getWalkAnimTime() {
+        return walkAnimTime;
+    }
+
+    public int getHunger() {
+        return hunger;
+    }
+
+    public void setHunger(int h) {
+        this.hunger = Math.clamp(h, 0, 20);
+    }
+
+    public boolean eatFood(BlockType food) {
+        if (food == null || !food.isFood()) return false;
+        if (gameMode == GameMode.SURVIVAL && hunger >= 20) return false;
+        int fv = food.getFoodValue();
+        hunger = Math.min(20, hunger + fv);
+        saturation = Math.min(20.0f, saturation + fv * 0.8f);
+        no.minecraft.sound.SoundManager.getInstance().play("pop", 1.0f);
+        return true;
     }
 }

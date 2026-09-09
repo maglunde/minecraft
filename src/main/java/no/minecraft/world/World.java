@@ -460,17 +460,32 @@ public class World {
         }
     }
 
-    public boolean isDarkAt(int x, int y, int z) {
-        if (currentDimension != Dimension.OVERWORLD) return true;
-        boolean openToSky = true;
+    public boolean isOpenToSky(int x, int y, int z) {
+        if (currentDimension != Dimension.OVERWORLD) return false;
         for (int checkY = y + 1; checkY < Chunk.SIZE_Y; checkY++) {
             BlockType b = getBlock(x, checkY, z);
             if (b != BlockType.AIR && !b.isTransparent()) {
-                openToSky = false;
-                break;
+                return false;
             }
         }
-        return openToSky ? isNight() : true;
+        return true;
+    }
+
+    public boolean isDarkAt(int x, int y, int z) {
+        if (currentDimension != Dimension.OVERWORLD) return true;
+        // Torches prevent darkness in an area of radius 6
+        for (int dx = -5; dx <= 5; dx++) {
+            for (int dy = -4; dy <= 4; dy++) {
+                for (int dz = -5; dz <= 5; dz++) {
+                    if (dx * dx + dy * dy + dz * dz <= 25) {
+                        if (getBlock(x + dx, y + dy, z + dz) == BlockType.TORCH) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        return isOpenToSky(x, y, z) ? isNight() : true;
     }
 
     public void update(float dt, Player player) {
@@ -543,15 +558,21 @@ public class World {
             if (i < mobs.size()) {
                 if (mob.isDead() && mob.getType() != no.minecraft.entity.MobType.ENDER_DRAGON) {
                     mobs.remove(i);
-                } else if (mob.getPosition().distance(player.getPosition()) > 75.0f && mob.getType() != no.minecraft.entity.MobType.ENDER_DRAGON) {
-                    mobs.remove(i);
+                } else if (mob.getType() != no.minecraft.entity.MobType.ENDER_DRAGON && mob.getType() != no.minecraft.entity.MobType.END_CRYSTAL) {
+                    float dist = mob.getPosition().distance(player.getPosition());
+                    if (mob.getType().isHostile() && dist > 75.0f) {
+                        mobs.remove(i);
+                    } else if (mob.getType().isPassive() && dist > 120.0f) {
+                        mobs.remove(i);
+                    }
                 }
             }
         }
 
         if (shouldClearHostileMobs) {
             shouldClearHostileMobs = false;
-            mobs.removeIf(mob -> mob.getType() != no.minecraft.entity.MobType.ENDER_DRAGON &&
+            mobs.removeIf(mob -> mob.getType().isHostile() &&
+                                 mob.getType() != no.minecraft.entity.MobType.ENDER_DRAGON &&
                                  mob.getType() != no.minecraft.entity.MobType.END_CRYSTAL);
         }
 
@@ -586,15 +607,32 @@ public class World {
         }
 
         if (currentDimension == Dimension.OVERWORLD) {
-            if (groundY > 1 && groundY < 50 && isDarkAt(bx, groundY, bz)) {
-                no.minecraft.entity.MobType[] types = {
-                        no.minecraft.entity.MobType.ZOMBIE,
-                        no.minecraft.entity.MobType.CREEPER,
-                        no.minecraft.entity.MobType.SPIDER,
-                        no.minecraft.entity.MobType.SKELETON,
-                        no.minecraft.entity.MobType.ENDERMAN
-                };
-                spawnMob(types[rand.nextInt(types.length)], mx, groundY + 0.05f, mz);
+            if (groundY > 1 && groundY < 55) {
+                if (isDarkAt(bx, groundY, bz)) {
+                    no.minecraft.entity.MobType[] types = {
+                            no.minecraft.entity.MobType.ZOMBIE,
+                            no.minecraft.entity.MobType.CREEPER,
+                            no.minecraft.entity.MobType.SPIDER,
+                            no.minecraft.entity.MobType.SKELETON,
+                            no.minecraft.entity.MobType.ENDERMAN
+                    };
+                    spawnMob(types[rand.nextInt(types.length)], mx, groundY + 0.05f, mz);
+                } else {
+                    // Daytime / lit surface: spawn passive farm animals on grass
+                    BlockType surfaceBlock = getBlock(bx, groundY - 1, bz);
+                    if (surfaceBlock == BlockType.GRASS) {
+                        long passiveCount = mobs.stream().filter(m -> m.getType().isPassive()).count();
+                        if (passiveCount < 10) {
+                            no.minecraft.entity.MobType[] passiveTypes = {
+                                    no.minecraft.entity.MobType.PIG,
+                                    no.minecraft.entity.MobType.COW,
+                                    no.minecraft.entity.MobType.SHEEP,
+                                    no.minecraft.entity.MobType.CHICKEN
+                            };
+                            spawnMob(passiveTypes[rand.nextInt(passiveTypes.length)], mx, groundY + 0.05f, mz);
+                        }
+                    }
+                }
             }
         } else if (currentDimension == Dimension.NETHER) {
             // Check for nearby active Blaze spawners (within 16 blocks)
@@ -703,9 +741,13 @@ public class World {
                 // Bedrock at y = 0
                 chunk.setBlock(lx, 0, lz, BlockType.BEDROCK);
 
-                // Underground stone layers
+                // Underground stone layers, caves and ores
                 for (int y = 1; y < height - 3; y++) {
-                    chunk.setBlock(lx, y, lz, BlockType.STONE);
+                    if (isOverworldCave(wx, y, wz, height)) {
+                        chunk.setBlock(lx, y, lz, (y <= 3) ? BlockType.LAVA : BlockType.AIR);
+                    } else {
+                        chunk.setBlock(lx, y, lz, getUndergroundBlock(wx, y, wz));
+                    }
                 }
 
                 // Biome-specific surface layers
@@ -772,6 +814,61 @@ public class World {
         if (chunk.getChunkX() == 3 && chunk.getChunkZ() == 3) {
             buildStrongholdPortalRoom(chunk);
         }
+    }
+
+    private boolean isOverworldCave(int wx, int y, int wz, int height) {
+        if (y <= 1 || y >= height - 3) return false;
+        if (height <= SEA_LEVEL && y >= height - 6) return false;
+
+        double sx = wx + offsetX;
+        double sz = wz + offsetZ;
+
+        // Two continuous 3D worm noise tunnels
+        double n1 = Math.sin(sx * 0.08 + y * 0.12) * Math.cos(sz * 0.08) + Math.sin(y * 0.07) * 0.4;
+        double n2 = Math.cos(sx * 0.08) * Math.sin(sz * 0.08 + y * 0.12) + Math.cos((sx + sz) * 0.05) * 0.4;
+
+        return (n1 * n1 + n2 * n2) < 0.06;
+    }
+
+    private BlockType getUndergroundBlock(int wx, int y, int wz) {
+        int cx2 = Math.floorDiv(wx, 2);
+        int cy2 = Math.floorDiv(y, 2);
+        int cz2 = Math.floorDiv(wz, 2);
+
+        long clusterHash = ((long) cx2 * 3129871L) ^ ((long) cz2 * 116129781L) ^ ((long) cy2 * 8429183L) ^ seed;
+        clusterHash = (clusterHash ^ (clusterHash >> 16)) * 0x45d9f3bL;
+        clusterHash = clusterHash ^ (clusterHash >> 16);
+        int clusterType = (int) Math.abs(clusterHash % 1000);
+
+        long blockHash = ((long) wx * 918273L) ^ ((long) wz * 482917L) ^ ((long) y * 182739L);
+        int blockVar = (int) Math.abs(blockHash % 10);
+
+        // Diamond Ore: Deep underground (y <= 14), rare
+        if (y <= 14 && clusterType >= 10 && clusterType <= 13 && blockVar < 7) {
+            return BlockType.DIAMOND_ORE;
+        }
+
+        // Gold Ore: Deep underground (y <= 24), uncommon
+        if (y <= 24 && clusterType >= 20 && clusterType <= 28 && blockVar < 7) {
+            return BlockType.GOLD_ORE;
+        }
+
+        // Iron Ore: From y = 2 to y = 42, frequent
+        if (y <= 42 && clusterType >= 40 && clusterType <= 85 && blockVar < 8) {
+            return BlockType.IRON_ORE;
+        }
+
+        // Coal Ore: Abundant anywhere underground
+        if (clusterType >= 100 && clusterType <= 170 && blockVar < 8) {
+            return BlockType.COAL_ORE;
+        }
+
+        // Gravel pockets: underground gravel veins
+        if (clusterType >= 180 && clusterType <= 195) {
+            return BlockType.GRAVEL;
+        }
+
+        return BlockType.STONE;
     }
 
     private void buildStrongholdPortalRoom(Chunk chunk) {

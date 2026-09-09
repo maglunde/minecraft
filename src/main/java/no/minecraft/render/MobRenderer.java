@@ -254,6 +254,80 @@ public class MobRenderer {
                 addBox(verts, x - 2.8f, y + 0.9f + wingFlap, z - 0.8f, 2.2f, 0.08f, 1.8f, 0.22f, 0.18f, 0.24f);
                 // Right Wing
                 addBox(verts, x + 0.65f, y + 0.9f - wingFlap, z - 0.8f, 2.2f, 0.08f, 1.8f, 0.22f, 0.18f, 0.24f);
+
+            } else if (mt == MobType.PIG) {
+                float pr = hurt ? 1.0f : 0.95f;
+                float pg = hurt ? 0.3f : 0.65f;
+                float pb = hurt ? 0.3f : 0.65f;
+
+                // Body
+                addBox(verts, x - 0.28f, y + 0.32f, z - 0.42f, 0.56f, 0.48f, 0.84f, pr, pg, pb);
+                // Head
+                addBox(verts, x - 0.22f, y + 0.40f, z + 0.36f, 0.44f, 0.44f, 0.38f, pr, pg, pb);
+                // Snout
+                addBox(verts, x - 0.11f, y + 0.46f, z + 0.72f, 0.22f, 0.14f, 0.08f, pr * 0.92f, pg * 0.85f, pb * 0.85f);
+                // Eyes
+                addBox(verts, x - 0.18f, y + 0.66f, z + 0.72f, 0.06f, 0.06f, 0.02f, 0.1f, 0.1f, 0.1f);
+                addBox(verts, x + 0.12f, y + 0.66f, z + 0.72f, 0.06f, 0.06f, 0.02f, 0.1f, 0.1f, 0.1f);
+                // 4 Legs
+                addBox(verts, x - 0.25f, y, z - 0.36f, 0.18f, 0.32f, 0.18f, pr * 0.9f, pg * 0.9f, pb * 0.9f);
+                addBox(verts, x + 0.07f, y, z - 0.36f, 0.18f, 0.32f, 0.18f, pr * 0.9f, pg * 0.9f, pb * 0.9f);
+                addBox(verts, x - 0.25f, y, z + 0.18f, 0.18f, 0.32f, 0.18f, pr * 0.9f, pg * 0.9f, pb * 0.9f);
+                addBox(verts, x + 0.07f, y, z + 0.18f, 0.18f, 0.32f, 0.18f, pr * 0.9f, pg * 0.9f, pb * 0.9f);
+
+            } else if (mt == MobType.COW) {
+                float cr = hurt ? 1.0f : 0.40f;
+                float cg = hurt ? 0.3f : 0.26f;
+                float cb = hurt ? 0.3f : 0.18f;
+
+                // Body
+                addBox(verts, x - 0.32f, y + 0.55f, z - 0.50f, 0.64f, 0.65f, 1.00f, cr, cg, cb);
+                // White patch on body
+                addBox(verts, x - 0.33f, y + 0.65f, z - 0.20f, 0.66f, 0.40f, 0.45f, 0.92f, 0.92f, 0.92f);
+                // Head
+                addBox(verts, x - 0.21f, y + 0.85f, z + 0.45f, 0.42f, 0.42f, 0.38f, cr, cg, cb);
+                // Muzzle (white)
+                addBox(verts, x - 0.14f, y + 0.88f, z + 0.78f, 0.28f, 0.18f, 0.08f, 0.88f, 0.88f, 0.85f);
+                // Horns (grey)
+                addBox(verts, x - 0.28f, y + 1.25f, z + 0.50f, 0.08f, 0.15f, 0.08f, 0.75f, 0.75f, 0.75f);
+                addBox(verts, x + 0.20f, y + 1.25f, z + 0.50f, 0.08f, 0.15f, 0.08f, 0.75f, 0.75f, 0.75f);
+                // 4 Legs
+                addBox(verts, x - 0.28f, y, z - 0.42f, 0.18f, 0.55f, 0.18f, cr * 0.85f, cg * 0.85f, cb * 0.85f);
+                addBox(verts, x + 0.10f, y, z - 0.42f, 0.18f, 0.55f, 0.18f, cr * 0.85f, cg * 0.85f, cb * 0.85f);
+                addBox(verts, x - 0.28f, y, z + 0.24f, 0.18f, 0.55f, 0.18f, cr * 0.85f, cg * 0.85f, cb * 0.85f);
+                addBox(verts, x + 0.10f, y, z + 0.24f, 0.18f, 0.55f, 0.18f, cr * 0.85f, cg * 0.85f, cb * 0.85f);
+
+            } else if (mt == MobType.SHEEP) {
+                float sr = hurt ? 1.0f : 0.92f;
+                float sg = hurt ? 0.3f : 0.92f;
+                float sb = hurt ? 0.3f : 0.92f;
+
+                // Fleece Body
+                addBox(verts, x - 0.34f, y + 0.55f, z - 0.48f, 0.68f, 0.65f, 0.96f, sr, sg, sb);
+                // Head (tan skin)
+                addBox(verts, x - 0.18f, y + 0.75f, z + 0.45f, 0.36f, 0.38f, 0.36f, 0.85f, 0.74f, 0.68f);
+                // 4 Legs (tan skin)
+                addBox(verts, x - 0.26f, y, z - 0.40f, 0.16f, 0.55f, 0.16f, 0.85f, 0.74f, 0.68f);
+                addBox(verts, x + 0.10f, y, z - 0.40f, 0.16f, 0.55f, 0.16f, 0.85f, 0.74f, 0.68f);
+                addBox(verts, x - 0.26f, y, z + 0.24f, 0.16f, 0.55f, 0.16f, 0.85f, 0.74f, 0.68f);
+                addBox(verts, x + 0.10f, y, z + 0.24f, 0.16f, 0.55f, 0.16f, 0.85f, 0.74f, 0.68f);
+
+            } else if (mt == MobType.CHICKEN) {
+                float chr = hurt ? 1.0f : 0.95f;
+                float chg = hurt ? 0.3f : 0.95f;
+                float chb = hurt ? 0.3f : 0.95f;
+
+                // Body
+                addBox(verts, x - 0.18f, y + 0.22f, z - 0.22f, 0.36f, 0.28f, 0.44f, chr, chg, chb);
+                // Head
+                addBox(verts, x - 0.11f, y + 0.38f, z + 0.16f, 0.22f, 0.28f, 0.20f, chr, chg, chb);
+                // Yellow Beak
+                addBox(verts, x - 0.05f, y + 0.50f, z + 0.34f, 0.10f, 0.08f, 0.10f, 0.95f, 0.75f, 0.10f);
+                // Red Wattle
+                addBox(verts, x - 0.03f, y + 0.42f, z + 0.32f, 0.06f, 0.10f, 0.06f, 0.90f, 0.15f, 0.15f);
+                // 2 Yellow Legs
+                addBox(verts, x - 0.10f, y, z - 0.04f, 0.06f, 0.22f, 0.06f, 0.95f, 0.75f, 0.10f);
+                addBox(verts, x + 0.04f, y, z - 0.04f, 0.06f, 0.22f, 0.06f, 0.95f, 0.75f, 0.10f);
             }
         }
 
