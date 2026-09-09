@@ -114,13 +114,20 @@ public class Main {
     }
 
     public void run() {
-        init();
-        loop();
-        cleanup();
+        try {
+            init();
+            loop();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            cleanup();
+        }
     }
 
+    private GLFWErrorCallback errorCallback;
+
     private void init() {
-        GLFWErrorCallback.createPrint(System.err).set();
+        errorCallback = GLFWErrorCallback.createPrint(System.err).set();
 
         if (!glfwInit()) {
             throw new IllegalStateException("Failed to initialize GLFW");
@@ -163,9 +170,6 @@ public class Main {
             this.windowHeight = h;
         });
 
-        // Setup mouse and keyboard input
-        setupInput();
-
         glfwMakeContextCurrent(window);
         glfwSwapInterval(1); // Enable VSync
         glfwShowWindow(window);
@@ -193,6 +197,9 @@ public class Main {
         world = new World();
         Vector3f spawn = world.getSpawnPoint();
         player = new Player(world, spawn.x, spawn.y, spawn.z);
+
+        // Wire input callbacks only after all game state exists (callbacks dereference it immediately)
+        setupInput();
 
         // Show cursor in menu
         setCursorLocked(false);
@@ -1302,31 +1309,37 @@ public class Main {
     }
 
     private void cleanup() {
-        if (!mainMenu.isInMenu() && mainMenu.getActiveWorldInfo() != null) {
-            no.minecraft.world.save.WorldSaveManager.saveWorld(world, player, mainMenu.getActiveWorldInfo());
+        // Emergency save: runs on normal exit AND on exceptions, so pending world state is not lost
+        if (mainMenu != null && !mainMenu.isInMenu() && mainMenu.getActiveWorldInfo() != null) {
+            try {
+                no.minecraft.world.save.WorldSaveManager.saveWorld(world, player, mainMenu.getActiveWorldInfo());
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
-        if (pauseMenu != null) {
-            pauseMenu.cleanup();
-        }
-        mainMenu.cleanup();
-        hud.cleanup();
-        skyRenderer.cleanup();
-        miningOverlay.cleanup();
-        mobRenderer.cleanup();
-        itemRenderer.cleanup();
-        if (handRenderer != null) {
-            handRenderer.cleanup();
-        }
-        if (playerRenderer != null) {
-            playerRenderer.cleanup();
-        }
-        blockOutline.cleanup();
-        worldShader.cleanup();
-        atlas.cleanup();
-        world.cleanup();
+        if (pauseMenu != null) pauseMenu.cleanup();
+        if (mainMenu != null) mainMenu.cleanup();
+        if (hud != null) hud.cleanup();
+        if (skyRenderer != null) skyRenderer.cleanup();
+        if (miningOverlay != null) miningOverlay.cleanup();
+        if (mobRenderer != null) mobRenderer.cleanup();
+        if (itemRenderer != null) itemRenderer.cleanup();
+        if (handRenderer != null) handRenderer.cleanup();
+        if (playerRenderer != null) playerRenderer.cleanup();
+        if (blockOutline != null) blockOutline.cleanup();
+        if (worldShader != null) worldShader.cleanup();
+        if (atlas != null) atlas.cleanup();
+        if (world != null) world.cleanup();
         no.minecraft.sound.SoundManager.getInstance().cleanup();
 
-        glfwDestroyWindow(window);
+        if (window != NULL) {
+            glfwDestroyWindow(window);
+            window = NULL;
+        }
         glfwTerminate();
+        if (errorCallback != null) {
+            errorCallback.free();
+            errorCallback = null;
+        }
     }
 }
