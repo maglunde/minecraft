@@ -7,9 +7,7 @@ import no.minecraft.world.World;
 import no.minecraft.world.save.WorldInfo;
 import no.minecraft.world.save.WorldSaveManager;
 import org.joml.Matrix4f;
-import org.lwjgl.BufferUtils;
 
-import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,6 +16,8 @@ import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL15.*;
 import static org.lwjgl.opengl.GL20.*;
 import static org.lwjgl.opengl.GL30.*;
+import static no.minecraft.render.UiBatch.addRect;
+import static no.minecraft.render.UiBatch.addVertex;
 
 public class MainMenu {
     private final Shader shader;
@@ -902,108 +902,13 @@ public class MainMenu {
     }
 
     private void drawLetterBlock(List<Float> g, char ch, float x, float y, float s, float r, float gr, float b) {
-        ch = Character.toUpperCase(ch);
-        int[][] glyph = getGlyph(ch);
-        if (glyph == null) return;
-
-        for (int row = 0; row < glyph.length; row++) {
-            for (int col = 0; col < glyph[row].length; col++) {
-                if (glyph[row][col] == 1) {
-                    addRect(g, x + col * s, y + row * s, s, s, 0, 0, 0, 0, r, gr, b, 1.0f);
-                }
-            }
-        }
+        UiBatch.drawLetterBlock(g, ch, x, y, s, r, gr, b, 1.0f);
     }
 
-    private int[][] getGlyph(char c) {
-        return switch (c) {
-            case 'A' -> new int[][]{{0,1,1,0},{1,0,0,1},{1,1,1,1},{1,0,0,1},{1,0,0,1}};
-            case 'B' -> new int[][]{{1,1,1,0},{1,0,0,1},{1,1,1,0},{1,0,0,1},{1,1,1,0}};
-            case 'C' -> new int[][]{{0,1,1,1},{1,0,0,0},{1,0,0,0},{1,0,0,0},{0,1,1,1}};
-            case 'D' -> new int[][]{{1,1,1,0},{1,0,0,1},{1,0,0,1},{1,0,0,1},{1,1,1,0}};
-            case 'E' -> new int[][]{{1,1,1,1},{1,0,0,0},{1,1,1,0},{1,0,0,0},{1,1,1,1}};
-            case 'F' -> new int[][]{{1,1,1,1},{1,0,0,0},{1,1,1,0},{1,0,0,0},{1,0,0,0}};
-            case 'G' -> new int[][]{{0,1,1,1},{1,0,0,0},{1,0,1,1},{1,0,0,1},{0,1,1,1}};
-            case 'H' -> new int[][]{{1,0,0,1},{1,0,0,1},{1,1,1,1},{1,0,0,1},{1,0,0,1}};
-            case 'I' -> new int[][]{{1,1,1},{0,1,0},{0,1,0},{0,1,0},{1,1,1}};
-            case 'J' -> new int[][]{{0,0,1,1},{0,0,0,1},{0,0,0,1},{1,0,0,1},{0,1,1,0}};
-            case 'K' -> new int[][]{{1,0,0,1},{1,0,1,0},{1,1,0,0},{1,0,1,0},{1,0,0,1}};
-            case 'L' -> new int[][]{{1,0,0,0},{1,0,0,0},{1,0,0,0},{1,0,0,0},{1,1,1,1}};
-            case 'M' -> new int[][]{{1,0,0,0,1},{1,1,0,1,1},{1,0,1,0,1},{1,0,0,0,1},{1,0,0,0,1}};
-            case 'N' -> new int[][]{{1,0,0,1},{1,1,0,1},{1,0,1,1},{1,0,0,1},{1,0,0,1}};
-            case 'O' -> new int[][]{{0,1,1,0},{1,0,0,1},{1,0,0,1},{1,0,0,1},{0,1,1,0}};
-            case 'P' -> new int[][]{{1,1,1,0},{1,0,0,1},{1,1,1,0},{1,0,0,0},{1,0,0,0}};
-            case 'Q' -> new int[][]{{0,1,1,0},{1,0,0,1},{1,0,0,1},{1,0,1,0},{0,1,0,1}};
-            case 'R' -> new int[][]{{1,1,1,0},{1,0,0,1},{1,1,1,0},{1,0,1,0},{1,0,0,1}};
-            case 'S' -> new int[][]{{0,1,1,1},{1,0,0,0},{0,1,1,0},{0,0,0,1},{1,1,1,0}};
-            case 'T' -> new int[][]{{1,1,1,1,1},{0,0,1,0,0},{0,0,1,0,0},{0,0,1,0,0},{0,0,1,0,0}};
-            case 'U' -> new int[][]{{1,0,0,1},{1,0,0,1},{1,0,0,1},{1,0,0,1},{0,1,1,0}};
-            case 'V' -> new int[][]{{1,0,0,1},{1,0,0,1},{1,0,0,1},{0,1,1,0},{0,0,0,0}};
-            case 'W' -> new int[][]{{1,0,0,0,1},{1,0,0,0,1},{1,0,1,0,1},{1,1,0,1,1},{1,0,0,0,1}};
-            case 'X' -> new int[][]{{1,0,0,1},{1,0,0,1},{0,1,1,0},{1,0,0,1},{1,0,0,1}};
-            case 'Y' -> new int[][]{{1,0,0,1},{1,0,0,1},{0,1,1,0},{0,0,1,0},{0,0,1,0}};
-            case 'Z' -> new int[][]{{1,1,1,1},{0,0,0,1},{0,1,1,0},{1,0,0,0},{1,1,1,1}};
-            case '0' -> new int[][]{{1,1,1},{1,0,1},{1,0,1},{1,0,1},{1,1,1}};
-            case '1' -> new int[][]{{0,1,0},{1,1,0},{0,1,0},{0,1,0},{1,1,1}};
-            case '2' -> new int[][]{{1,1,1},{0,0,1},{1,1,1},{1,0,0},{1,1,1}};
-            case '3' -> new int[][]{{1,1,1},{0,0,1},{1,1,1},{0,0,1},{1,1,1}};
-            case '4' -> new int[][]{{1,0,1},{1,0,1},{1,1,1},{0,0,1},{0,0,1}};
-            case '5' -> new int[][]{{1,1,1},{1,0,0},{1,1,1},{0,0,1},{1,1,1}};
-            case '6' -> new int[][]{{1,1,1},{1,0,0},{1,1,1},{1,0,1},{1,1,1}};
-            case '7' -> new int[][]{{1,1,1},{0,0,1},{0,0,1},{0,0,1},{0,0,1}};
-            case '8' -> new int[][]{{1,1,1},{1,0,1},{1,1,1},{1,0,1},{1,1,1}};
-            case '9' -> new int[][]{{1,1,1},{1,0,1},{1,1,1},{0,0,1},{1,1,1}};
-            case '%' -> new int[][]{{1,0,1},{0,0,1},{0,1,0},{1,0,0},{1,0,1}};
-            case ':' -> new int[][]{{0},{1},{0},{1},{0}};
-            case '-' -> new int[][]{{0,0,0,0},{0,0,0,0},{1,1,1,1},{0,0,0,0},{0,0,0,0}};
-            case '_' -> new int[][]{{0,0,0,0},{0,0,0,0},{0,0,0,0},{0,0,0,0},{1,1,1,1}};
-            case '!' -> new int[][]{{1},{1},{1},{0},{1}};
-            case '?' -> new int[][]{{1,1,1},{0,0,1},{0,1,1},{0,0,0},{0,1,0}};
-            case '(' -> new int[][]{{0,1},{1,0},{1,0},{1,0},{0,1}};
-            case ')' -> new int[][]{{1,0},{0,1},{0,1},{0,1},{1,0}};
-            case '/' -> new int[][]{{0,0,1},{0,0,1},{0,1,0},{1,0,0},{1,0,0}};
-            case '+' -> new int[][]{{0,0,0},{0,1,0},{1,1,1},{0,1,0},{0,0,0}};
-            case '\'' -> new int[][]{{1},{1},{0},{0},{0}};
-            case '"' -> new int[][]{{1,0,1},{1,0,1},{0,0,0},{0,0,0},{0,0,0}};
-            case ',' -> new int[][]{{0},{0},{0},{1},{1}};
-            case '.' -> new int[][]{{0},{0},{0},{0},{1}};
-            case '|' -> new int[][]{{1},{1},{1},{1},{1}};
-            default -> null;
-        };
-    }
-
-    private void addRect(List<Float> v, float x, float y, float w, float h,
-                          float u0, float v0, float u1, float v1,
-                          float r, float g, float b, float a) {
-        addVertex(v, x, y, u0, v0, r, g, b, a);
-        addVertex(v, x, y + h, u0, v1, r, g, b, a);
-        addVertex(v, x + w, y + h, u1, v1, r, g, b, a);
-
-        addVertex(v, x, y, u0, v0, r, g, b, a);
-        addVertex(v, x + w, y + h, u1, v1, r, g, b, a);
-        addVertex(v, x + w, y, u1, v0, r, g, b, a);
-    }
-
-    private void addVertex(List<Float> v, float x, float y, float u, float valV, float r, float g, float b, float a) {
-        v.add(x); v.add(y); v.add(u); v.add(valV);
-        v.add(r); v.add(g); v.add(b); v.add(a);
-    }
+    // addRect/addVertex and the pixel font are shared via static imports from UiBatch
 
     private void drawVertices(List<Float> vertices) {
-        if (vertices.isEmpty()) return;
-
-        glBindVertexArray(vaoId);
-        glBindBuffer(GL_ARRAY_BUFFER, vboId);
-
-        FloatBuffer buffer = BufferUtils.createFloatBuffer(vertices.size());
-        for (float f : vertices) buffer.put(f);
-        buffer.flip();
-
-        glBufferData(GL_ARRAY_BUFFER, buffer, GL_DYNAMIC_DRAW);
-        glDrawArrays(GL_TRIANGLES, 0, vertices.size() / 8);
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+        UiBatch.drawVertices(vaoId, vboId, vertices);
     }
 
     public void cleanup() {
