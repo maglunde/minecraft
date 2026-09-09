@@ -22,6 +22,10 @@ public class Raycast {
     }
 
     public static HitResult raycast(World world, Vector3f origin, Vector3f direction, float maxDistance) {
+        return raycast(world, origin, direction, maxDistance, false);
+    }
+
+    public static HitResult raycast(World world, Vector3f origin, Vector3f direction, float maxDistance, boolean includeWater) {
         float step = 0.05f;
         Vector3f currentPos = new Vector3f(origin);
         Vector3f rayStep = new Vector3f(direction).mul(step);
@@ -42,7 +46,11 @@ public class Raycast {
 
             if (blockX != prevBlockX || blockY != prevBlockY || blockZ != prevBlockZ) {
                 BlockType type = world.getBlock(blockX, blockY, blockZ);
-                if (type != BlockType.AIR && type != BlockType.BEDROCK && type != BlockType.WATER) {
+                boolean isHit = (type != BlockType.AIR && type != BlockType.BEDROCK && type != BlockType.LAVA);
+                if (!includeWater) {
+                    isHit = isHit && (type != BlockType.WATER);
+                }
+                if (isHit) {
                     return new HitResult(blockX, blockY, blockZ, prevBlockX, prevBlockY, prevBlockZ, type);
                 }
                 prevBlockX = blockX;
