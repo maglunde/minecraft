@@ -330,6 +330,9 @@ public class HUD {
                     if (s.getType() == BlockType.PLANKS) {
                         return new ItemStack(BlockType.WOODEN_BUTTON, 1);
                     }
+                    if (s.getType() == BlockType.BLAZE_ROD) {
+                        return new ItemStack(BlockType.BLAZE_POWDER, 2);
+                    }
                 }
             }
         }
@@ -350,6 +353,28 @@ public class HUD {
             if ((!craftSlots[0].isEmpty() && !craftSlots[1].isEmpty() && craftSlots[0].getType() == BlockType.PLANKS && craftSlots[1].getType() == BlockType.PLANKS) ||
                 (!craftSlots[2].isEmpty() && !craftSlots[3].isEmpty() && craftSlots[2].getType() == BlockType.PLANKS && craftSlots[3].getType() == BlockType.PLANKS)) {
                 return new ItemStack(BlockType.WOODEN_PRESSURE_PLATE, 1);
+            }
+            // Eye of Ender: 1 Ender Pearl + 1 Blaze Powder (any 2 slots)
+            boolean hasPearl = false, hasPowder = false;
+            for (ItemStack s : craftSlots) {
+                if (!s.isEmpty()) {
+                    if (s.getType() == BlockType.ENDER_PEARL) hasPearl = true;
+                    if (s.getType() == BlockType.BLAZE_POWDER) hasPowder = true;
+                }
+            }
+            if (hasPearl && hasPowder) {
+                return new ItemStack(BlockType.EYE_OF_ENDER, 1);
+            }
+            // Flint and Steel: 1 Iron Ingot + 1 Gunpowder (any 2 slots)
+            boolean hasIron = false, hasGunpowder = false;
+            for (ItemStack s : craftSlots) {
+                if (!s.isEmpty()) {
+                    if (s.getType() == BlockType.IRON_INGOT) hasIron = true;
+                    if (s.getType() == BlockType.GUNPOWDER) hasGunpowder = true;
+                }
+            }
+            if (hasIron && hasGunpowder) {
+                return new ItemStack(BlockType.FLINT_AND_STEEL, 1);
             }
         }
 
@@ -696,20 +721,36 @@ public class HUD {
         }
     }
 
+    private boolean isType(int idx, BlockType type) {
+        return !benchSlots[idx].isEmpty() && benchSlots[idx].getType() == type;
+    }
+
     private boolean isPlank(int idx) {
-        return !benchSlots[idx].isEmpty() && benchSlots[idx].getType() == BlockType.PLANKS;
+        return isType(idx, BlockType.PLANKS);
     }
 
     private boolean isStick(int idx) {
-        return !benchSlots[idx].isEmpty() && benchSlots[idx].getType() == BlockType.STICK;
+        return isType(idx, BlockType.STICK);
     }
 
     private boolean isCobble(int idx) {
-        return !benchSlots[idx].isEmpty() && benchSlots[idx].getType() == BlockType.COBBLESTONE;
+        return isType(idx, BlockType.COBBLESTONE);
     }
 
     private boolean isCoal(int idx) {
-        return !benchSlots[idx].isEmpty() && benchSlots[idx].getType() == BlockType.COAL;
+        return isType(idx, BlockType.COAL);
+    }
+
+    private boolean isIron(int idx) {
+        return isType(idx, BlockType.IRON_INGOT);
+    }
+
+    private boolean isDiamond(int idx) {
+        return isType(idx, BlockType.DIAMOND);
+    }
+
+    private boolean isString(int idx) {
+        return isType(idx, BlockType.STRING);
     }
 
     public ItemStack get3x3CraftingResult() {
@@ -719,6 +760,14 @@ public class HUD {
         int stickCount = 0;
         int cobbleCount = 0;
         int coalCount = 0;
+        int ironCount = 0;
+        int diamondCount = 0;
+        int stringCount = 0;
+        int blazeRodCount = 0;
+        int blazePowderCount = 0;
+        int enderPearlCount = 0;
+        int gunpowderCount = 0;
+        int stoneCount = 0;
 
         for (ItemStack s : benchSlots) {
             if (!s.isEmpty()) {
@@ -728,6 +777,14 @@ public class HUD {
                 else if (s.getType() == BlockType.STICK) stickCount++;
                 else if (s.getType() == BlockType.COBBLESTONE) cobbleCount++;
                 else if (s.getType() == BlockType.COAL) coalCount++;
+                else if (s.getType() == BlockType.IRON_INGOT) ironCount++;
+                else if (s.getType() == BlockType.DIAMOND) diamondCount++;
+                else if (s.getType() == BlockType.STRING) stringCount++;
+                else if (s.getType() == BlockType.BLAZE_ROD) blazeRodCount++;
+                else if (s.getType() == BlockType.BLAZE_POWDER) blazePowderCount++;
+                else if (s.getType() == BlockType.ENDER_PEARL) enderPearlCount++;
+                else if (s.getType() == BlockType.GUNPOWDER) gunpowderCount++;
+                else if (s.getType() == BlockType.STONE) stoneCount++;
             }
         }
 
@@ -771,6 +828,110 @@ public class HUD {
                 (isCobble(2) && isCobble(5) && isStick(8))) {
                 return new ItemStack(BlockType.STONE_SWORD, 1);
             }
+        }
+
+        // --- Iron Tools ---
+        // 3 Iron Ingots + 2 Sticks: Iron Pickaxe
+        if (ironCount == 3 && stickCount == 2 && countNonEmpty == 5) {
+            if (isIron(0) && isIron(1) && isIron(2) && isStick(4) && isStick(7)) {
+                return new ItemStack(BlockType.IRON_PICKAXE, 1);
+            }
+        }
+
+        // 3 Iron Ingots + 2 Sticks: Iron Axe
+        if (ironCount == 3 && stickCount == 2 && countNonEmpty == 5) {
+            if (((isIron(0) && isIron(1) && isIron(3)) || (isIron(1) && isIron(2) && isIron(5))) && isStick(4) && isStick(7)) {
+                return new ItemStack(BlockType.IRON_AXE, 1);
+            }
+        }
+
+        // 1 Iron Ingot + 2 Sticks: Iron Shovel
+        if (ironCount == 1 && stickCount == 2 && countNonEmpty == 3) {
+            if ((isIron(1) && isStick(4) && isStick(7)) ||
+                (isIron(0) && isStick(3) && isStick(6)) ||
+                (isIron(2) && isStick(5) && isStick(8))) {
+                return new ItemStack(BlockType.IRON_SHOVEL, 1);
+            }
+        }
+
+        // 2 Iron Ingots + 1 Stick: Iron Sword
+        if (ironCount == 2 && stickCount == 1 && countNonEmpty == 3) {
+            if ((isIron(1) && isIron(4) && isStick(7)) ||
+                (isIron(0) && isIron(3) && isStick(6)) ||
+                (isIron(2) && isIron(5) && isStick(8))) {
+                return new ItemStack(BlockType.IRON_SWORD, 1);
+            }
+        }
+
+        // --- Diamond Tools ---
+        // 3 Diamonds + 2 Sticks: Diamond Pickaxe
+        if (diamondCount == 3 && stickCount == 2 && countNonEmpty == 5) {
+            if (isDiamond(0) && isDiamond(1) && isDiamond(2) && isStick(4) && isStick(7)) {
+                return new ItemStack(BlockType.DIAMOND_PICKAXE, 1);
+            }
+        }
+
+        // 3 Diamonds + 2 Sticks: Diamond Axe
+        if (diamondCount == 3 && stickCount == 2 && countNonEmpty == 5) {
+            if (((isDiamond(0) && isDiamond(1) && isDiamond(3)) || (isDiamond(1) && isDiamond(2) && isDiamond(5))) && isStick(4) && isStick(7)) {
+                return new ItemStack(BlockType.DIAMOND_AXE, 1);
+            }
+        }
+
+        // 1 Diamond + 2 Sticks: Diamond Shovel
+        if (diamondCount == 1 && stickCount == 2 && countNonEmpty == 3) {
+            if ((isDiamond(1) && isStick(4) && isStick(7)) ||
+                (isDiamond(0) && isStick(3) && isStick(6)) ||
+                (isDiamond(2) && isStick(5) && isStick(8))) {
+                return new ItemStack(BlockType.DIAMOND_SHOVEL, 1);
+            }
+        }
+
+        // 2 Diamonds + 1 Stick: Diamond Sword
+        if (diamondCount == 2 && stickCount == 1 && countNonEmpty == 3) {
+            if ((isDiamond(1) && isDiamond(4) && isStick(7)) ||
+                (isDiamond(0) && isDiamond(3) && isStick(6)) ||
+                (isDiamond(2) && isDiamond(5) && isStick(8))) {
+                return new ItemStack(BlockType.DIAMOND_SWORD, 1);
+            }
+        }
+
+        // --- Combat & Utility Recipes ---
+        // Bow: 3 Sticks + 3 String
+        if (stickCount == 3 && stringCount == 3 && countNonEmpty == 6) {
+            if ((isStick(1) && isStick(3) && isStick(7) && isString(2) && isString(5) && isString(8)) ||
+                (isStick(1) && isStick(5) && isStick(7) && isString(0) && isString(3) && isString(6))) {
+                return new ItemStack(BlockType.BOW, 1);
+            }
+        }
+
+        // Arrow: 1 Cobble + 1 Stick + 1 String (or Feather)
+        if (countNonEmpty == 3 && stickCount == 1 && cobbleCount == 1 && (stringCount == 1 || isType(6, BlockType.FEATHER) || isType(7, BlockType.FEATHER) || isType(8, BlockType.FEATHER))) {
+            if ((isStick(4) && isCobble(1) && (isString(7) || isType(7, BlockType.FEATHER))) ||
+                (isStick(3) && isCobble(0) && (isString(6) || isType(6, BlockType.FEATHER))) ||
+                (isStick(5) && isCobble(2) && (isString(8) || isType(8, BlockType.FEATHER)))) {
+                return new ItemStack(BlockType.ARROW, 4);
+            }
+        }
+
+        // Flint and Steel: 1 Iron Ingot + 1 Gunpowder
+        if (ironCount == 1 && gunpowderCount == 1 && countNonEmpty == 2) {
+            return new ItemStack(BlockType.FLINT_AND_STEEL, 1);
+        }
+
+        // Eye of Ender: 1 Ender Pearl + 1 Blaze Powder
+        if (enderPearlCount == 1 && blazePowderCount == 1 && countNonEmpty == 2) {
+            return new ItemStack(BlockType.EYE_OF_ENDER, 1);
+        }
+
+        // Blaze Powder: 1 Blaze Rod
+        if (blazeRodCount == 1 && countNonEmpty == 1) {
+            return new ItemStack(BlockType.BLAZE_POWDER, 2);
+        }
+
+        // Obsidian: 4 Stone + 4 Cobblestone
+        if (stoneCount == 4 && cobbleCount == 4 && countNonEmpty == 8) {
+            return new ItemStack(BlockType.OBSIDIAN, 2);
         }
 
         // --- Torch Recipe ---
@@ -940,7 +1101,7 @@ public class HUD {
         }
     }
 
-    private void populate3x3Recipe(CraftingRecipe r, Player player) {
+    void populate3x3Recipe(CraftingRecipe r, Player player) {
         if (!r.canCraft(player.getInventory())) return;
         returnBenchSlotsToInventory(player);
 
@@ -1009,6 +1170,48 @@ public class HUD {
         } else if (out == BlockType.TORCH) {
             placeInBench(player, BlockType.COAL, 1);
             placeInBench(player, BlockType.STICK, 4);
+        } else if (out == BlockType.IRON_PICKAXE) {
+            placeInBench(player, BlockType.IRON_INGOT, 0, 1, 2);
+            placeInBench(player, BlockType.STICK, 4, 7);
+        } else if (out == BlockType.IRON_AXE) {
+            placeInBench(player, BlockType.IRON_INGOT, 0, 1, 3);
+            placeInBench(player, BlockType.STICK, 4, 7);
+        } else if (out == BlockType.IRON_SHOVEL) {
+            placeInBench(player, BlockType.IRON_INGOT, 1);
+            placeInBench(player, BlockType.STICK, 4, 7);
+        } else if (out == BlockType.IRON_SWORD) {
+            placeInBench(player, BlockType.IRON_INGOT, 1, 4);
+            placeInBench(player, BlockType.STICK, 7);
+        } else if (out == BlockType.DIAMOND_PICKAXE) {
+            placeInBench(player, BlockType.DIAMOND, 0, 1, 2);
+            placeInBench(player, BlockType.STICK, 4, 7);
+        } else if (out == BlockType.DIAMOND_AXE) {
+            placeInBench(player, BlockType.DIAMOND, 0, 1, 3);
+            placeInBench(player, BlockType.STICK, 4, 7);
+        } else if (out == BlockType.DIAMOND_SHOVEL) {
+            placeInBench(player, BlockType.DIAMOND, 1);
+            placeInBench(player, BlockType.STICK, 4, 7);
+        } else if (out == BlockType.DIAMOND_SWORD) {
+            placeInBench(player, BlockType.DIAMOND, 1, 4);
+            placeInBench(player, BlockType.STICK, 7);
+        } else if (out == BlockType.BOW) {
+            placeInBench(player, BlockType.STICK, 1, 3, 7);
+            placeInBench(player, BlockType.STRING, 2, 5, 8);
+        } else if (out == BlockType.ARROW) {
+            placeInBench(player, BlockType.COBBLESTONE, 1);
+            placeInBench(player, BlockType.STICK, 4);
+            placeInBench(player, BlockType.STRING, 7);
+        } else if (out == BlockType.FLINT_AND_STEEL) {
+            placeInBench(player, BlockType.IRON_INGOT, 0);
+            placeInBench(player, BlockType.GUNPOWDER, 1);
+        } else if (out == BlockType.EYE_OF_ENDER) {
+            placeInBench(player, BlockType.ENDER_PEARL, 0);
+            placeInBench(player, BlockType.BLAZE_POWDER, 1);
+        } else if (out == BlockType.BLAZE_POWDER) {
+            placeInBench(player, BlockType.BLAZE_ROD, 4);
+        } else if (out == BlockType.OBSIDIAN) {
+            placeInBench(player, BlockType.STONE, 0, 2, 6, 8);
+            placeInBench(player, BlockType.COBBLESTONE, 1, 3, 5, 7);
         }
     }
 
@@ -1516,10 +1719,32 @@ public class HUD {
                             craftSlots[2].setType(BlockType.STICK);
                             craftSlots[2].setCount(1);
                         }
-                    } else {
-                        // 3x3 recipe (tools, boat, chest, door, etc.)
-                        if (r.canCraft(player.getInventory())) {
-                            r.craft(player.getInventory());
+                    } else if (r.getOutput().getType() == BlockType.BLAZE_POWDER) {
+                        if (player.getInventory().getItemCount(BlockType.BLAZE_ROD) >= 1) {
+                            returnCraftSlotsToInventory(player);
+                            player.getInventory().removeItem(BlockType.BLAZE_ROD, 1);
+                            craftSlots[0].setType(BlockType.BLAZE_ROD);
+                            craftSlots[0].setCount(1);
+                        }
+                    } else if (r.getOutput().getType() == BlockType.EYE_OF_ENDER) {
+                        if (player.getInventory().getItemCount(BlockType.ENDER_PEARL) >= 1 && player.getInventory().getItemCount(BlockType.BLAZE_POWDER) >= 1) {
+                            returnCraftSlotsToInventory(player);
+                            player.getInventory().removeItem(BlockType.ENDER_PEARL, 1);
+                            player.getInventory().removeItem(BlockType.BLAZE_POWDER, 1);
+                            craftSlots[0].setType(BlockType.ENDER_PEARL);
+                            craftSlots[0].setCount(1);
+                            craftSlots[1].setType(BlockType.BLAZE_POWDER);
+                            craftSlots[1].setCount(1);
+                        }
+                    } else if (r.getOutput().getType() == BlockType.FLINT_AND_STEEL) {
+                        if (player.getInventory().getItemCount(BlockType.IRON_INGOT) >= 1 && player.getInventory().getItemCount(BlockType.GUNPOWDER) >= 1) {
+                            returnCraftSlotsToInventory(player);
+                            player.getInventory().removeItem(BlockType.IRON_INGOT, 1);
+                            player.getInventory().removeItem(BlockType.GUNPOWDER, 1);
+                            craftSlots[0].setType(BlockType.IRON_INGOT);
+                            craftSlots[0].setCount(1);
+                            craftSlots[1].setType(BlockType.GUNPOWDER);
+                            craftSlots[1].setCount(1);
                         }
                     }
                     return true;
