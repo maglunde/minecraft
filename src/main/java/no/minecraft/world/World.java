@@ -1,6 +1,7 @@
 package no.minecraft.world;
 
 import no.minecraft.player.Player;
+import org.joml.Vector3f;
 import java.util.*;
 
 public class World {
@@ -34,6 +35,7 @@ public class World {
 
     // Victory state when Dragon is slain
     private boolean gameWon = false;
+    private Vector3f spawnPoint = null;
 
     public World() {
         this(new Random().nextLong());
@@ -45,6 +47,13 @@ public class World {
             dimensionGenerated.put(dim, new HashSet<>());
         }
         setSeed(seed);
+    }
+
+    public Vector3f getSpawnPoint() {
+        if (spawnPoint == null) {
+            spawnPoint = findSafeSpawnPosition(0, 0);
+        }
+        return spawnPoint;
     }
 
     public Dimension getCurrentDimension() {
@@ -75,6 +84,10 @@ public class World {
             dimensionGenerated.put(dim, new HashSet<>());
         }
         updateLoadedChunks(0, 0);
+        this.spawnPoint = findSafeSpawnPosition(0, 0);
+        int scx = Math.floorDiv((int) Math.floor(spawnPoint.x), Chunk.SIZE_X);
+        int scz = Math.floorDiv((int) Math.floor(spawnPoint.z), Chunk.SIZE_Z);
+        updateLoadedChunks(scx, scz);
     }
 
     public static long chunkKey(int cx, int cz) {
@@ -127,19 +140,118 @@ public class World {
         chunk.setBlock(localX, y, localZ, type);
     }
 
-    public int getSpawnHeight(int x, int z) {
-        for (int y = Chunk.SIZE_Y - 1; y >= 0; y--) {
-            BlockType type = getBlock(x, y, z);
-            if (type != BlockType.AIR) {
-                if (type == BlockType.WATER) {
-                    return Math.max(SEA_LEVEL + 1, y + 1);
-                }
-                if (type.isSolid()) {
-                    return y + 1;
+    public boolean isSafeSolidSpawn(int x, int y, int z) {
+        if (y < 1 || y >= Chunk.SIZE_Y - 2) return false;
+
+        BlockType ground = getBlock(x, y, z);
+        if (!ground.isSolid() || ground == BlockType.CACTUS || ground == BlockType.LAVA || ground == BlockType.WATER) {
+            return false;
+        }
+
+        BlockType feet = getBlock(x, y + 1, z);
+        if (feet.isSolid() || feet == BlockType.WATER || feet == BlockType.LAVA || feet == BlockType.CACTUS) {
+            return false;
+        }
+
+        BlockType head = getBlock(x, y + 2, z);
+        if (head.isSolid() || head == BlockType.WATER || head == BlockType.LAVA || head == BlockType.CACTUS) {
+            return false;
+        }
+
+        // In Overworld, cannot be submerged or underneath water
+        if (currentDimension == Dimension.OVERWORLD && y < SEA_LEVEL) {
+            for (int cy = y + 1; cy <= SEA_LEVEL; cy++) {
+                if (getBlock(x, cy, z) == BlockType.WATER) {
+                    return false;
                 }
             }
         }
-        return SEA_LEVEL + 2;
+
+        // Avoid spawning directly touching cactus
+        if (getBlock(x + 1, y + 1, z) == BlockType.CACTUS ||
+            getBlock(x - 1, y + 1, z) == BlockType.CACTUS ||
+            getBlock(x, y + 1, z + 1) == BlockType.CACTUS ||
+            getBlock(x, y + 1, z - 1) == BlockType.CACTUS) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public int getSpawnHeight(int x, int z) {
+        for (int y = Chunk.SIZE_Y - 3; y >= 1; y--) {
+            if (isSafeSolidSpawn(x, y, z)) {
+                return y + 1;
+            }
+        }
+        return -1;
+    }
+
+    public Vector3f findSafeSpawnPosition(int originX, int originZ) {
+        int originCx = Math.floorDiv(originX, Chunk.SIZE_X);
+        int originCz = Math.floorDiv(originZ, Chunk.SIZE_Z);
+        ensureChunkGenerated(originCx, originCz);
+
+        // 1. First check origin itself (prefer non-leaves ground)
+        int y = getSpawnHeight(originX, originZ);
+        if (y > 0 && getBlock(originX, y - 1, originZ) != BlockType.LEAVES) {
+            return new Vector3f(originX + 0.5f, y + 0.05f, originZ + 0.5f);
+        }
+
+        // 2. Search outwards in an expanding box pattern for bare ground
+        int maxRadius = 160;
+        for (int r = 1; r <= maxRadius; r += 2) {
+            for (int dx = -r; dx <= r; dx += 2) {
+                for (int dz : new int[]{-r, r}) {
+                    int tx = originX + dx;
+                    int tz = originZ + dz;
+                    int cx = Math.floorDiv(tx, Chunk.SIZE_X);
+                    int cz = Math.floorDiv(tz, Chunk.SIZE_Z);
+                    ensureChunkGenerated(cx, cz);
+                    int sy = getSpawnHeight(tx, tz);
+                    if (sy > 0 && getBlock(tx, sy - 1, tz) != BlockType.LEAVES) {
+                        return new Vector3f(tx + 0.5f, sy + 0.05f, tz + 0.5f);
+                    }
+                }
+            }
+            for (int dz = -r + 2; dz <= r - 2; dz += 2) {
+                for (int dx : new int[]{-r, r}) {
+                    int tx = originX + dx;
+                    int tz = originZ + dz;
+                    int cx = Math.floorDiv(tx, Chunk.SIZE_X);
+                    int cz = Math.floorDiv(tz, Chunk.SIZE_Z);
+                    ensureChunkGenerated(cx, cz);
+                    int sy = getSpawnHeight(tx, tz);
+                    if (sy > 0 && getBlock(tx, sy - 1, tz) != BlockType.LEAVES) {
+                        return new Vector3f(tx + 0.5f, sy + 0.05f, tz + 0.5f);
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback: accept leaves if no bare ground was found
+        for (int r = 0; r <= maxRadius; r += 4) {
+            int tx = originX + r;
+            int tz = originZ;
+            int cx = Math.floorDiv(tx, Chunk.SIZE_X);
+            int cz = Math.floorDiv(tz, Chunk.SIZE_Z);
+            ensureChunkGenerated(cx, cz);
+            int sy = getSpawnHeight(tx, tz);
+            if (sy > 0) {
+                return new Vector3f(tx + 0.5f, sy + 0.05f, tz + 0.5f);
+            }
+        }
+
+        // 4. Guaranteed absolute fallback: build a safe 3x3 solid platform at SEA_LEVEL
+        int spawnY = (currentDimension == Dimension.OVERWORLD) ? SEA_LEVEL : 30;
+        for (int px = -1; px <= 1; px++) {
+            for (int pz = -1; pz <= 1; pz++) {
+                setBlock(originX + px, spawnY, originZ + pz, BlockType.GRASS);
+                setBlock(originX + px, spawnY + 1, originZ + pz, BlockType.AIR);
+                setBlock(originX + px, spawnY + 2, originZ + pz, BlockType.AIR);
+            }
+        }
+        return new Vector3f(originX + 0.5f, spawnY + 1.05f, originZ + 0.5f);
     }
 
     private org.joml.Vector3f lastOverworldPortal = null;
@@ -185,9 +297,11 @@ public class World {
                 updateLoadedChunks(cx, cz);
                 player.teleportTo(lastOverworldPortal.x, lastOverworldPortal.y, lastOverworldPortal.z);
             } else {
-                updateLoadedChunks(0, 0);
-                int sy = getSpawnHeight(0, 0);
-                player.teleportTo(0.5f, sy + 0.05f, 0.5f);
+                Vector3f safe = getSpawnPoint();
+                int cx = Math.floorDiv((int) Math.floor(safe.x), Chunk.SIZE_X);
+                int cz = Math.floorDiv((int) Math.floor(safe.z), Chunk.SIZE_Z);
+                updateLoadedChunks(cx, cz);
+                player.teleportTo(safe.x, safe.y, safe.z);
             }
         }
     }
@@ -405,6 +519,23 @@ public class World {
         }
     }
 
+    public Chunk ensureChunkGenerated(int cx, int cz) {
+        long key = chunkKey(cx, cz);
+        Set<Long> activeGenerated = getActiveGenerated();
+        Chunk chunk = getOrCreateChunk(cx, cz);
+        if (!activeGenerated.contains(key)) {
+            generateChunkTerrain(chunk);
+            decorateChunk(cx, cz);
+            activeGenerated.add(key);
+            chunk.setDirty(true);
+            markChunkDirty(cx - 1, cz);
+            markChunkDirty(cx + 1, cz);
+            markChunkDirty(cx, cz - 1);
+            markChunkDirty(cx, cz + 1);
+        }
+        return chunk;
+    }
+
     public void updateLoadedChunks(int centerCx, int centerCz) {
         int rd = no.minecraft.settings.GameSettings.getInstance().getRenderDistance();
         int unloadDist = rd + 2;
@@ -412,31 +543,12 @@ public class World {
         Map<Long, Chunk> activeChunks = getActiveChunks();
         Set<Long> activeGenerated = getActiveGenerated();
 
-        List<Chunk> newlyGenerated = new ArrayList<>();
-
         for (int dx = -rd; dx <= rd; dx++) {
             for (int dz = -rd; dz <= rd; dz++) {
                 int cx = centerCx + dx;
                 int cz = centerCz + dz;
-                long key = chunkKey(cx, cz);
-
-                if (!activeGenerated.contains(key)) {
-                    Chunk chunk = getOrCreateChunk(cx, cz);
-                    generateChunkTerrain(chunk);
-                    decorateChunk(cx, cz);
-                    activeGenerated.add(key);
-                    newlyGenerated.add(chunk);
-
-                    markChunkDirty(cx - 1, cz);
-                    markChunkDirty(cx + 1, cz);
-                    markChunkDirty(cx, cz - 1);
-                    markChunkDirty(cx, cz + 1);
-                }
+                ensureChunkGenerated(cx, cz);
             }
-        }
-
-        for (Chunk chunk : newlyGenerated) {
-            chunk.setDirty(true);
         }
 
         Iterator<Map.Entry<Long, Chunk>> iterator = activeChunks.entrySet().iterator();

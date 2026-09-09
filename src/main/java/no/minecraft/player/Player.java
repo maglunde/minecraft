@@ -60,6 +60,7 @@ public class Player {
         this.spawnPosition.set(startX, startY, startZ);
         this.position.set(startX, startY, startZ);
         this.camera = new Camera(startX, startY + EYE_HEIGHT, startZ);
+        ensureGroundedOnSolidBlock();
     }
 
     public void update(float dt, boolean forward, boolean backward, boolean left, boolean right,
@@ -240,6 +241,11 @@ public class Player {
 
         world.clearHostileMobs();
         int groundY = world.getSpawnHeight((int) Math.floor(spawnPosition.x), (int) Math.floor(spawnPosition.z));
+        if (groundY <= 0) {
+            Vector3f safe = world.findSafeSpawnPosition((int) Math.floor(spawnPosition.x), (int) Math.floor(spawnPosition.z));
+            spawnPosition.set(safe);
+            groundY = (int) Math.floor(safe.y);
+        }
         position.set(spawnPosition.x, groundY + 0.05f, spawnPosition.z);
         velocity.set(0, 0, 0);
         health = MAX_HEALTH;
@@ -247,6 +253,7 @@ public class Player {
         if (gameMode == GameMode.SURVIVAL) {
             flying = false;
         }
+        ensureGroundedOnSolidBlock();
     }
 
     public Vector3f getSpawnPosition() {
@@ -469,6 +476,23 @@ public class Player {
         this.camera.updateVectors();
         this.inventory.clear();
         this.selectedSlot = 0;
+        ensureGroundedOnSolidBlock();
+    }
+
+    public void ensureGroundedOnSolidBlock() {
+        int bx = (int) Math.floor(position.x);
+        int by = (int) Math.floor(position.y);
+        int bz = (int) Math.floor(position.z);
+        int checkY = (position.y - by < 0.2f) ? by - 1 : by;
+        BlockType ground = world.getBlock(bx, checkY, bz);
+        if (!ground.isSolid() || ground == BlockType.WATER || ground == BlockType.LAVA || ground == BlockType.CACTUS) {
+            Vector3f safe = world.findSafeSpawnPosition(bx, bz);
+            this.position.set(safe);
+            this.spawnPosition.set(safe);
+            this.velocity.set(0, 0, 0);
+            this.camera.getPosition().set(safe.x, safe.y + EYE_HEIGHT, safe.z);
+            this.camera.updateVectors();
+        }
     }
 
     public void teleportTo(float x, float y, float z) {

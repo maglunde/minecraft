@@ -167,8 +167,8 @@ public class Main {
         pauseMenu = new PauseMenu();
 
         world = new World();
-        int spawnY = world.getSpawnHeight(0, 0);
-        player = new Player(world, 0.5f, spawnY + 0.05f, 0.5f);
+        Vector3f spawn = world.getSpawnPoint();
+        player = new Player(world, spawn.x, spawn.y, spawn.z);
 
         // Show cursor in menu
         setCursorLocked(false);
@@ -240,8 +240,8 @@ public class Main {
                         if (!wasGameStarted) {
                             long newSeed = new java.util.Random().nextLong();
                             world.setSeed(newSeed);
-                            int sy = world.getSpawnHeight(0, 0);
-                            player.resetToSpawn(0.5f, sy + 0.05f, 0.5f);
+                            Vector3f spawn = world.getSpawnPoint();
+                            player.resetToSpawn(spawn.x, spawn.y, spawn.z);
                             mainMenu.setGameStarted(true);
                         }
                         setCursorLocked(true);
@@ -441,8 +441,14 @@ public class Main {
                 } else if (key == GLFW_KEY_P) {
                     // Reset position to ground at spawn
                     int gy = world.getSpawnHeight((int) Math.floor(player.getSpawnPosition().x), (int) Math.floor(player.getSpawnPosition().z));
+                    if (gy <= 0) {
+                        Vector3f safe = world.findSafeSpawnPosition((int) Math.floor(player.getSpawnPosition().x), (int) Math.floor(player.getSpawnPosition().z));
+                        player.getSpawnPosition().set(safe);
+                        gy = (int) Math.floor(safe.y);
+                    }
                     player.getPosition().set(player.getSpawnPosition().x, gy + 0.05f, player.getSpawnPosition().z);
                     player.getVelocity().set(0, 0, 0);
+                    player.ensureGroundedOnSolidBlock();
                 } else if (key >= GLFW_KEY_1 && key <= GLFW_KEY_9) {
                     player.setSelectedSlot(key - GLFW_KEY_1);
                 } else if (key == gs.keyJump) {
