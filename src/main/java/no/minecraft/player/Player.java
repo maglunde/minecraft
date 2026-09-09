@@ -1,11 +1,9 @@
 package no.minecraft.player;
 
+import no.minecraft.physics.AABB;
 import no.minecraft.world.BlockType;
 import no.minecraft.world.World;
 import org.joml.Vector3f;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class Player {
     public static final float WIDTH = 0.6f;
@@ -361,80 +359,12 @@ public class Player {
         return deathFlashTimer;
     }
 
+    private final no.minecraft.physics.EntityCollider collider = new no.minecraft.physics.EntityCollider();
+    private final no.minecraft.physics.EntityCollider.MoveResult moveResult = new no.minecraft.physics.EntityCollider.MoveResult();
+
     private void moveWithCollision(float dx, float dy, float dz) {
-        AABB playerBox = getBoundingBox();
-
-        // Check Y axis first
-        List<AABB> blockBoxes = getSurroundingBlockBoxes(playerBox.offset(0, dy, 0));
-        for (AABB block : blockBoxes) {
-            if (dy > 0 && playerBox.offset(0, dy, 0).intersects(block)) {
-                dy = block.minY - playerBox.maxY - 0.001f;
-                velocity.y = 0;
-            } else if (dy < 0 && playerBox.offset(0, dy, 0).intersects(block)) {
-                dy = block.maxY - playerBox.minY + 0.001f;
-                velocity.y = 0;
-                onGround = true;
-            }
-        }
-        position.y += dy;
-        playerBox = getBoundingBox();
-
-        if (dy <= 0.0001f && dy >= -0.0001f && velocity.y <= 0) {
-            List<AABB> groundCheck = getSurroundingBlockBoxes(playerBox.offset(0, -0.05f, 0));
-            onGround = !groundCheck.isEmpty();
-        } else if (dy > 0) {
-            onGround = false;
-        }
-
-        // Check X axis
-        blockBoxes = getSurroundingBlockBoxes(playerBox.offset(dx, 0, 0));
-        for (AABB block : blockBoxes) {
-            if (dx > 0 && playerBox.offset(dx, 0, 0).intersects(block)) {
-                dx = block.minX - playerBox.maxX - 0.001f;
-            } else if (dx < 0 && playerBox.offset(dx, 0, 0).intersects(block)) {
-                dx = block.maxX - playerBox.minX + 0.001f;
-            }
-        }
-        position.x += dx;
-        playerBox = getBoundingBox();
-
-        // Check Z axis
-        blockBoxes = getSurroundingBlockBoxes(playerBox.offset(0, 0, dz));
-        for (AABB block : blockBoxes) {
-            if (dz > 0 && playerBox.offset(0, 0, dz).intersects(block)) {
-                dz = block.minZ - playerBox.maxZ - 0.001f;
-            } else if (dz < 0 && playerBox.offset(0, 0, dz).intersects(block)) {
-                dz = block.maxZ - playerBox.minZ + 0.001f;
-            }
-        }
-        position.z += dz;
-        playerBox = getBoundingBox();
-
-        // Final solid ground verification after all axis translations
-        List<AABB> groundCheck = getSurroundingBlockBoxes(playerBox.offset(0, -0.08f, 0));
-        onGround = !groundCheck.isEmpty() && velocity.y <= 0.1f;
-    }
-
-    private List<AABB> getSurroundingBlockBoxes(AABB query) {
-        List<AABB> list = new ArrayList<>();
-        int minX = (int) Math.floor(query.minX);
-        int maxX = (int) Math.floor(query.maxX);
-        int minY = (int) Math.floor(query.minY);
-        int maxY = (int) Math.floor(query.maxY);
-        int minZ = (int) Math.floor(query.minZ);
-        int maxZ = (int) Math.floor(query.maxZ);
-
-        for (int x = minX; x <= maxX; x++) {
-            for (int y = minY; y <= maxY; y++) {
-                for (int z = minZ; z <= maxZ; z++) {
-                    BlockType type = world.getBlock(x, y, z);
-                    if (type != BlockType.AIR && type.isSolid()) {
-                        list.add(new AABB(x, y, z, x + 1.0f, y + 1.0f, z + 1.0f));
-                    }
-                }
-            }
-        }
-        return list;
+        collider.resolveMove(world, position, velocity, WIDTH / 2.0f, HEIGHT, dx, dy, dz, true, moveResult);
+        onGround = moveResult.onGround;
     }
 
     public AABB getBoundingBox() {

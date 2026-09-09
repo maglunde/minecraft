@@ -1,6 +1,6 @@
 package no.minecraft.entity;
 
-import no.minecraft.player.AABB;
+import no.minecraft.physics.AABB;
 import no.minecraft.player.Player;
 import no.minecraft.world.BlockType;
 import no.minecraft.world.World;

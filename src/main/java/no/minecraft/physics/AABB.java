@@ -1,4 +1,4 @@
-package no.minecraft.player;
+package no.minecraft.physics;
 
 public class AABB {
     public float minX, minY, minZ;

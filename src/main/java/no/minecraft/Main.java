@@ -808,7 +808,7 @@ public class Main {
                 BlockType toPlace = player.getSelectedBlock();
                 if (toPlace != null && toPlace != BlockType.AIR) {
                     boolean roomAvailable = !toPlace.isSolid() || player.isFlying() || !player.getBoundingBox().intersects(
-                            new no.minecraft.player.AABB(hit.placeX, hit.placeY, hit.placeZ,
+                            new no.minecraft.physics.AABB(hit.placeX, hit.placeY, hit.placeZ,
                                     hit.placeX + 1, hit.placeY + 1, hit.placeZ + 1));
                     if (toPlace == BlockType.TORCH && hit.placeY < hit.hitY) {
                         // Torch cannot be placed on ceiling
@@ -1196,7 +1196,7 @@ public class Main {
             if (dimensionPortalCooldown > 0) {
                 dimensionPortalCooldown -= dt;
             } else {
-                no.minecraft.player.AABB playerAABB = player.getBoundingBox();
+                no.minecraft.physics.AABB playerAABB = player.getBoundingBox();
                 int minX = (int) Math.floor(playerAABB.minX);
                 int maxX = (int) Math.floor(playerAABB.maxX);
                 int minY = (int) Math.floor(playerAABB.minY);

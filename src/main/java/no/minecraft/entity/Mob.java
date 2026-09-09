@@ -1,13 +1,11 @@
 package no.minecraft.entity;
 
-import no.minecraft.player.AABB;
+import no.minecraft.physics.AABB;
 import no.minecraft.player.Player;
 import no.minecraft.world.BlockType;
 import no.minecraft.world.World;
 import org.joml.Vector3f;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 
 public class Mob {
@@ -527,55 +525,18 @@ public class Mob {
         );
     }
 
+    private final no.minecraft.physics.EntityCollider collider = new no.minecraft.physics.EntityCollider();
+    private final no.minecraft.physics.EntityCollider.MoveResult moveResult = new no.minecraft.physics.EntityCollider.MoveResult();
+
     private void moveWithCollision(World world, float dx, float dy, float dz) {
         float origDx = dx;
         float origDz = dz;
-        AABB box = getBoundingBox();
 
-        // Y Collision
-        List<AABB> blocks = getSurroundingBoxes(world, box.offset(0, dy, 0));
-        for (AABB b : blocks) {
-            if (dy > 0 && box.offset(0, dy, 0).intersects(b)) {
-                dy = b.minY - box.maxY - 0.001f;
-                velocity.y = 0;
-            } else if (dy < 0 && box.offset(0, dy, 0).intersects(b)) {
-                dy = b.maxY - box.minY + 0.001f;
-                velocity.y = 0;
-                onGround = true;
-            }
-        }
-        position.y += dy;
-        box = getBoundingBox();
-
-        if (dy <= 0.0001f && dy >= -0.0001f && velocity.y <= 0) {
-            List<AABB> ground = getSurroundingBoxes(world, box.offset(0, -0.05f, 0));
-            onGround = !ground.isEmpty();
-        } else if (dy > 0) {
-            onGround = false;
-        }
-
-        // X Collision
-        blocks = getSurroundingBoxes(world, box.offset(dx, 0, 0));
-        for (AABB b : blocks) {
-            if (dx > 0 && box.offset(dx, 0, 0).intersects(b)) {
-                dx = b.minX - box.maxX - 0.001f;
-            } else if (dx < 0 && box.offset(dx, 0, 0).intersects(b)) {
-                dx = b.maxX - box.minX + 0.001f;
-            }
-        }
-        position.x += dx;
-        box = getBoundingBox();
-
-        // Z Collision
-        blocks = getSurroundingBoxes(world, box.offset(0, 0, dz));
-        for (AABB b : blocks) {
-            if (dz > 0 && box.offset(0, 0, dz).intersects(b)) {
-                dz = b.minZ - box.maxZ - 0.001f;
-            } else if (dz < 0 && box.offset(0, 0, dz).intersects(b)) {
-                dz = b.maxZ - box.minZ + 0.001f;
-            }
-        }
-        position.z += dz;
+        collider.resolveMove(world, position, velocity, type.getWidth() / 2.0f, type.getHeight(),
+                dx, dy, dz, false, moveResult);
+        onGround = moveResult.onGround;
+        dx = moveResult.dx;
+        dz = moveResult.dz;
 
         // If mob was on ground and horizontally blocked by an obstacle, jump if headroom exists
         if (onGround && ((Math.abs(origDx) > 0.001f && Math.abs(dx) < Math.abs(origDx) * 0.5f) ||
@@ -592,28 +553,6 @@ public class Mob {
                 wanderTimer = 0.0f;
             }
         }
-    }
-
-    private List<AABB> getSurroundingBoxes(World world, AABB q) {
-        List<AABB> list = new ArrayList<>();
-        int minX = (int) Math.floor(q.minX);
-        int maxX = (int) Math.floor(q.maxX);
-        int minY = (int) Math.floor(q.minY);
-        int maxY = (int) Math.floor(q.maxY);
-        int minZ = (int) Math.floor(q.minZ);
-        int maxZ = (int) Math.floor(q.maxZ);
-
-        for (int x = minX; x <= maxX; x++) {
-            for (int y = minY; y <= maxY; y++) {
-                for (int z = minZ; z <= maxZ; z++) {
-                    BlockType bt = world.getBlock(x, y, z);
-                    if (bt != BlockType.AIR && bt.isSolid()) {
-                        list.add(new AABB(x, y, z, x + 1.0f, y + 1.0f, z + 1.0f));
-                    }
-                }
-            }
-        }
-        return list;
     }
 
     public MobType getType() { return type; }
