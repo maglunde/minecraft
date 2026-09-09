@@ -238,6 +238,10 @@ public class Player {
         return velocity;
     }
 
+    public boolean isOnGround() {
+        return onGround;
+    }
+
     public float getDeathFlashTimer() {
         return deathFlashTimer;
     }

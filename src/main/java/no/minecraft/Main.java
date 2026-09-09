@@ -26,6 +26,7 @@ public class Main {
     private Shader worldShader;
     private BlockOutline blockOutline;
     private ItemRenderer itemRenderer;
+    private HandRenderer handRenderer;
     private MobRenderer mobRenderer;
     private MiningOverlay miningOverlay;
     private SkyRenderer skyRenderer;
@@ -157,6 +158,7 @@ public class Main {
         worldShader = new Shader(WORLD_VERT, WORLD_FRAG);
         blockOutline = new BlockOutline();
         itemRenderer = new ItemRenderer();
+        handRenderer = new HandRenderer();
         mobRenderer = new MobRenderer();
         miningOverlay = new MiningOverlay();
         skyRenderer = new SkyRenderer();
@@ -274,6 +276,7 @@ public class Main {
             if (button == GLFW_MOUSE_BUTTON_LEFT) {
                 if (action == GLFW_PRESS) {
                     isLeftMouseDown = true;
+                    handRenderer.swing();
 
                     // 1. Check if attacking a mob with sword / tool / fist
                     Vector3f eye = player.getCamera().getPosition();
@@ -313,6 +316,7 @@ public class Main {
             } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
                 if (action == GLFW_PRESS) {
                     isRightMouseDown = true;
+                    handRenderer.use();
                     if (handleRightClickAction()) {
                         rightClickTimer = 0.22f;
                     } else {
@@ -1008,6 +1012,13 @@ public class Main {
                 blockOutline.render(projection, view, targetedHit.hitX, targetedHit.hitY, targetedHit.hitZ);
             }
 
+            // 6.5 Render First-Person Hand & Held Item (if in game)
+            if (!mainMenu.isInMenu()) {
+                atlas.bind();
+                handRenderer.render(player, dynamicSunLight, dt, isLeftMouseDown && !hud.isInventoryOpen(), width, height);
+                atlas.unbind();
+            }
+
             // 7. Render 2D HUD or Main Menu or Pause Menu
             if (mainMenu.isInMenu()) {
                 mainMenu.render(width, height, (float) lastMouseX, (float) lastMouseY, atlas);
@@ -1036,6 +1047,9 @@ public class Main {
         miningOverlay.cleanup();
         mobRenderer.cleanup();
         itemRenderer.cleanup();
+        if (handRenderer != null) {
+            handRenderer.cleanup();
+        }
         blockOutline.cleanup();
         worldShader.cleanup();
         atlas.cleanup();
