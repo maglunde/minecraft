@@ -8,18 +8,26 @@ import no.minecraft.world.World;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class WorldSaveManagerTest {
 
+    @TempDir
+    Path tempDir;
+
     private WorldInfo createdWorldInfo = null;
+    private Path originalSavesDir;
 
     @BeforeEach
     public void setUp() {
         createdWorldInfo = null;
+        originalSavesDir = WorldSaveManager.SAVES_DIR;
+        WorldSaveManager.SAVES_DIR = tempDir;
     }
 
     @AfterEach
@@ -27,6 +35,7 @@ public class WorldSaveManagerTest {
         if (createdWorldInfo != null) {
             WorldSaveManager.deleteWorld(createdWorldInfo);
         }
+        WorldSaveManager.SAVES_DIR = originalSavesDir;
     }
 
     @Test

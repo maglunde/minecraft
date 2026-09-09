@@ -21,7 +21,8 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 public class WorldSaveManager {
-    public static final Path SAVES_DIR = Paths.get("saves");
+    /** Save directory; mutable so tests can redirect it to a temp dir. */
+    public static Path SAVES_DIR = Paths.get("saves");
 
     private static final int WORLD_MAGIC = 0x4D435744; // "MCWD"
     private static final int CHUNKS_MAGIC = 0x4D43434B; // "MCCK"
