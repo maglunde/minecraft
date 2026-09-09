@@ -92,25 +92,35 @@ public class HUD {
             """;
 
     public HUD() {
-        hudShader = new Shader(VERTEX_SHADER, FRAGMENT_SHADER);
-        vaoId = glGenVertexArrays();
-        vboId = glGenBuffers();
+        this(true);
+    }
 
-        glBindVertexArray(vaoId);
-        glBindBuffer(GL_ARRAY_BUFFER, vboId);
+    public HUD(boolean initGl) {
+        if (initGl) {
+            hudShader = new Shader(VERTEX_SHADER, FRAGMENT_SHADER);
+            vaoId = glGenVertexArrays();
+            vboId = glGenBuffers();
 
-        int stride = (2 + 2 + 4) * Float.BYTES;
-        glVertexAttribPointer(0, 2, GL_FLOAT, false, stride, 0);
-        glEnableVertexAttribArray(0);
+            glBindVertexArray(vaoId);
+            glBindBuffer(GL_ARRAY_BUFFER, vboId);
 
-        glVertexAttribPointer(1, 2, GL_FLOAT, false, stride, 2 * Float.BYTES);
-        glEnableVertexAttribArray(1);
+            int stride = (2 + 2 + 4) * Float.BYTES;
+            glVertexAttribPointer(0, 2, GL_FLOAT, false, stride, 0);
+            glEnableVertexAttribArray(0);
 
-        glVertexAttribPointer(2, 4, GL_FLOAT, false, stride, 4 * Float.BYTES);
-        glEnableVertexAttribArray(2);
+            glVertexAttribPointer(1, 2, GL_FLOAT, false, stride, 2 * Float.BYTES);
+            glEnableVertexAttribArray(1);
 
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+            glVertexAttribPointer(2, 4, GL_FLOAT, false, stride, 4 * Float.BYTES);
+            glEnableVertexAttribArray(2);
+
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            glBindVertexArray(0);
+        } else {
+            hudShader = null;
+            vaoId = 0;
+            vboId = 0;
+        }
 
         for (int i = 0; i < 4; i++) {
             craftSlots[i] = new ItemStack(BlockType.AIR, 0);
@@ -300,6 +310,10 @@ public class HUD {
     }
 
     public ItemStack getCraftingResult() {
+        return calculateCraftingResult(craftSlots);
+    }
+
+    public static ItemStack calculateCraftingResult(ItemStack[] craftSlots) {
         int countNonEmpty = 0;
         for (ItemStack s : craftSlots) {
             if (!s.isEmpty()) countNonEmpty++;
@@ -326,6 +340,11 @@ public class HUD {
             if ((!craftSlots[0].isEmpty() && !craftSlots[2].isEmpty() && craftSlots[0].getType() == BlockType.PLANKS && craftSlots[2].getType() == BlockType.PLANKS) ||
                 (!craftSlots[1].isEmpty() && !craftSlots[3].isEmpty() && craftSlots[1].getType() == BlockType.PLANKS && craftSlots[3].getType() == BlockType.PLANKS)) {
                 return new ItemStack(BlockType.STICK, 4);
+            }
+            // Vertical Coal on top of Stick -> Torches (slots 0 & 2 or 1 & 3)
+            if ((!craftSlots[0].isEmpty() && !craftSlots[2].isEmpty() && craftSlots[0].getType() == BlockType.COAL && craftSlots[2].getType() == BlockType.STICK) ||
+                (!craftSlots[1].isEmpty() && !craftSlots[3].isEmpty() && craftSlots[1].getType() == BlockType.COAL && craftSlots[3].getType() == BlockType.STICK)) {
+                return new ItemStack(BlockType.TORCH, 4);
             }
             // Horizontal 2 planks -> Pressure Plate (slots 0 & 1 or 2 & 3)
             if ((!craftSlots[0].isEmpty() && !craftSlots[1].isEmpty() && craftSlots[0].getType() == BlockType.PLANKS && craftSlots[1].getType() == BlockType.PLANKS) ||
@@ -685,12 +704,17 @@ public class HUD {
         return !benchSlots[idx].isEmpty() && benchSlots[idx].getType() == BlockType.COBBLESTONE;
     }
 
+    private boolean isCoal(int idx) {
+        return !benchSlots[idx].isEmpty() && benchSlots[idx].getType() == BlockType.COAL;
+    }
+
     public ItemStack get3x3CraftingResult() {
         int countNonEmpty = 0;
         int woodCount = 0;
         int plankCount = 0;
         int stickCount = 0;
         int cobbleCount = 0;
+        int coalCount = 0;
 
         for (ItemStack s : benchSlots) {
             if (!s.isEmpty()) {
@@ -699,6 +723,7 @@ public class HUD {
                 else if (s.getType() == BlockType.PLANKS) plankCount++;
                 else if (s.getType() == BlockType.STICK) stickCount++;
                 else if (s.getType() == BlockType.COBBLESTONE) cobbleCount++;
+                else if (s.getType() == BlockType.COAL) coalCount++;
             }
         }
 
@@ -741,6 +766,16 @@ public class HUD {
                 (isCobble(0) && isCobble(3) && isStick(6)) ||
                 (isCobble(2) && isCobble(5) && isStick(8))) {
                 return new ItemStack(BlockType.STONE_SWORD, 1);
+            }
+        }
+
+        // --- Torch Recipe ---
+        // 1 Coal + 1 Stick: 4 Torches (Coal directly above Stick)
+        if (coalCount == 1 && stickCount == 1 && countNonEmpty == 2) {
+            if ((isCoal(0) && isStick(3)) || (isCoal(3) && isStick(6)) ||
+                (isCoal(1) && isStick(4)) || (isCoal(4) && isStick(7)) ||
+                (isCoal(2) && isStick(5)) || (isCoal(5) && isStick(8))) {
+                return new ItemStack(BlockType.TORCH, 4);
             }
         }
 
@@ -967,6 +1002,9 @@ public class HUD {
             placeInBench(player, BlockType.COBBLESTONE, 0, 1, 2, 3, 5, 6, 7, 8);
         } else if (out == BlockType.WOODEN_BUTTON) {
             placeInBench(player, BlockType.PLANKS, 4);
+        } else if (out == BlockType.TORCH) {
+            placeInBench(player, BlockType.COAL, 1);
+            placeInBench(player, BlockType.STICK, 4);
         }
     }
 
@@ -1463,6 +1501,16 @@ public class HUD {
                             player.getInventory().removeItem(BlockType.PLANKS, 1);
                             craftSlots[0].setType(BlockType.PLANKS);
                             craftSlots[0].setCount(1);
+                        }
+                    } else if (r.getOutput().getType() == BlockType.TORCH) {
+                        if (player.getInventory().getItemCount(BlockType.COAL) >= 1 && player.getInventory().getItemCount(BlockType.STICK) >= 1) {
+                            returnCraftSlotsToInventory(player);
+                            player.getInventory().removeItem(BlockType.COAL, 1);
+                            player.getInventory().removeItem(BlockType.STICK, 1);
+                            craftSlots[0].setType(BlockType.COAL);
+                            craftSlots[0].setCount(1);
+                            craftSlots[2].setType(BlockType.STICK);
+                            craftSlots[2].setCount(1);
                         }
                     } else {
                         // 3x3 recipe (tools, boat, chest, door, etc.)

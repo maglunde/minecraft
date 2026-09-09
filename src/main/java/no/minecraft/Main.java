@@ -757,6 +757,10 @@ public class Main {
                     boolean roomAvailable = !toPlace.isSolid() || player.isFlying() || !player.getBoundingBox().intersects(
                             new no.minecraft.player.AABB(hit.placeX, hit.placeY, hit.placeZ,
                                     hit.placeX + 1, hit.placeY + 1, hit.placeZ + 1));
+                    if (toPlace == BlockType.TORCH && hit.placeY < hit.hitY) {
+                        // Torch cannot be placed on ceiling
+                        return false;
+                    }
                     if (roomAvailable) {
                         world.setBlock(hit.placeX, hit.placeY, hit.placeZ, toPlace);
                         no.minecraft.sound.SoundManager.getInstance().play(toPlace.getDigSound(), 0.8f);
