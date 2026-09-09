@@ -130,4 +130,31 @@ public class WorldSaveManagerTest {
         assertTrue(deleted);
         assertFalse(WorldSaveManager.listWorlds().stream().anyMatch(w -> w.getFolderName().equals(info.getFolderName())));
     }
+
+    @Test
+    public void testEvictedChunkReloadsFromSave() {
+        World world = new World();
+        Player player = new Player(world, 0, 10, 0);
+        createdWorldInfo = WorldSaveManager.createNewWorld(
+                "EvictTest_" + System.currentTimeMillis(), "555", GameMode.SURVIVAL, world, player);
+
+        // Player edit, then save (autosave equivalent)
+        world.setBlock(2, 20, 0, BlockType.GOLD_ORE);
+        assertTrue(WorldSaveManager.saveWorld(world, player, createdWorldInfo));
+
+        int originalRd = no.minecraft.settings.GameSettings.getInstance().getRenderDistance();
+        try {
+            no.minecraft.settings.GameSettings.getInstance().setRenderDistance(3);
+            // Walk far away: spawn chunk leaves memory
+            world.updateLoadedChunks(6, 0);
+            assertNull(world.getChunk(0, 0), "Spawn-chunk skal være eviktert");
+
+            // Return: chunk reloads from save, keeping the player edit
+            world.updateLoadedChunks(0, 0);
+            assertEquals(BlockType.GOLD_ORE, world.getBlock(2, 20, 0),
+                    "Blokk i eviktert chunk må gjenopprettes fra save ved retur");
+        } finally {
+            no.minecraft.settings.GameSettings.getInstance().setRenderDistance(originalRd);
+        }
+    }
 }
