@@ -128,6 +128,7 @@ public class Main {
 
     private void init() {
         errorCallback = GLFWErrorCallback.createPrint(System.err).set();
+        no.minecraft.settings.GameSettings.load();
 
         if (!glfwInit()) {
             throw new IllegalStateException("Failed to initialize GLFW");
@@ -1341,5 +1342,6 @@ public class Main {
             errorCallback.free();
             errorCallback = null;
         }
+        no.minecraft.settings.GameSettings.save();
     }
 }

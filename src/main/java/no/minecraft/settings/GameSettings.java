@@ -1,8 +1,17 @@
 package no.minecraft.settings;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Properties;
+
 import static org.lwjgl.glfw.GLFW.*;
 
 public class GameSettings {
+    public static final Path SETTINGS_FILE = Paths.get("settings.properties");
     private static final GameSettings INSTANCE = new GameSettings();
 
     public static GameSettings getInstance() {
@@ -55,6 +64,93 @@ public class GameSettings {
     private int guiScale = 0;
 
     private GameSettings() {}
+
+    public static void load() {
+        getInstance().loadFrom(SETTINGS_FILE);
+    }
+
+    public static void save() {
+        getInstance().saveTo(SETTINGS_FILE);
+    }
+
+    public void loadFrom(Path path) {
+        if (!Files.exists(path)) return;
+        Properties p = new Properties();
+        try (InputStream in = Files.newInputStream(path)) {
+            p.load(in);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return;
+        }
+        String lang = p.getProperty("language");
+        if (lang != null) {
+            try {
+                language = Language.valueOf(lang);
+            } catch (IllegalArgumentException ignored) {}
+        }
+        setMouseSensitivity(parseFloat(p, "mouseSensitivity", mouseSensitivity));
+        setFov(parseFloat(p, "fov", fov));
+        setRenderDistance(parseInt(p, "renderDistance", renderDistance));
+        setBrightness(parseFloat(p, "brightness", brightness));
+        setSoundVolume(parseFloat(p, "soundVolume", soundVolume));
+        setGuiScale(parseInt(p, "guiScale", guiScale));
+        keyForward = parseInt(p, "keyForward", keyForward);
+        keyBackward = parseInt(p, "keyBackward", keyBackward);
+        keyLeft = parseInt(p, "keyLeft", keyLeft);
+        keyRight = parseInt(p, "keyRight", keyRight);
+        keyJump = parseInt(p, "keyJump", keyJump);
+        keySneak = parseInt(p, "keySneak", keySneak);
+        keyInventory = parseInt(p, "keyInventory", keyInventory);
+        keyDrop = parseInt(p, "keyDrop", keyDrop);
+        keyToggleDebug = parseInt(p, "keyToggleDebug", keyToggleDebug);
+        keyTogglePerspective = parseInt(p, "keyTogglePerspective", keyTogglePerspective);
+    }
+
+    public void saveTo(Path path) {
+        Properties p = new Properties();
+        p.setProperty("language", language.name());
+        p.setProperty("mouseSensitivity", Float.toString(mouseSensitivity));
+        p.setProperty("fov", Float.toString(fov));
+        p.setProperty("renderDistance", Integer.toString(renderDistance));
+        p.setProperty("brightness", Float.toString(brightness));
+        p.setProperty("soundVolume", Float.toString(soundVolume));
+        p.setProperty("guiScale", Integer.toString(guiScale));
+        p.setProperty("keyForward", Integer.toString(keyForward));
+        p.setProperty("keyBackward", Integer.toString(keyBackward));
+        p.setProperty("keyLeft", Integer.toString(keyLeft));
+        p.setProperty("keyRight", Integer.toString(keyRight));
+        p.setProperty("keyJump", Integer.toString(keyJump));
+        p.setProperty("keySneak", Integer.toString(keySneak));
+        p.setProperty("keyInventory", Integer.toString(keyInventory));
+        p.setProperty("keyDrop", Integer.toString(keyDrop));
+        p.setProperty("keyToggleDebug", Integer.toString(keyToggleDebug));
+        p.setProperty("keyTogglePerspective", Integer.toString(keyTogglePerspective));
+        try (OutputStream out = Files.newOutputStream(path)) {
+            p.store(out, "Minecraft clone settings");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static float parseFloat(Properties p, String key, float fallback) {
+        String v = p.getProperty(key);
+        if (v == null) return fallback;
+        try {
+            return Float.parseFloat(v);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private static int parseInt(Properties p, String key, int fallback) {
+        String v = p.getProperty(key);
+        if (v == null) return fallback;
+        try {
+            return Integer.parseInt(v);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
 
     public int getGuiScale() {
         return guiScale;
