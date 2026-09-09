@@ -303,15 +303,35 @@ public class Main {
 
                     if (hitMob != null) {
                         BlockType tool = player.getSelectedBlock();
-                        int dmg = tool != null ? tool.getAttackDamage() : 1;
+                        int baseDmg = tool != null ? tool.getAttackDamage() : 1;
+                        boolean isCrit = player.canPerformCriticalHit();
+                        int dmg = isCrit ? Math.max(baseDmg + 1, (int) Math.ceil(baseDmg * 1.5f)) : baseDmg;
+
                         hitMob.takeDamage(dmg, fwd.x, fwd.z, world);
-                        no.minecraft.sound.SoundManager.getInstance().play("hurt", 0.9f);
+                        if (isCrit) {
+                            no.minecraft.sound.SoundManager.getInstance().play("crit", 1.0f);
+                        } else {
+                            no.minecraft.sound.SoundManager.getInstance().play("hurt", 0.9f);
+                        }
+
                         float mobH = hitMob.getType().getHeight();
+                        float targetY = hitMob.getPosition().y + mobH * 0.65f;
+
+                        if (isCrit) {
+                            no.minecraft.render.ParticleManager.getInstance().spawnCritParticles(
+                                    hitMob.getPosition().x,
+                                    targetY,
+                                    hitMob.getPosition().z,
+                                    16
+                            );
+                        }
+
                         CombatTextManager.getInstance().add(
                                 hitMob.getPosition().x,
                                 hitMob.getPosition().y + mobH * 0.75f,
                                 hitMob.getPosition().z,
-                                dmg / 2.0f
+                                dmg / 2.0f,
+                                isCrit
                         );
                         // Damage tool in survival
                         if (player.getGameMode() == GameMode.SURVIVAL) {
@@ -899,6 +919,7 @@ public class Main {
                 player.update(dt, fwd, bwd, left, right, jump, sneak, sprint);
                 world.update(dt, player);
                 CombatTextManager.getInstance().update(dt);
+                no.minecraft.render.ParticleManager.getInstance().update(dt);
 
                 // Dimension Portal stepping check with cooldown
                 if (dimensionPortalCooldown > 0) {

@@ -14,14 +14,16 @@ public class CombatTextManager {
     public static class CombatText {
         public final Vector3f worldPos;
         public final float hearts;
+        public final boolean isCrit;
         public float age = 0.0f;
         public final float maxLifetime = 1.2f;
         public final float driftX;
         public final float driftZ;
 
-        public CombatText(float x, float y, float z, float hearts) {
+        public CombatText(float x, float y, float z, float hearts, boolean isCrit) {
             this.worldPos = new Vector3f(x, y, z);
             this.hearts = hearts;
+            this.isCrit = isCrit;
             this.driftX = (RANDOM.nextFloat() - 0.5f) * 0.35f;
             this.driftZ = (RANDOM.nextFloat() - 0.5f) * 0.35f;
         }
@@ -37,7 +39,11 @@ public class CombatTextManager {
     }
 
     public void add(float x, float y, float z, float hearts) {
-        texts.add(new CombatText(x, y, z, hearts));
+        add(x, y, z, hearts, false);
+    }
+
+    public void add(float x, float y, float z, float hearts, boolean isCrit) {
+        texts.add(new CombatText(x, y, z, hearts, isCrit));
     }
 
     public void update(float dt) {

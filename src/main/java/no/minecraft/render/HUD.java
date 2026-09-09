@@ -3058,6 +3058,9 @@ public class HUD {
 
             float alpha = t < 0.65f ? 1.0f : Math.max(0.0f, 1.0f - (t - 0.65f) / 0.35f);
             float scale = (t < 0.12f ? (1.8f - (t / 0.12f) * 0.4f) : 1.4f) * 2.0f;
+            if (ct.isCrit) {
+                scale *= 1.22f;
+            }
 
             int fullHearts = (int) Math.floor(ct.hearts);
             boolean hasHalf = (ct.hearts - fullHearts) >= 0.25f;
@@ -3076,7 +3079,13 @@ public class HUD {
             float startY = sy - 4.0f * scale;
 
             // Semi-transparent background pill for contrast against any scenery
-            addRect(overlayGeom, startX - 3.0f * scale, startY - 2.0f * scale, totalW + 6.0f * scale, 12.0f * scale, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.40f * alpha);
+            if (ct.isCrit) {
+                // Golden outer accent border for critical hit
+                addRect(overlayGeom, startX - 4.5f * scale, startY - 3.5f * scale, totalW + 9.0f * scale, 15.0f * scale, 0, 0, 0, 0, 1.0f, 0.78f, 0.15f, 0.70f * alpha);
+                addRect(overlayGeom, startX - 3.0f * scale, startY - 2.0f * scale, totalW + 6.0f * scale, 12.0f * scale, 0, 0, 0, 0, 0.12f, 0.04f, 0.0f, 0.55f * alpha);
+            } else {
+                addRect(overlayGeom, startX - 3.0f * scale, startY - 2.0f * scale, totalW + 6.0f * scale, 12.0f * scale, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.40f * alpha);
+            }
 
             // Red pixel hearts only (full and half hearts)
             for (int i = 0; i < totalHearts; i++) {

@@ -22,6 +22,7 @@ public class SoundManager {
         preload("click");
         preload("pop");
         preload("hurt");
+        preload("crit");
         preload("fall_small");
         preload("explode");
         preload("fuse");

@@ -69,6 +69,8 @@ public class Player {
 
     private boolean movingForward = false;
     private boolean movingBackward = false;
+    private boolean inWater = false;
+    private boolean onLadder = false;
     private no.minecraft.entity.Boat ridingBoat = null;
 
     public Player(World world, float startX, float startY, float startZ) {
@@ -102,7 +104,8 @@ public class Player {
         int currZ = (int) Math.floor(position.z);
         BlockType bFeet = world.getBlock(currX, currY, currZ);
         BlockType bHead = world.getBlock(currX, (int) Math.floor(position.y + 0.9f), currZ);
-        boolean inWater = (bFeet == BlockType.WATER || bHead == BlockType.WATER);
+        this.inWater = (bFeet == BlockType.WATER || bHead == BlockType.WATER);
+        this.onLadder = (bFeet == BlockType.LADDER || bHead == BlockType.LADDER);
 
         if (world.getBlock(currX, (int) Math.floor(position.y - 0.2f), currZ) == BlockType.SOUL_SAND) {
             baseSpeed *= 0.45f;
@@ -640,4 +643,14 @@ public class Player {
     public boolean isMovingBackward() { return movingBackward; }
     public no.minecraft.entity.Boat getRidingBoat() { return ridingBoat; }
     public void setRidingBoat(no.minecraft.entity.Boat boat) { this.ridingBoat = boat; }
+    public boolean isInWater() { return inWater; }
+    public boolean isOnLadder() { return onLadder; }
+
+    /**
+     * In Minecraft, a critical hit occurs when the player is descending in mid-air
+     * (!onGround && velocity.y < 0) and not sprinting, in water, on a ladder, flying, or riding.
+     */
+    public boolean canPerformCriticalHit() {
+        return !onGround && velocity.y < 0.0f && !inWater && !onLadder && !flying && ridingBoat == null && !isSprinting;
+    }
 }

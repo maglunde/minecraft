@@ -73,7 +73,8 @@ public class MobRenderer {
     }
 
     public void render(List<Mob> mobs, List<Arrow> arrows, List<no.minecraft.entity.Boat> boats, Matrix4f projection, Matrix4f view, float sunLight) {
-        if (mobs.isEmpty() && arrows.isEmpty() && (boats == null || boats.isEmpty())) return;
+        List<ParticleManager.Particle> particles = ParticleManager.getInstance().getParticles();
+        if (mobs.isEmpty() && arrows.isEmpty() && (boats == null || boats.isEmpty()) && particles.isEmpty()) return;
 
         List<Float> verts = new ArrayList<>();
 
@@ -422,6 +423,16 @@ public class MobRenderer {
                 addRotatedBox(verts, bx, by, bz, -0.62f, 0.24f, 0.1f, 0.06f, 0.06f, 0.7f, yaw + 25.0f, or, og, ob);
                 addRotatedBox(verts, bx, by, bz, 0.62f, 0.24f, 0.1f, 0.06f, 0.06f, 0.7f, yaw - 25.0f, or, og, ob);
             }
+        }
+
+        // 8. 3D Particles (e.g. Critical Hit sparkles)
+        for (ParticleManager.Particle p : particles) {
+            float alpha = Math.max(0.0f, 1.0f - (p.age / p.maxLifetime));
+            float s = p.size * (0.6f + alpha * 0.4f);
+            float px = p.pos.x;
+            float py = p.pos.y;
+            float pz = p.pos.z;
+            addBox(verts, px - s * 0.5f, py - s * 0.5f, pz - s * 0.5f, s, s, s, p.r, p.g, p.b);
         }
 
         if (verts.isEmpty()) return;
