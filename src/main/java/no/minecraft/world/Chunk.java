@@ -405,7 +405,30 @@ public class Chunk {
     }
 
     public void cleanup() {
-        if (vboId != 0) glDeleteBuffers(vboId);
-        if (vaoId != 0) glDeleteVertexArrays(vaoId);
+        if (vboId != 0) {
+            glDeleteBuffers(vboId);
+            vboId = 0;
+        }
+        if (vaoId != 0) {
+            glDeleteVertexArrays(vaoId);
+            vaoId = 0;
+        }
+        vertexCount = 0;
+    }
+
+    public void unloadMesh() {
+        cleanup();
+        isDirty = true;
+    }
+
+    public byte[] getBlocks() {
+        return blocks;
+    }
+
+    public void setBlocks(byte[] src) {
+        if (src != null && src.length == blocks.length) {
+            System.arraycopy(src, 0, blocks, 0, blocks.length);
+            isDirty = true;
+        }
     }
 }

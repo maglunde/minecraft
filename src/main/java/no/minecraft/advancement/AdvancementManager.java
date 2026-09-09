@@ -81,6 +81,19 @@ public class AdvancementManager {
         return Collections.unmodifiableSet(unlocked);
     }
 
+    public void setUnlocked(java.util.Collection<String> names) {
+        unlocked.clear();
+        unlock(Advancement.ROOT, false);
+        if (names != null) {
+            for (String name : names) {
+                try {
+                    Advancement adv = Advancement.valueOf(name);
+                    unlocked.add(adv);
+                } catch (IllegalArgumentException ignored) {}
+            }
+        }
+    }
+
     public void update(float dt) {
         if (popupTimer > 0.0f) {
             popupTimer -= dt;

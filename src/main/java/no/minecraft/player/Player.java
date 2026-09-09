@@ -629,6 +629,22 @@ public class Player {
         this.hunger = Math.clamp(h, 0, 20);
     }
 
+    public float getSaturation() {
+        return saturation;
+    }
+
+    public void setSaturation(float s) {
+        this.saturation = Math.clamp(s, 0.0f, 20.0f);
+    }
+
+    public float getExhaustion() {
+        return exhaustion;
+    }
+
+    public void setExhaustion(float e) {
+        this.exhaustion = Math.max(0.0f, e);
+    }
+
     public boolean eatFood(BlockType food) {
         if (food == null || !food.isFood()) return false;
         if (gameMode == GameMode.SURVIVAL && hunger >= 20) return false;

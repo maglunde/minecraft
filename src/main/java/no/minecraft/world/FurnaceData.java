@@ -30,8 +30,11 @@ public class FurnaceData {
     public ItemStack getOutput() { return output; }
 
     public float getCookTime() { return cookTime; }
+    public void setCookTime(float t) { this.cookTime = t; }
     public float getBurnTime() { return burnTime; }
+    public void setBurnTime(float t) { this.burnTime = t; }
     public float getMaxBurnTime() { return maxBurnTime; }
+    public void setMaxBurnTime(float t) { this.maxBurnTime = t; }
     public boolean isBurning() { return burnTime > 0.0f; }
 
     public static BlockType getSmeltingResult(BlockType in) {

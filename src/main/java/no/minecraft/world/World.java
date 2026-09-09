@@ -60,6 +60,18 @@ public class World {
         return currentDimension;
     }
 
+    public void setCurrentDimension(Dimension currentDimension) {
+        this.currentDimension = currentDimension;
+    }
+
+    public Map<Dimension, Map<Long, Chunk>> getDimensionChunks() {
+        return dimensionChunks;
+    }
+
+    public Map<Dimension, Set<Long>> getDimensionGenerated() {
+        return dimensionGenerated;
+    }
+
     public boolean isGameWon() {
         return gameWon;
     }
@@ -563,6 +575,19 @@ public class World {
         }
     }
 
+    public Map<Long, FurnaceData> getFurnaces() {
+        return Collections.unmodifiableMap(furnaces);
+    }
+
+    public void setFurnaces(List<FurnaceData> list) {
+        furnaces.clear();
+        if (list != null) {
+            for (FurnaceData fd : list) {
+                furnaces.put(blockPosKey(fd.getX(), fd.getY(), fd.getZ()), fd);
+            }
+        }
+    }
+
     public float getWorldTime() { return worldTime; }
     public void setWorldTime(float time) { this.worldTime = Math.max(0.0f, time); }
     public void setTimeOfDay(float dayFraction) {
@@ -851,9 +876,7 @@ public class World {
             Chunk chunk = entry.getValue();
             int dist = Math.max(Math.abs(chunk.getChunkX() - centerCx), Math.abs(chunk.getChunkZ() - centerCz));
             if (dist > unloadDist) {
-                chunk.cleanup();
-                activeGenerated.remove(entry.getKey());
-                iterator.remove();
+                chunk.unloadMesh();
             }
         }
     }

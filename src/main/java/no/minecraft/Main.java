@@ -257,7 +257,11 @@ public class Main {
                     if (pauseMenu.isQuitToTitleRequested()) {
                         pauseMenu.clearQuitToTitleRequested();
                         pauseMenu.close();
+                        if (mainMenu.getActiveWorldInfo() != null) {
+                            no.minecraft.world.save.WorldSaveManager.saveWorld(world, player, mainMenu.getActiveWorldInfo());
+                        }
                         mainMenu.setInMenu(true);
+                        mainMenu.setCurrentScreen(MainMenu.Screen.TITLE);
                         setCursorLocked(false);
                     } else if (!pauseMenu.isOpen()) {
                         if (!mainMenu.isInMenu()) {
@@ -270,17 +274,7 @@ public class Main {
 
             if (mainMenu.isInMenu()) {
                 if (action == GLFW_PRESS) {
-                    boolean wasGameStarted = mainMenu.isGameStarted();
-                    if (mainMenu.handleClick(lastMouseX, lastMouseY, button, width, height)) {
-                        player.setGameMode(mainMenu.getSelectedMode());
-                        // If freshly started from title menu, generate a brand new random seed terrain!
-                        if (!wasGameStarted) {
-                            long newSeed = new java.util.Random().nextLong();
-                            world.setSeed(newSeed);
-                            Vector3f spawn = world.getSpawnPoint();
-                            player.resetToSpawn(spawn.x, spawn.y, spawn.z);
-                            mainMenu.setGameStarted(true);
-                        }
+                    if (mainMenu.handleClick(lastMouseX, lastMouseY, button, width, height, world, player)) {
                         setCursorLocked(true);
                     } else if (mainMenu.isOpenOptionsRequested()) {
                         mainMenu.clearOpenOptionsRequested();
@@ -422,6 +416,10 @@ public class Main {
 
         // Scroll for hotbar / GUI
         glfwSetScrollCallback(window, (win, xoffset, yoffset) -> {
+            if (mainMenu.isInMenu()) {
+                mainMenu.handleScroll(yoffset);
+                return;
+            }
             if (hud.isInventoryOpen()) {
                 hud.handleScroll(xoffset, yoffset);
                 return;
@@ -446,6 +444,11 @@ public class Main {
             no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
 
             if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+                if (mainMenu.isInMenu()) {
+                    if (mainMenu.handleKey(key, action)) {
+                        return;
+                    }
+                }
                 if (hud.isRecipeSearchFocused()) {
                     if (key == GLFW_KEY_BACKSPACE) {
                         hud.recipeSearchBackspace();
@@ -497,7 +500,7 @@ public class Main {
                     if (mainMenu.handleKey(key, action)) {
                         return;
                     }
-                    if (key == GLFW_KEY_ESCAPE && mainMenu.isGameStarted()) {
+                    if (key == GLFW_KEY_ESCAPE && mainMenu.isGameStarted() && mainMenu.getCurrentScreen() == MainMenu.Screen.TITLE) {
                         // Resume game if already in progress
                         no.minecraft.sound.SoundManager.getInstance().play("click");
                         mainMenu.setInMenu(false);
@@ -620,6 +623,10 @@ public class Main {
         glfwSetCharCallback(window, (win, codepoint) -> {
             if (ignoreNextChar) {
                 ignoreNextChar = false;
+                return;
+            }
+            if (mainMenu.isInMenu()) {
+                mainMenu.handleChar((char) codepoint);
                 return;
             }
             if (chatManager.isOpen()) {
@@ -931,6 +938,7 @@ public class Main {
         int currentFps = 60;
 
         Vector3f skyColor = new Vector3f(0.53f, 0.81f, 0.98f); // Minecraft sky blue
+        float autoSaveTimer = 0.0f;
 
         while (!glfwWindowShouldClose(window)) {
             double currentTime = glfwGetTime();
@@ -939,6 +947,14 @@ public class Main {
 
             // Cap dt to prevent physics tunneling during lags
             dt = Math.min(dt, 0.05f);
+
+            if (!mainMenu.isInMenu() && mainMenu.getActiveWorldInfo() != null) {
+                autoSaveTimer += dt;
+                if (autoSaveTimer >= 60.0f) {
+                    autoSaveTimer = 0.0f;
+                    no.minecraft.world.save.WorldSaveManager.saveWorld(world, player, mainMenu.getActiveWorldInfo());
+                }
+            }
 
             no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
             boolean isPaused = mainMenu.isInMenu() || pauseMenu.isOpen();
@@ -1283,6 +1299,9 @@ public class Main {
     }
 
     private void cleanup() {
+        if (!mainMenu.isInMenu() && mainMenu.getActiveWorldInfo() != null) {
+            no.minecraft.world.save.WorldSaveManager.saveWorld(world, player, mainMenu.getActiveWorldInfo());
+        }
         if (pauseMenu != null) {
             pauseMenu.cleanup();
         }

@@ -60,6 +60,12 @@ public class Camera {
         updateVectors();
     }
 
+    public void setRotation(float yaw, float pitch) {
+        this.yaw = yaw;
+        this.pitch = Math.clamp(pitch, -89.0f, 89.0f);
+        updateVectors();
+    }
+
     public void updatePosition(World world, float eyeX, float eyeY, float eyeZ) {
         eyePosition.set(eyeX, eyeY, eyeZ);
 
