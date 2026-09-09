@@ -27,6 +27,7 @@ public class World {
     private final List<no.minecraft.entity.Arrow> arrows = new ArrayList<>();
     private float mobSpawnTimer = 0.0f;
     private final Random rand = new Random();
+    private boolean shouldClearHostileMobs = false;
 
     public static final float DAY_LENGTH_SECONDS = 240.0f;
     private float worldTime = 20.0f;
@@ -200,8 +201,7 @@ public class World {
     }
 
     public void clearHostileMobs() {
-        mobs.removeIf(mob -> mob.getType() != no.minecraft.entity.MobType.ENDER_DRAGON &&
-                             mob.getType() != no.minecraft.entity.MobType.END_CRYSTAL);
+        shouldClearHostileMobs = true;
     }
 
     public List<DroppedItem> getDroppedItems() { return droppedItems; }
@@ -271,11 +271,18 @@ public class World {
             }
         }
 
+        if (shouldClearHostileMobs) {
+            shouldClearHostileMobs = false;
+            mobs.removeIf(mob -> mob.getType() != no.minecraft.entity.MobType.ENDER_DRAGON &&
+                                 mob.getType() != no.minecraft.entity.MobType.END_CRYSTAL);
+        }
+
         // Dropped items
         for (int i = droppedItems.size() - 1; i >= 0; i--) {
+            if (i >= droppedItems.size()) continue;
             DroppedItem item = droppedItems.get(i);
             item.update(dt, this, player);
-            if (item.isDead()) droppedItems.remove(i);
+            if (item.isDead() && i < droppedItems.size()) droppedItems.remove(i);
         }
 
         // Mob spawning
@@ -287,20 +294,35 @@ public class World {
 
         // Update Mobs
         for (int i = mobs.size() - 1; i >= 0; i--) {
+            if (i >= mobs.size()) continue;
             no.minecraft.entity.Mob mob = mobs.get(i);
             mob.update(dt, this, player);
-            if (mob.isDead() && mob.getType() != no.minecraft.entity.MobType.ENDER_DRAGON) {
-                mobs.remove(i);
-            } else if (mob.getPosition().distance(player.getPosition()) > 75.0f && mob.getType() != no.minecraft.entity.MobType.ENDER_DRAGON) {
-                mobs.remove(i);
+
+            if (shouldClearHostileMobs) {
+                break;
             }
+
+            if (i < mobs.size()) {
+                if (mob.isDead() && mob.getType() != no.minecraft.entity.MobType.ENDER_DRAGON) {
+                    mobs.remove(i);
+                } else if (mob.getPosition().distance(player.getPosition()) > 75.0f && mob.getType() != no.minecraft.entity.MobType.ENDER_DRAGON) {
+                    mobs.remove(i);
+                }
+            }
+        }
+
+        if (shouldClearHostileMobs) {
+            shouldClearHostileMobs = false;
+            mobs.removeIf(mob -> mob.getType() != no.minecraft.entity.MobType.ENDER_DRAGON &&
+                                 mob.getType() != no.minecraft.entity.MobType.END_CRYSTAL);
         }
 
         // Update Arrows
         for (int i = arrows.size() - 1; i >= 0; i--) {
+            if (i >= arrows.size()) continue;
             no.minecraft.entity.Arrow arrow = arrows.get(i);
             arrow.update(dt, this, player);
-            if (arrow.isDead()) arrows.remove(i);
+            if (arrow.isDead() && i < arrows.size()) arrows.remove(i);
         }
     }
 
