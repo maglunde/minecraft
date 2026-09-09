@@ -25,4 +25,37 @@ public class GameSettingsTest {
         // Restore default
         settings.setRenderDistance(5);
     }
+
+    @Test
+    public void testCalculateGuiScale() {
+        GameSettings settings = GameSettings.getInstance();
+        settings.setGuiScale(0); // Auto
+
+        // Small window (854x480) -> scale 2
+        assertEquals(2.0f, settings.calculateGuiScale(854, 480));
+
+        // 720p window (1280x720) -> scale 3
+        assertEquals(3.0f, settings.calculateGuiScale(1280, 720));
+
+        // 1080p window (1920x1080) -> scale 4
+        assertEquals(4.0f, settings.calculateGuiScale(1920, 1080));
+
+        // 1440p / Retina window (2560x1440) -> scale 6
+        assertEquals(6.0f, settings.calculateGuiScale(2560, 1440));
+
+        // Ultra tiny window (300x200) -> min scale 1
+        assertEquals(1.0f, settings.calculateGuiScale(300, 200));
+
+        // Manual GUI Scale override
+        settings.setGuiScale(2);
+        assertEquals(2.0f, settings.calculateGuiScale(1920, 1080));
+        assertEquals(2.0f, settings.calculateGuiScale(2560, 1440));
+
+        // Manual override cannot exceed window capability
+        settings.setGuiScale(4);
+        assertEquals(2.0f, settings.calculateGuiScale(854, 480));
+
+        // Restore default Auto
+        settings.setGuiScale(0);
+    }
 }

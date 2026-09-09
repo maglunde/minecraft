@@ -179,7 +179,7 @@ public class PauseMenu {
         if (button != GLFW_MOUSE_BUTTON_LEFT && button != GLFW_MOUSE_BUTTON_RIGHT) return false;
         if (button == GLFW_MOUSE_BUTTON_RIGHT && currentScreen != Screen.OPTIONS) return false;
 
-        float p = 2.4f;
+        float p = GameSettings.getInstance().calculateGuiScale(width, height);
         boolean norwegian = GameSettings.getInstance().getLanguage() == GameSettings.Language.NORWEGIAN;
 
         if (currentScreen == Screen.MAIN) {
@@ -309,11 +309,19 @@ public class PauseMenu {
             return true;
         }
 
-        // Row 3: Language (left)
+        // Row 3: Language (left) & GUI Scale (right)
         float y3 = startY + gap * 3.0f;
         if (mx >= leftX && mx <= leftX + btnW && my >= y3 && my <= y3 + btnH) {
             SoundManager.getInstance().play("click");
             s.toggleLanguage();
+            return true;
+        }
+        if (mx >= rightX && mx <= rightX + btnW && my >= y3 && my <= y3 + btnH) {
+            SoundManager.getInstance().play("click");
+            int next = (button == GLFW_MOUSE_BUTTON_RIGHT) ? s.getGuiScale() - 1 : s.getGuiScale() + 1;
+            if (next > 4) next = 0;
+            if (next < 0) next = 4;
+            s.setGuiScale(next);
             return true;
         }
 
@@ -395,7 +403,7 @@ public class PauseMenu {
         List<Float> tex = new ArrayList<>();
         List<Float> overlayGeom = new ArrayList<>();
 
-        float p = 2.4f;
+        float p = GameSettings.getInstance().calculateGuiScale(width, height);
 
         // Background: Tinted translucent dark layer for pause menu (in-game world dimly visible underneath)
         if (currentScreen == Screen.MAIN) {
@@ -544,12 +552,17 @@ public class PauseMenu {
         drawMenuButton(geom, rightX, y2, btnW, btnH, h2R, p);
         drawCenteredButtonText(overlayGeom, norwegian ? "STYRING (CONTROLS)..." : "CONTROLS...", rightX + btnW / 2.0f, y2 + 5.5f * p, p * 0.75f, h2R);
 
-        // Row 3: Language
+        // Row 3: Language (left) & GUI Scale (right)
         float y3 = startY + gap * 3.0f;
         boolean h3L = (mx >= leftX && mx <= leftX + btnW && my >= y3 && my <= y3 + btnH);
         drawMenuButton(geom, leftX, y3, btnW, btnH, h3L, p);
         String langStr = (norwegian ? "SPRAK: " : "LANGUAGE: ") + s.getLanguage().getDisplayName();
         drawCenteredButtonText(overlayGeom, langStr, leftX + btnW / 2.0f, y3 + 5.5f * p, p * 0.65f, h3L);
+
+        boolean h3R = (mx >= rightX && mx <= rightX + btnW && my >= y3 && my <= y3 + btnH);
+        drawMenuButton(geom, rightX, y3, btnW, btnH, h3R, p);
+        String guiScaleStr = s.getGuiScale() == 0 ? "AUTO" : String.valueOf(s.getGuiScale());
+        drawCenteredButtonText(overlayGeom, (norwegian ? "GUI SKALA: " : "GUI SCALE: ") + guiScaleStr, rightX + btnW / 2.0f, y3 + 5.5f * p, p * 0.75f, h3R);
 
         // Done button
         float doneW = 200.0f * p;

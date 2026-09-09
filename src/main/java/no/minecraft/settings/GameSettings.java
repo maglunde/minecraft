@@ -51,7 +51,29 @@ public class GameSettings {
     // Master Sound Volume (0.0f to 1.0f)
     private float soundVolume = 1.0f;
 
+    // GUI Scale: 0 = Auto, 1, 2, 3, 4
+    private int guiScale = 0;
+
     private GameSettings() {}
+
+    public int getGuiScale() {
+        return guiScale;
+    }
+
+    public void setGuiScale(int guiScale) {
+        this.guiScale = Math.clamp(guiScale, 0, 4);
+    }
+
+    public float calculateGuiScale(int width, int height) {
+        int maxScale = 1;
+        while (width / (maxScale + 1) >= 320 && height / (maxScale + 1) >= 240) {
+            maxScale++;
+        }
+        if (guiScale > 0 && guiScale <= maxScale) {
+            return (float) guiScale;
+        }
+        return (float) Math.max(1, maxScale);
+    }
 
     public Language getLanguage() {
         return language;

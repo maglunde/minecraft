@@ -154,7 +154,7 @@ public class MainMenu {
     public boolean handleClick(double mx, double my, int button, int width, int height) {
         if (!inMenu || button != GLFW_MOUSE_BUTTON_LEFT) return false;
 
-        float p = 2.4f;
+        float p = no.minecraft.settings.GameSettings.getInstance().calculateGuiScale(width, height);
 
         if (currentScreen == Screen.TITLE) {
             float btnW = 180.0f * p;
@@ -237,7 +237,7 @@ public class MainMenu {
         List<Float> tex = new ArrayList<>();
         List<Float> overlayGeom = new ArrayList<>();
 
-        float p = 2.4f;
+        float p = no.minecraft.settings.GameSettings.getInstance().calculateGuiScale(width, height);
 
         // 1. Dark dirt-tiled panoramic background
         int dirtTile = BlockType.DIRT.getTexture(BlockType.Face.TOP);

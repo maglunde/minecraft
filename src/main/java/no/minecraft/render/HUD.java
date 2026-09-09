@@ -486,9 +486,13 @@ public class HUD {
         }
     }
 
+    public float getGuiScale(int windowWidth, int windowHeight) {
+        return no.minecraft.settings.GameSettings.getInstance().calculateGuiScale(windowWidth, windowHeight);
+    }
+
     public ItemStack getSlotAt(double mx, double my, Player player, int windowWidth, int windowHeight) {
         if (!isInventoryOpen()) return null;
-        float scale = 2.4f;
+        float scale = getGuiScale(windowWidth, windowHeight);
         float invW = 176.0f * scale;
         float invH = 166.0f * scale;
         float ix = (windowWidth - invW) / 2.0f;
@@ -545,11 +549,11 @@ public class HUD {
             }
         }
 
-        // Hotbar Grid (1x9)
-        float hotbarInvY = iy + 142.0f * scale;
+        // Hotbar (1x9)
+        float hotbarY = iy + 142.0f * scale;
         for (int col = 0; col < 9; col++) {
             float sx = mainInvX + col * 18.0f * scale;
-            if (mx >= sx && mx <= sx + 18.0f * scale && my >= hotbarInvY && my <= hotbarInvY + 18.0f * scale) {
+            if (mx >= sx && mx <= sx + 18.0f * scale && my >= hotbarY && my <= hotbarY + 18.0f * scale) {
                 return player.getInventory().getSlot(col);
             }
         }
@@ -585,7 +589,7 @@ public class HUD {
     public void handleMouseRelease(double mx, double my, int button, Player player, int windowWidth, int windowHeight) {
         if (!isInventoryOpen()) return;
 
-        float scale = 2.4f;
+        float scale = getGuiScale(windowWidth, windowHeight);
         float invW = 176.0f * scale;
         float invH = 166.0f * scale;
         float ix = (windowWidth - invW) / 2.0f;
@@ -1091,7 +1095,7 @@ public class HUD {
     public boolean handleMouseClick(double mx, double my, int button, boolean isShiftDown, Player player, int windowWidth, int windowHeight) {
         if (!inventoryOpen && !craftingTableOpen && !furnaceOpen) return false;
 
-        float scale = 2.4f;
+        float scale = getGuiScale(windowWidth, windowHeight);
         float invW = 176.0f * scale;
         float invH = 166.0f * scale;
         float ix = (windowWidth - invW) / 2.0f;
@@ -1617,7 +1621,7 @@ public class HUD {
             return false; // Bare dersom den er ledig da
         }
 
-        float scale = 2.4f;
+        float scale = getGuiScale(windowWidth, windowHeight);
         float invW = 176.0f * scale;
         float invH = 166.0f * scale;
         float ix = (windowWidth - invW) / 2.0f;
@@ -1706,7 +1710,7 @@ public class HUD {
     public boolean handleDropKeyPress(double mx, double my, boolean dropAll, Player player, int windowWidth, int windowHeight) {
         if (!inventoryOpen && !craftingTableOpen && (!furnaceOpen || activeFurnace == null)) return false;
 
-        float scale = 2.4f;
+        float scale = getGuiScale(windowWidth, windowHeight);
         float invW = 176.0f * scale;
         float invH = 166.0f * scale;
         float ix = (windowWidth - invW) / 2.0f;
@@ -1942,11 +1946,11 @@ public class HUD {
     }
 
     private void renderMinecraftHUD(List<Float> geom, List<Float> tex, List<Float> overlayGeom, int windowWidth, int windowHeight, Player player, TextureAtlas atlas) {
-        float pScale = 2.4f; // Pixel scale for authentic UI
+        float pScale = getGuiScale(windowWidth, windowHeight); // Dynamic GUI scale as in Minecraft 1.16.1
         float hotbarW = 182.0f * pScale;
         float hotbarH = 22.0f * pScale;
         float hx = (windowWidth - hotbarW) / 2.0f;
-        float hy = windowHeight - hotbarH - 8.0f;
+        float hy = windowHeight - hotbarH - 4.0f * pScale;
 
         // --- A. Health Bar (10 Hearts on left) ---
         if (player.getGameMode() != GameMode.CREATIVE) {
@@ -2048,7 +2052,7 @@ public class HUD {
     }
 
     private void renderMinecraftInventoryGUI(List<Float> geom, List<Float> tex, List<Float> overlayGeom, int windowWidth, int windowHeight, Player player, TextureAtlas atlas) {
-        float p = 2.4f; // Scale
+        float p = getGuiScale(windowWidth, windowHeight); // Scale
         float invW = 176.0f * p;
         float invH = 166.0f * p;
         float ix = (windowWidth - invW) / 2.0f;
@@ -2202,7 +2206,7 @@ public class HUD {
     }
 
     private void renderCraftingTableGUI(List<Float> geom, List<Float> tex, List<Float> overlayGeom, int windowWidth, int windowHeight, Player player, TextureAtlas atlas) {
-        float p = 2.4f; // Scale
+        float p = getGuiScale(windowWidth, windowHeight); // Scale
         float invW = 176.0f * p;
         float invH = 166.0f * p;
         float ix = (windowWidth - invW) / 2.0f;
@@ -2362,7 +2366,8 @@ public class HUD {
             colors.add(new float[]{0.75f, 0.75f, 0.75f});
         }
 
-        float textScale = 1.35f;
+        float p = getGuiScale(windowWidth, windowHeight);
+        float textScale = p * 0.55f;
         float charW = 6.0f * textScale;
         float lineH = 10.0f * textScale;
 
@@ -2372,16 +2377,16 @@ public class HUD {
             if (w > maxW) maxW = w;
         }
 
-        float padX = 6.0f;
-        float padY = 5.0f;
+        float padX = 2.5f * p;
+        float padY = 2.0f * p;
         float boxW = maxW + padX * 2.0f;
         float boxH = lines.size() * lineH + padY * 2.0f;
 
-        float tx = mx + 12.0f;
-        float ty = my - 12.0f;
+        float tx = mx + 5.0f * p;
+        float ty = my - 5.0f * p;
 
         if (tx + boxW > windowWidth - 4.0f) {
-            tx = mx - boxW - 6.0f;
+            tx = mx - boxW - 3.0f * p;
         }
         if (tx < 4.0f) tx = 4.0f;
 
@@ -2390,12 +2395,13 @@ public class HUD {
         }
         if (ty < 4.0f) ty = 4.0f;
 
-        // Outer dark border (1.5px)
-        addRect(overlayGeom, tx - 1.5f, ty - 1.5f, boxW + 3.0f, boxH + 3.0f, 0, 0, 0, 0, 0.05f, 0.05f, 0.05f, 0.96f);
+        float border = Math.max(1.0f, p * 0.5f);
+        // Outer dark border
+        addRect(overlayGeom, tx - border, ty - border, boxW + border * 2.0f, boxH + border * 2.0f, 0, 0, 0, 0, 0.05f, 0.05f, 0.05f, 0.96f);
         // Purple border (Minecraft tooltip)
         addRect(overlayGeom, tx, ty, boxW, boxH, 0, 0, 0, 0, 0.28f, 0.05f, 0.65f, 0.96f);
         // Dark inner background
-        addRect(overlayGeom, tx + 1.5f, ty + 1.5f, boxW - 3.0f, boxH - 3.0f, 0, 0, 0, 0, 0.08f, 0.04f, 0.12f, 0.94f);
+        addRect(overlayGeom, tx + border, ty + border, boxW - border * 2.0f, boxH - border * 2.0f, 0, 0, 0, 0, 0.08f, 0.04f, 0.12f, 0.94f);
 
         // Draw lines
         for (int i = 0; i < lines.size(); i++) {
@@ -2650,7 +2656,7 @@ public class HUD {
                                   int windowWidth, int windowHeight, Player player, TextureAtlas atlas) {
         if (activeFurnace == null) return;
 
-        float p = 2.4f; // Scale
+        float p = getGuiScale(windowWidth, windowHeight); // Scale
         float invW = 176.0f * p;
         float invH = 166.0f * p;
         float ix = (windowWidth - invW) / 2.0f;
@@ -3205,20 +3211,21 @@ public class HUD {
         }
         if (dragon == null) return;
 
-        float barW = 360.0f;
-        float barH = 12.0f;
+        float p = getGuiScale(windowWidth, 720);
+        float barW = 182.0f * p;
+        float barH = 5.0f * p;
         float bx = (windowWidth - barW) / 2.0f;
-        float by = 18.0f;
+        float by = 12.0f * p;
 
         // Boss Title text: "Ender Dragon"
         String title = "ENDER DRAGON";
-        float scale = 1.8f;
+        float scale = p * 0.70f;
         float textW = title.length() * (6.0f * scale);
         float tx = (windowWidth - textW) / 2.0f;
-        drawHudText(overlayGeom, title, tx, by - 12.0f, scale, 0.95f, 0.4f, 0.95f);
+        drawHudText(overlayGeom, title, tx, by - 6.0f * (p / 2.4f), scale, 0.95f, 0.4f, 0.95f);
 
         // Background dark bar
-        addRect(geom, bx - 2, by - 2, barW + 4, barH + 4, 0, 0, 0, 0, 0.08f, 0.08f, 0.08f, 0.85f);
+        addRect(geom, bx - p * 0.8f, by - p * 0.8f, barW + p * 1.6f, barH + p * 1.6f, 0, 0, 0, 0, 0.08f, 0.08f, 0.08f, 0.85f);
         addRect(geom, bx, by, barW, barH, 0, 0, 0, 0, 0.22f, 0.08f, 0.25f, 1.0f);
 
         // Purple Boss Health Fill
@@ -3226,7 +3233,7 @@ public class HUD {
         float fillW = barW * hpRatio;
         if (fillW > 0) {
             addRect(geom, bx, by, fillW, barH, 0, 0, 0, 0, 0.82f, 0.18f, 0.88f, 1.0f);
-            addRect(geom, bx, by, fillW, 3.0f, 0, 0, 0, 0, 0.95f, 0.45f, 1.0f, 1.0f);
+            addRect(geom, bx, by, fillW, 1.2f * p, 0, 0, 0, 0, 0.95f, 0.45f, 1.0f, 1.0f);
         }
     }
 
@@ -3234,26 +3241,27 @@ public class HUD {
         // Dark translucent overlay
         addRect(geom, 0, 0, windowWidth, windowHeight, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.75f);
 
+        float p = getGuiScale(windowWidth, windowHeight);
         // Game Over / Victory banners
         String title = "SPILLET ER VUNNET";
         String titleSub = "FREE THE END!";
-        float scale = 3.6f;
+        float scale = p * 1.4f;
         float textW = title.length() * (6.0f * scale);
         float tx = (windowWidth - textW) / 2.0f;
         float ty = windowHeight * 0.30f;
 
         drawHudText(overlayGeom, title, tx, ty, scale, 1.0f, 0.85f, 0.15f);
 
-        float scale2 = 2.2f;
+        float scale2 = p * 0.85f;
         float textW2 = titleSub.length() * (6.0f * scale2);
-        drawHudText(overlayGeom, titleSub, (windowWidth - textW2) / 2.0f, ty + 42.0f, scale2, 0.85f, 0.45f, 0.95f);
+        drawHudText(overlayGeom, titleSub, (windowWidth - textW2) / 2.0f, ty + 16.0f * p, scale2, 0.85f, 0.45f, 0.95f);
 
         String desc1 = "DRAGEN ER BESEIRET";
-        float scale3 = 1.8f;
-        drawHudText(overlayGeom, desc1, (windowWidth - desc1.length() * (6.0f * scale3)) / 2.0f, ty + 85.0f, scale3, 0.9f, 0.9f, 0.9f);
+        float scale3 = p * 0.70f;
+        drawHudText(overlayGeom, desc1, (windowWidth - desc1.length() * (6.0f * scale3)) / 2.0f, ty + 34.0f * p, scale3, 0.9f, 0.9f, 0.9f);
 
         String hint = "TRYKK ESC FOR MENY";
-        drawHudText(overlayGeom, hint, (windowWidth - hint.length() * (6.0f * scale3)) / 2.0f, ty + 125.0f, scale3, 0.7f, 0.7f, 0.7f);
+        drawHudText(overlayGeom, hint, (windowWidth - hint.length() * (6.0f * scale3)) / 2.0f, ty + 50.0f * p, scale3, 0.7f, 0.7f, 0.7f);
     }
 
     private void drawHudText(List<Float> g, String text, float startX, float startY, float s, float r, float gr, float b) {
@@ -3286,10 +3294,11 @@ public class HUD {
     }
 
     private void renderChat(List<Float> geom, List<Float> overlayGeom, int windowWidth, int windowHeight, no.minecraft.chat.ChatManager chat) {
-        float scale = 1.4f;
-        float chatX = 10.0f;
-        float chatBottom = windowHeight - (chat.isOpen() ? 32.0f : 80.0f);
-        float lineHeight = 12.0f * scale;
+        float p = getGuiScale(windowWidth, windowHeight);
+        float scale = p * 0.55f;
+        float chatX = 4.0f * p;
+        float chatBottom = windowHeight - (chat.isOpen() ? 16.0f * p : 34.0f * p);
+        float lineHeight = 10.0f * scale;
 
         // Render recent messages (up to 8 lines)
         List<no.minecraft.chat.ChatManager.ChatMessage> msgs = chat.getMessages();
@@ -3314,9 +3323,9 @@ public class HUD {
 
         // Render Chat Input Box if Chat is Open
         if (chat.isOpen()) {
-            float boxY = windowHeight - 24.0f;
-            float boxW = windowWidth - 20.0f;
-            float boxH = 18.0f;
+            float boxH = 12.0f * scale;
+            float boxY = windowHeight - boxH - 2.0f * p;
+            float boxW = windowWidth - chatX * 2.0f;
 
             // Dark input background with white/gray border
             addRect(geom, chatX - 2.0f, boxY, boxW, boxH, 0, 0, 0, 0, 0.05f, 0.05f, 0.05f, 0.85f);
@@ -3326,7 +3335,7 @@ public class HUD {
             // Prompt cursor text
             boolean blink = (System.currentTimeMillis() / 450) % 2 == 0;
             String prompt = "> " + chat.getInputText() + (blink ? "_" : "");
-            drawHudText(overlayGeom, prompt, chatX + 2.0f, boxY + 3.0f, scale, 1.0f, 1.0f, 1.0f);
+            drawHudText(overlayGeom, prompt, chatX + 2.0f, boxY + 2.0f * scale, scale, 1.0f, 1.0f, 1.0f);
         }
     }
 
@@ -3334,10 +3343,11 @@ public class HUD {
                                 Player player, no.minecraft.world.World world) {
         if (world == null || player == null) return;
 
-        float scale = 2.7f;
+        float p = getGuiScale(windowWidth, windowHeight);
+        float scale = p * 0.9f;
         float lineHeight = 10.0f * scale;
-        float startX = 8.0f;
-        float startY = 8.0f;
+        float startX = 4.0f * p;
+        float startY = 4.0f * p;
 
         org.joml.Vector3f pos = player.getPosition();
         int bx = (int) Math.floor(pos.x);
@@ -3384,7 +3394,7 @@ public class HUD {
         String timeStr = world.isNight() ? "Night" : "Day";
 
         List<String> leftLines = new ArrayList<>();
-        leftLines.add(String.format("Minecraft 1.20 Clone (%d fps)", lastFps));
+        leftLines.add(String.format("Minecraft 1.16.1 Clone (%d fps)", lastFps));
         leftLines.add(String.format(java.util.Locale.ROOT, "XYZ: %.3f / %.3f / %.3f", pos.x, pos.y, pos.z));
         leftLines.add(String.format(java.util.Locale.ROOT, "Block: %d %d %d", bx, by, bz));
         leftLines.add(String.format(java.util.Locale.ROOT, "Chunk: %d %d %d [%d %d %d in chunk]", cx, cy, cz, inCx, inCy, inCz));
@@ -3436,7 +3446,7 @@ public class HUD {
             if (line.isEmpty()) continue;
             float y = startY + i * lineHeight;
             float textW = line.length() * (6.0f * scale);
-            float rx = windowWidth - 8.0f - textW;
+            float rx = windowWidth - 4.0f * p - textW;
             addRect(geom, rx - 2.0f, y - 1.0f, textW + 4.0f, lineHeight - 1.0f, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.55f);
             drawHudText(overlayGeom, line, rx, y, scale, 0.90f, 0.90f, 0.90f);
         }

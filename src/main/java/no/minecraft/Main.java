@@ -19,6 +19,8 @@ public class Main {
     private long window;
     private int width = 1280;
     private int height = 720;
+    private int windowWidth = 1280;
+    private int windowHeight = 720;
 
     private World world;
     private Player player;
@@ -38,6 +40,7 @@ public class Main {
 
     private boolean cursorLocked = false;
     private double lastMouseX, lastMouseY;
+    private double lastScreenX, lastScreenY;
     private boolean firstMouse = true;
 
     // Mining progress state
@@ -135,10 +138,28 @@ public class Main {
             throw new RuntimeException("Failed to create GLFW window");
         }
 
+        try (var stack = org.lwjgl.system.MemoryStack.stackPush()) {
+            java.nio.IntBuffer fbW = stack.mallocInt(1);
+            java.nio.IntBuffer fbH = stack.mallocInt(1);
+            java.nio.IntBuffer winW = stack.mallocInt(1);
+            java.nio.IntBuffer winH = stack.mallocInt(1);
+            glfwGetFramebufferSize(window, fbW, fbH);
+            glfwGetWindowSize(window, winW, winH);
+            this.width = fbW.get(0);
+            this.height = fbH.get(0);
+            this.windowWidth = winW.get(0);
+            this.windowHeight = winH.get(0);
+        }
+
         glfwSetFramebufferSizeCallback(window, (win, w, h) -> {
             this.width = w;
             this.height = h;
             glViewport(0, 0, w, h);
+        });
+
+        glfwSetWindowSizeCallback(window, (win, w, h) -> {
+            this.windowWidth = w;
+            this.windowHeight = h;
         });
 
         // Setup mouse and keyboard input
@@ -191,27 +212,38 @@ public class Main {
     private void setupInput() {
         // Cursor movement
         glfwSetCursorPosCallback(window, (win, xpos, ypos) -> {
+            double scaleX = (windowWidth > 0) ? ((double) this.width / windowWidth) : 1.0;
+            double scaleY = (windowHeight > 0) ? ((double) this.height / windowHeight) : 1.0;
+            double fbMouseX = xpos * scaleX;
+            double fbMouseY = ypos * scaleY;
+
             if (hud.isInventoryOpen() || mainMenu.isInMenu() || pauseMenu.isOpen() || chatManager.isOpen() || !cursorLocked) {
-                lastMouseX = xpos;
-                lastMouseY = ypos;
+                lastMouseX = fbMouseX;
+                lastMouseY = fbMouseY;
+                lastScreenX = xpos;
+                lastScreenY = ypos;
                 firstMouse = true;
                 if (hud.isInventoryOpen()) {
-                    hud.handleMouseMove(xpos, ypos, player, width, height);
+                    hud.handleMouseMove(fbMouseX, fbMouseY, player, width, height);
                 }
                 return;
             }
 
             if (firstMouse) {
-                lastMouseX = xpos;
-                lastMouseY = ypos;
+                lastMouseX = fbMouseX;
+                lastMouseY = fbMouseY;
+                lastScreenX = xpos;
+                lastScreenY = ypos;
                 firstMouse = false;
                 return;
             }
 
-            float dx = (float) (xpos - lastMouseX);
-            float dy = (float) (lastMouseY - ypos); // Inverted Y for OpenGL
-            lastMouseX = xpos;
-            lastMouseY = ypos;
+            float dx = (float) (xpos - lastScreenX);
+            float dy = (float) (lastScreenY - ypos); // Inverted Y for OpenGL
+            lastMouseX = fbMouseX;
+            lastMouseY = fbMouseY;
+            lastScreenX = xpos;
+            lastScreenY = ypos;
 
             float sens = no.minecraft.settings.GameSettings.getInstance().getMouseSensitivity();
             player.getCamera().rotate(dx * sens, dy * sens);
