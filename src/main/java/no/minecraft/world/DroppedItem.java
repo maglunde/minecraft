@@ -1,6 +1,7 @@
 package no.minecraft.world;
 
 import no.minecraft.player.Player;
+import no.minecraft.sound.SoundManager;
 import org.joml.Vector3f;
 
 import java.util.Random;
@@ -93,6 +94,7 @@ public class DroppedItem {
                 boolean added = player.getInventory().addItem(type, count);
                 if (added) {
                     dead = true;
+                    SoundManager.getInstance().play("pop", 0.7f);
                 }
             }
         }
