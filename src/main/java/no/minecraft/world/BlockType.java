@@ -121,25 +121,32 @@ public enum BlockType {
     public float getHardness() {
         return switch (this) {
             case BEDROCK, END_PORTAL, NETHER_PORTAL, LAVA, WATER -> -1.0f; // Unbreakable
-            case OBSIDIAN -> 5.0f;
+            case OBSIDIAN -> 50.0f;
             case END_PORTAL_FRAME, END_PORTAL_FRAME_FILLED -> -1.0f;
             case END_STONE -> 3.0f;
-            case STONE, BASALT, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE -> 1.5f;
-            case COBBLESTONE, BRICKS, FURNACE, NETHER_BRICKS -> 2.0f;
-            case NETHER_QUARTZ_ORE -> 1.8f;
+            case STONE -> 1.5f;
+            case BASALT -> 1.25f;
+            case COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE, NETHER_QUARTZ_ORE -> 3.0f;
+            case COBBLESTONE, BRICKS, WOOD, PLANKS, FENCE, FENCE_GATE, WOODEN_SLAB, WOODEN_STAIRS, NETHER_BRICKS -> 2.0f;
+            case FURNACE -> 3.5f;
             case SPAWNER -> 5.0f;
             case SANDSTONE -> 0.8f;
             case GRAVEL -> 0.6f;
             case NETHERRACK -> 0.4f;
             case SOUL_SAND -> 0.5f;
             case GLOWSTONE -> 0.3f;
-            case DRAGON_EGG -> 1.0f;
-            case WOOD, PLANKS, CHEST, CRAFTING_TABLE, WOODEN_DOOR, TRAPDOOR, FENCE, FENCE_GATE, WOODEN_STAIRS, WOODEN_SLAB -> 1.0f;
-            case DIRT, GRASS -> 0.5f;
-            case SAND, CACTUS -> 0.4f;
+            case DRAGON_EGG -> 3.0f;
+            case CHEST, CRAFTING_TABLE -> 2.5f;
+            case WOODEN_DOOR, TRAPDOOR -> 3.0f;
+            case WOODEN_PRESSURE_PLATE, WOODEN_BUTTON -> 0.5f;
+            case LADDER -> 0.4f;
+            case DIRT -> 0.5f;
+            case GRASS -> 0.6f;
+            case SAND -> 0.5f;
+            case CACTUS -> 0.4f;
             case GLASS, LEAVES, SNOW_BLOCK -> 0.2f;
             case TORCH -> 0.0f;
-            default -> 0.1f;
+            default -> 0.0f;
         };
     }
 

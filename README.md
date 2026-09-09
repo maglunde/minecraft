@@ -2,6 +2,8 @@
 
 En 3D voxel Minecraft-klone bygget i Java 21 med LWJGL 3 og OpenGL.
 
+**Målversjon:** Prosjektet etterligner **Minecraft Java Edition 1.16.1** så nøyaktig som mulig for alle spillmekanikker, oppskrifter, fysikk, combat, UI og blokk-/gjenstandsegenskaper.
+
 ## Innhold og funksjoner
 - **3D Blokk-drops & Oppsamling (Minecraft-stil)**:
   - Når du hakker på en blokk, fjernes den fra terrenget og legger seg som en **roterende og svevende 3D-miniatyrblokk på bakken**.
