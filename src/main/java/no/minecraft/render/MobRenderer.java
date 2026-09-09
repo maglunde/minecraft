@@ -203,6 +203,10 @@ public class MobRenderer {
                 float eg = hurt ? 0.2f : 0.08f;
                 float eb = hurt ? 0.2f : 0.08f;
 
+                boolean aggro = mob.isAggressive();
+                float shake = aggro ? (float) Math.sin(System.currentTimeMillis() * 0.05) * 0.02f : 0.0f;
+                float headY = aggro ? 2.30f : 2.25f;
+
                 // Long slender legs
                 addBox(verts, x - 0.12f, y, z - 0.05f, 0.08f, 1.5f, 0.08f, er, eg, eb);
                 addBox(verts, x + 0.04f, y, z - 0.05f, 0.08f, 1.5f, 0.08f, er, eg, eb);
@@ -212,10 +216,17 @@ public class MobRenderer {
                 addBox(verts, x - 0.28f, y + 0.6f, z - 0.05f, 0.08f, 1.65f, 0.08f, er, eg, eb);
                 addBox(verts, x + 0.20f, y + 0.6f, z - 0.05f, 0.08f, 1.65f, 0.08f, er, eg, eb);
                 // Head
-                addBox(verts, x - 0.20f, y + 2.25f, z - 0.20f, 0.40f, 0.40f, 0.40f, er, eg, eb);
-                // Glowing Purple eyes
-                addBox(verts, x - 0.15f, y + 2.42f, z - 0.21f, 0.09f, 0.05f, 0.03f, 0.85f, 0.15f, 0.95f);
-                addBox(verts, x + 0.06f, y + 2.42f, z - 0.21f, 0.09f, 0.05f, 0.03f, 0.85f, 0.15f, 0.95f);
+                addBox(verts, x - 0.20f + shake, y + headY, z - 0.20f, 0.40f, 0.35f, 0.40f, er, eg, eb);
+                if (aggro) {
+                    // Open lower jaw
+                    addBox(verts, x - 0.18f + shake, y + 2.15f, z - 0.18f, 0.36f, 0.10f, 0.36f, er, eg, eb);
+                }
+                // Glowing Purple eyes (brighter when angry)
+                float eyeR = aggro ? 1.0f : 0.85f;
+                float eyeG = aggro ? 0.05f : 0.15f;
+                float eyeB = aggro ? 1.0f : 0.95f;
+                addBox(verts, x - 0.15f + shake, y + headY + 0.17f, z - 0.21f, 0.09f, 0.06f, 0.03f, eyeR, eyeG, eyeB);
+                addBox(verts, x + 0.06f + shake, y + headY + 0.17f, z - 0.21f, 0.09f, 0.06f, 0.03f, eyeR, eyeG, eyeB);
 
             } else if (mt == MobType.END_CRYSTAL) {
                 // Glass outer shell
@@ -328,6 +339,17 @@ public class MobRenderer {
                 // 2 Yellow Legs
                 addBox(verts, x - 0.10f, y, z - 0.04f, 0.06f, 0.22f, 0.06f, 0.95f, 0.75f, 0.10f);
                 addBox(verts, x + 0.04f, y, z - 0.04f, 0.06f, 0.22f, 0.06f, 0.95f, 0.75f, 0.10f);
+            }
+
+            if (mob.isOnFire()) {
+                // Flickering fire flames around the mob
+                float flameAnim = (float) Math.sin(System.currentTimeMillis() * 0.02) * 0.06f;
+                float fH = mob.getType().getHeight();
+                float fW = mob.getType().getWidth() + 0.16f;
+                // Outer fire orange quad/box
+                addBox(verts, x - fW * 0.5f, y, z - fW * 0.5f, fW, fH * 0.85f + flameAnim, fW, 1.0f, 0.45f, 0.05f);
+                // Inner bright yellow flame
+                addBox(verts, x - fW * 0.35f, y + 0.1f, z - fW * 0.35f, fW * 0.7f, fH * 0.65f - flameAnim, fW * 0.7f, 1.0f, 0.85f, 0.1f);
             }
         }
 

@@ -1288,34 +1288,56 @@ public class World {
         double sx = x + offsetX;
         double sz = z + offsetZ;
 
-        // Continentalness noise for ocean vs land
-        double cont = Math.sin(sx * 0.007) * Math.cos(sz * 0.007)
-                    + 0.5 * Math.sin((sx + 120.0) * 0.015) * Math.cos((sz + 60.0) * 0.015);
+        // 1. Continentalness noise (oceans vs coastal lowlands vs inland continents)
+        double cont = Math.sin(sx * 0.005) * Math.cos(sz * 0.005)
+                    + 0.5 * Math.sin((sx + 150.0) * 0.010) * Math.cos((sz + 80.0) * 0.010);
 
-        // Mountain ridge noise
-        double mNoise = Math.sin((sx + 350.0) * 0.011) * Math.cos((sz - 250.0) * 0.011)
-                      + 0.5 * Math.sin((sx + 100.0) * 0.023) * Math.cos((sz - 100.0) * 0.023);
+        // 2. Mountain ridge noise (ridged multifractal for sharp, continuous peaks & crests)
+        double r1 = Math.sin((sx + 350.0) * 0.008) * Math.cos((sz - 250.0) * 0.008);
+        double r2 = Math.sin((sx - 180.0) * 0.016) * Math.cos((sz + 220.0) * 0.016);
+        double ridge = 1.0 - Math.abs(r1 + 0.5 * r2); // 0.0 (valleys) to 1.5 (sharp ridges)
 
-        // Fine terrain detail
-        double detail = Math.sin(sx * 0.035) * Math.cos(sz * 0.035) * 4.5
-                      + Math.sin((sx + 100.0) * 0.07) * Math.cos((sz + 50.0) * 0.07) * 2.0;
+        // 3. Valley & river canyon carving noise
+        double vNoise = Math.sin((sx * 0.5 + sz * 0.5) * 0.011) * Math.cos((sx * 0.5 - sz * 0.5) * 0.011);
+        double valley = Math.abs(vNoise);
 
-        if (mNoise > 0.65) {
-            double base = 28.0 + (mNoise - 0.65) * 35.0;
-            return (int) Math.clamp(Math.round(base + detail * 1.5), 5, Chunk.SIZE_Y - 8);
-        }
+        // 4. Rolling hills & terrain undulations
+        double hills = Math.sin((sx + 80.0) * 0.022) * Math.cos((sz - 60.0) * 0.022) * 3.5
+                     + Math.sin((sx - 200.0) * 0.014) * Math.cos((sz + 150.0) * 0.014) * 5.0;
+
+        // 5. Fine surface roughness
+        double detail = Math.sin(sx * 0.045) * Math.cos(sz * 0.045) * 2.5
+                      + Math.sin((sx + 40.0) * 0.09) * Math.cos((sz + 70.0) * 0.09) * 1.2;
 
         double base;
-        if (cont < -0.30) {
-            base = 11.0 + (cont + 0.30) * 8.0; // Deep ocean
+        if (cont < -0.32) {
+            // Deep ocean floor
+            base = 9.0 + (cont + 0.32) * 8.0 + detail * 0.6;
         } else if (cont < -0.15) {
-            base = 15.0 + (cont + 0.15) * 12.0; // Shallow coast / beach
+            // Coastal shelf & beaches
+            base = 13.5 + (cont + 0.15) * 13.0 + detail * 0.8;
         } else {
-            base = 21.0 + (cont + 0.15) * 6.0; // Inland hills
+            // Inland terrain: rolling plains & plateaus
+            base = 20.5 + (cont + 0.15) * 7.5;
+
+            // Dramatic mountain spines and alpine peaks
+            if (ridge > 0.82) {
+                double mFactor = Math.pow((ridge - 0.82) / 0.68, 1.35);
+                double mountainHeight = 28.0 + mFactor * 26.0; // Up to height 54
+                base = Math.max(base, mountainHeight);
+            }
+
+            // Valley & gorge erosion between high grounds
+            if (valley < 0.12 && base > SEA_LEVEL + 3.0) {
+                double carve = (1.0 - valley / 0.12) * 8.0;
+                base = Math.max(SEA_LEVEL + 1.0, base - carve);
+            }
+
+            base += hills + detail;
         }
 
-        int height = (int) Math.round(base + detail);
-        return (int) Math.clamp(height, 5, Chunk.SIZE_Y - 8);
+        int height = (int) Math.round(base);
+        return (int) Math.clamp(height, 5, Chunk.SIZE_Y - 7);
     }
 
     public void updateAndRender() {

@@ -27,6 +27,12 @@ public class Mob {
     private static final float FUSE_MAX = 1.5f;
     private boolean ignited = false;
 
+    // Fire / burning state
+    private float fireTimer = 0.0f;
+    private float fireDamageTimer = 0.0f;
+
+    // Enderman aggro state
+    private boolean aggressive = false;
 
     // Rotation
     private float yaw = 0.0f;
@@ -45,6 +51,27 @@ public class Mob {
         if (hurtTimer > 0) hurtTimer -= dt;
         if (attackCooldown > 0) attackCooldown -= dt;
 
+        // Fire & Daylight burning processing
+        if (fireTimer > 0) {
+            fireTimer -= dt;
+            fireDamageTimer += dt;
+            if (fireDamageTimer >= 1.0f) {
+                fireDamageTimer = 0.0f;
+                takeDamage(1, 0, 0, world);
+            }
+        }
+
+        // Extinguish in water, or ignite in sunlight for Zombie & Skeleton
+        int mbx = (int) Math.floor(position.x);
+        int mby = (int) Math.floor(position.y);
+        int mbz = (int) Math.floor(position.z);
+        if (world.getBlock(mbx, mby, mbz) == BlockType.WATER || world.getBlock(mbx, mby + 1, mbz) == BlockType.WATER) {
+            fireTimer = 0.0f;
+        } else if (world.getCurrentDimension() == no.minecraft.world.Dimension.OVERWORLD && !world.isNight()) {
+            if ((type == MobType.ZOMBIE || type == MobType.SKELETON) && world.isOpenToSky(mbx, mby, mbz)) {
+                fireTimer = Math.max(fireTimer, 4.0f);
+            }
+        }
 
         float distToPlayer = position.distance(player.getPosition());
 
@@ -145,15 +172,51 @@ public class Mob {
                     world.spawnArrow(position.x, position.y + 0.8f, position.z, vx, vy, vz);
                 }
             } else if (type == MobType.ENDERMAN) {
-                moveX = dx * type.getMoveSpeed();
-                moveZ = dz * type.getMoveSpeed();
-                if (distToPlayer < 1.6f && attackCooldown <= 0) {
-                    player.damage(type.getAttackDamage());
-                    attackCooldown = 0.8f;
+                // Check if player makes direct eye contact with Enderman
+                if (!aggressive && distToPlayer < 40.0f) {
+                    org.joml.Vector3f pEye = player.getEyePosition();
+                    org.joml.Vector3f toHead = new org.joml.Vector3f(
+                            position.x - pEye.x,
+                            (position.y + type.getHeight() * 0.85f) - pEye.y,
+                            position.z - pEye.z
+                    );
+                    float dLen = toHead.length();
+                    if (dLen > 0.1f) {
+                        toHead.normalize();
+                        org.joml.Vector3f lookDir = player.getCamera().getForward();
+                        float dot = lookDir.dot(toHead);
+                        // If crosshair is aligned within ~12 degrees of looking at head
+                        if (dot > 0.978f) {
+                            no.minecraft.player.Raycast.HitResult los = no.minecraft.player.Raycast.raycast(world, pEye, toHead, dLen);
+                            if (los == null) {
+                                aggressive = true;
+                                no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.6f);
+                            }
+                        }
+                    }
                 }
-                // Random teleportation when hit or close
-                if (random.nextFloat() < 0.005f) {
-                    teleportRandom(world);
+
+                if (!aggressive) {
+                    // Peaceful wandering / lingering
+                    float wanderAngle = (float) ((System.currentTimeMillis() + position.x * 37) * 0.0007);
+                    moveX = (float) Math.cos(wanderAngle) * (type.getMoveSpeed() * 0.25f);
+                    moveZ = (float) Math.sin(wanderAngle) * (type.getMoveSpeed() * 0.25f);
+                    yaw = (float) Math.toDegrees(Math.atan2(moveZ, moveX));
+                    if (random.nextFloat() < 0.001f) {
+                        teleportRandom(world);
+                    }
+                } else {
+                    // Aggressive charge & attack
+                    moveX = dx * (type.getMoveSpeed() * 1.35f);
+                    moveZ = dz * (type.getMoveSpeed() * 1.35f);
+                    yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
+                    if (distToPlayer < 1.6f && attackCooldown <= 0) {
+                        player.damage(type.getAttackDamage());
+                        attackCooldown = 0.8f;
+                    }
+                    if (random.nextFloat() < 0.015f) {
+                        teleportRandom(world);
+                    }
                 }
             } else if (type == MobType.ENDER_DRAGON) {
                 updateDragonAI(dt, world, player);
@@ -170,7 +233,7 @@ public class Mob {
                     attackCooldown = 1.0f;
                 }
             }
-        } else if (type.isPassive() && distToPlayer < 48.0f) {
+        } else if ((type.isPassive() || (type == MobType.ENDERMAN && !aggressive)) && distToPlayer < 48.0f) {
             float wanderAngle = (float) ((System.currentTimeMillis() + position.x * 37) * 0.001);
             moveX = (float) Math.cos(wanderAngle) * (type.getMoveSpeed() * 0.35f);
             moveZ = (float) Math.sin(wanderAngle) * (type.getMoveSpeed() * 0.35f);
@@ -334,6 +397,9 @@ public class Mob {
         if (dead) return;
         health -= amount;
         hurtTimer = 0.4f;
+        if (type == MobType.ENDERMAN) {
+            aggressive = true;
+        }
         velocity.x += knockbackX * 6.0f;
         velocity.y += 4.5f;
         velocity.z += knockbackZ * 6.0f;
@@ -448,4 +514,6 @@ public class Mob {
     public float getFuseRatio() { return Math.min(1.0f, fuseTime / FUSE_MAX); }
     public int getHealth() { return health; }
     public void setHealth(int health) { this.health = health; }
+    public boolean isOnFire() { return fireTimer > 0; }
+    public boolean isAggressive() { return aggressive; }
 }
