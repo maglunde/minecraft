@@ -14,6 +14,12 @@ public class Camera {
     private final Vector3f right = new Vector3f();
     private final Vector3f up = new Vector3f(0, 1, 0);
 
+    // Scratch state reused across frames to avoid per-frame allocations
+    private final Vector3f dirScratch = new Vector3f();
+    private final Vector3f lookTarget = new Vector3f();
+    private final Vector3f worldUp = new Vector3f(0, 1, 0);
+    private final Matrix4f viewMatrix = new Matrix4f();
+
     private Perspective perspective = Perspective.FIRST_PERSON;
     public static final float MAX_THIRD_PERSON_DISTANCE = 4.0f;
 
@@ -73,33 +79,36 @@ public class Camera {
             case FIRST_PERSON -> position.set(eyePosition);
             case THIRD_PERSON_BACK -> {
                 // Vector going backward from eyes: -forward
-                Vector3f backDir = new Vector3f(forward).negate();
+                dirScratch.set(forward).negate();
                 float dist = (world != null)
-                        ? Raycast.getCameraDistance(world, eyePosition, backDir, MAX_THIRD_PERSON_DISTANCE)
+                        ? Raycast.getCameraDistance(world, eyePosition, dirScratch, MAX_THIRD_PERSON_DISTANCE)
                         : MAX_THIRD_PERSON_DISTANCE;
-                position.set(eyePosition).add(new Vector3f(backDir).mul(dist));
+                dirScratch.mul(dist);
+                position.set(eyePosition).add(dirScratch);
             }
             case THIRD_PERSON_FRONT -> {
                 // Vector going forward from eyes: +forward
                 float dist = (world != null)
                         ? Raycast.getCameraDistance(world, eyePosition, forward, MAX_THIRD_PERSON_DISTANCE)
                         : MAX_THIRD_PERSON_DISTANCE;
-                position.set(eyePosition).add(new Vector3f(forward).mul(dist));
+                dirScratch.set(forward).mul(dist);
+                position.set(eyePosition).add(dirScratch);
             }
         }
     }
 
     public Matrix4f getViewMatrix() {
         if (perspective == Perspective.THIRD_PERSON_FRONT) {
-            return new Matrix4f().lookAt(
+            return viewMatrix.lookAt(
                     position,
                     eyePosition,
-                    new Vector3f(0, 1, 0)
+                    worldUp
             );
         } else {
-            return new Matrix4f().lookAt(
+            lookTarget.set(position).add(forward);
+            return viewMatrix.lookAt(
                     position,
-                    new Vector3f(position).add(forward),
+                    lookTarget,
                     up
             );
         }
