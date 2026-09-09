@@ -9,12 +9,18 @@ import org.joml.Vector3f;
 public class Arrow {
     private final Vector3f position = new Vector3f();
     private final Vector3f velocity = new Vector3f();
+    private final boolean hostileShooter;
     private boolean dead = false;
     private float lifetime = 0.0f;
 
     public Arrow(float x, float y, float z, float vx, float vy, float vz) {
+        this(x, y, z, vx, vy, vz, false);
+    }
+
+    public Arrow(float x, float y, float z, float vx, float vy, float vz, boolean hostileShooter) {
         this.position.set(x, y, z);
         this.velocity.set(vx, vy, vz);
+        this.hostileShooter = hostileShooter;
     }
 
     public void update(float dt, World world, Player player) {
@@ -26,28 +32,72 @@ public class Arrow {
         }
 
         velocity.y -= 14.0f * dt; // Gravity
+        float prevX = position.x, prevY = position.y, prevZ = position.z;
         position.add(velocity.x * dt, velocity.y * dt, velocity.z * dt);
 
-        // Check block collision
-        int bx = (int) Math.floor(position.x);
-        int by = (int) Math.floor(position.y);
-        int bz = (int) Math.floor(position.z);
-        BlockType b = world.getBlock(bx, by, bz);
-        if (b != BlockType.AIR && b.isSolid()) {
-            dead = true;
-            return;
-        }
+        // Sweep the moved segment so fast arrows cannot tunnel through 1-wide walls or entities
+        float dist = position.distance(prevX, prevY, prevZ);
+        int steps = Math.max(1, (int) Math.ceil(dist / 0.25f));
+        for (int i = 1; i <= steps; i++) {
+            float t = (float) i / steps;
+            float sx = prevX + (position.x - prevX) * t;
+            float sy = prevY + (position.y - prevY) * t;
+            float sz = prevZ + (position.z - prevZ) * t;
 
-        // Check collision with player
+            int bx = (int) Math.floor(sx);
+            int by = (int) Math.floor(sy);
+            int bz = (int) Math.floor(sz);
+            BlockType b = world.getBlock(bx, by, bz);
+            if (b != BlockType.AIR && b.isSolid()) {
+                dead = true;
+                return;
+            }
+
+            if (hitsEntity(world, player, sx, sy, sz)) {
+                dead = true;
+                return;
+            }
+        }
+    }
+
+    private boolean hitsEntity(World world, Player player, float x, float y, float z) {
+        // Player
         AABB pBox = player.getBoundingBox();
-        if (position.x >= pBox.minX && position.x <= pBox.maxX &&
-            position.y >= pBox.minY && position.y <= pBox.maxY &&
-            position.z >= pBox.minZ && position.z <= pBox.maxZ) {
+        if (x >= pBox.minX && x <= pBox.maxX &&
+            y >= pBox.minY && y <= pBox.maxY &&
+            z >= pBox.minZ && z <= pBox.maxZ) {
             player.damage(3);
             // Knockback
             player.getVelocity().add(velocity.x * 0.25f, 3.0f, velocity.z * 0.25f);
-            dead = true;
+            return true;
         }
+
+        if (hostileShooter) return false; // Mob-fired arrows only threaten the player
+
+        // Mobs
+        for (Mob m : world.getMobs()) {
+            if (m.isDead()) continue;
+            AABB box = m.getBoundingBox();
+            if (x >= box.minX && x <= box.maxX && y >= box.minY && y <= box.maxY && z >= box.minZ && z <= box.maxZ) {
+                float vlen = (float) Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+                float kb = (vlen > 0.01f) ? 1.0f / vlen : 0.0f;
+                m.takeDamage(3, velocity.x * kb, velocity.z * kb, world);
+                return true;
+            }
+        }
+
+        // Boats (approx 1.4 wide, 0.5 tall)
+        for (Boat boat : world.getBoats()) {
+            if (boat.isDead()) continue;
+            Vector3f bp = boat.getPosition();
+            if (x >= bp.x - 0.7f && x <= bp.x + 0.7f &&
+                y >= bp.y && y <= bp.y + 0.5f &&
+                z >= bp.z - 0.7f && z <= bp.z + 0.7f) {
+                boat.hit(world);
+                return true;
+            }
+        }
+        return false;
     }
 
     public Vector3f getPosition() {

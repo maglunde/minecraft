@@ -153,7 +153,7 @@ public class Mob {
                     float arrowVx = dx * 14.0f;
                     float arrowVy = (player.getPosition().y - position.y) * 2.0f + 2.5f;
                     float arrowVz = dz * 14.0f;
-                    world.spawnArrow(position.x, position.y + type.getHeight() * 0.7f, position.z, arrowVx, arrowVy, arrowVz);
+                    world.spawnArrow(position.x, position.y + type.getHeight() * 0.7f, position.z, arrowVx, arrowVy, arrowVz, true);
                 }
             } else if (type == MobType.SPIDER) {
                 yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
@@ -184,7 +184,7 @@ public class Mob {
                     float vx = dx * 16.0f;
                     float vy = (player.getPosition().y - position.y) * 2.0f + 1.5f;
                     float vz = dz * 16.0f;
-                    world.spawnArrow(position.x, position.y + 0.8f, position.z, vx, vy, vz);
+                    world.spawnArrow(position.x, position.y + 0.8f, position.z, vx, vy, vz, true);
                 }
             } else if (type == MobType.ENDERMAN) {
                 if (!aggressive && distToPlayer < 40.0f) {
