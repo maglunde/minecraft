@@ -790,14 +790,14 @@ public class Main {
                 if (player.getGameMode() != GameMode.CREATIVE) {
                     player.useSelectedBlock();
                 }
-                checkAndActivateEndPortal();
+                PortalController.checkAndActivateEndPortal(world);
                 return true;
             }
 
             // Flint and Steel igniting Nether Portal
             if (held == BlockType.FLINT_AND_STEEL) {
                 if (clickedBlock == BlockType.OBSIDIAN) {
-                    igniteNetherPortal(hit.hitX, hit.hitY, hit.hitZ);
+                    PortalController.igniteNetherPortal(world, hit.hitX, hit.hitY, hit.hitZ);
                     no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.0f);
                     return true;
                 }
@@ -824,117 +824,6 @@ public class Main {
             }
         }
         return false;
-    }
-
-    private void igniteNetherPortal(int x, int y, int z) {
-        // Find which plane (XY or ZY) forms a valid Minecraft Nether Portal frame:
-        // A standard portal frame is 4 wide x 5 tall (interior 2x3 air blocks),
-        // or up to 23x23. We support standard 4x5 vertical frames along X or Z axis.
-        if (tryIgnitePortalAxis(x, y, z, true)) return;
-        tryIgnitePortalAxis(x, y, z, false);
-    }
-
-    private boolean tryIgnitePortalAxis(int startX, int startY, int startZ, boolean alongX) {
-        // Search in a local neighborhood around the clicked obsidian block for candidate portal interior base
-        for (int offset = -3; offset <= 1; offset++) {
-            for (int dy = -1; dy <= 1; dy++) {
-                int baseX = alongX ? startX + offset : startX;
-                int baseZ = alongX ? startZ : startZ + offset;
-                int baseY = startY + dy;
-
-                // Check if this (baseX, baseY, baseZ) is the bottom-left interior corner of a 2x3 portal
-                // Interior is: (i=0..1, j=0..2)
-                // Bottom frame: (baseX + (alongX ? i : 0), baseY - 1, baseZ + (alongX ? 0 : i)) == OBSIDIAN
-                // Top frame: (baseX + (alongX ? i : 0), baseY + 3, baseZ + (alongX ? 0 : i)) == OBSIDIAN
-                // Left frame: (baseX - (alongX ? 1 : 0), baseY + j, baseZ - (alongX ? 0 : 1)) == OBSIDIAN
-                // Right frame: (baseX + (alongX ? 2 : 0), baseY + j, baseZ + (alongX ? 0 : 2)) == OBSIDIAN
-                boolean validFrame = true;
-
-                // Bottom and Top frames
-                for (int i = 0; i < 2; i++) {
-                    int bx = alongX ? baseX + i : baseX;
-                    int bz = alongX ? baseZ : baseZ + i;
-                    if (world.getBlock(bx, baseY - 1, bz) != BlockType.OBSIDIAN ||
-                        world.getBlock(bx, baseY + 3, bz) != BlockType.OBSIDIAN) {
-                        validFrame = false;
-                        break;
-                    }
-                }
-                if (!validFrame) continue;
-
-                // Left and Right sides
-                for (int j = 0; j < 3; j++) {
-                    int lx = alongX ? baseX - 1 : baseX;
-                    int lz = alongX ? baseZ : baseZ - 1;
-                    int rx = alongX ? baseX + 2 : baseX;
-                    int rz = alongX ? baseZ : baseZ + 2;
-                    if (world.getBlock(lx, baseY + j, lz) != BlockType.OBSIDIAN ||
-                        world.getBlock(rx, baseY + j, rz) != BlockType.OBSIDIAN) {
-                        validFrame = false;
-                        break;
-                    }
-                }
-                if (!validFrame) continue;
-
-                // Check that interior is air (or already portal)
-                for (int i = 0; i < 2; i++) {
-                    for (int j = 0; j < 3; j++) {
-                        int ix = alongX ? baseX + i : baseX;
-                        int iz = alongX ? baseZ : baseZ + i;
-                        BlockType cur = world.getBlock(ix, baseY + j, iz);
-                        if (cur != BlockType.AIR && cur != BlockType.NETHER_PORTAL) {
-                            validFrame = false;
-                            break;
-                        }
-                    }
-                    if (!validFrame) break;
-                }
-                if (!validFrame) continue;
-
-                // Valid frame! Fill interior with NETHER_PORTAL
-                for (int i = 0; i < 2; i++) {
-                    for (int j = 0; j < 3; j++) {
-                        int ix = alongX ? baseX + i : baseX;
-                        int iz = alongX ? baseZ : baseZ + i;
-                        world.setBlock(ix, baseY + j, iz, BlockType.NETHER_PORTAL);
-                    }
-                }
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void checkAndActivateEndPortal() {
-        // Stronghold center portal space is at local x: 5..7, z: 5..7 in chunk (3, 3)
-        // World coordinates: cx*16 + 5 = 48 + 5 = 53, py = 12
-        int py = 12;
-        boolean allFilled = true;
-        // Check frames around (53..55, 53..55)
-        for (int x = 53; x <= 55; x++) {
-            if (world.getBlock(x, py, 52) != BlockType.END_PORTAL_FRAME_FILLED ||
-                world.getBlock(x, py, 56) != BlockType.END_PORTAL_FRAME_FILLED) {
-                allFilled = false;
-                break;
-            }
-        }
-        for (int z = 53; z <= 55; z++) {
-            if (world.getBlock(52, py, z) != BlockType.END_PORTAL_FRAME_FILLED ||
-                world.getBlock(56, py, z) != BlockType.END_PORTAL_FRAME_FILLED) {
-                allFilled = false;
-                break;
-            }
-        }
-
-        if (allFilled) {
-            // Fill 3x3 horizontal portal
-            for (int x = 53; x <= 55; x++) {
-                for (int z = 53; z <= 55; z++) {
-                    world.setBlock(x, py, z, BlockType.END_PORTAL);
-                }
-            }
-            no.minecraft.sound.SoundManager.getInstance().play("explode", 0.8f);
-        }
     }
 
     private void setCursorLocked(boolean locked) {
@@ -984,28 +873,7 @@ public class Main {
             frameCount++;
             if (currentTime - fpsTimer >= 1.0) {
                 currentFps = frameCount;
-                String status = player.getDeathFlashTimer() > 0 ? " [💀 DU DØDE - Falt ut av verden!]" : "";
-                String sprintIndicator = sprintActive ? " [⚡ SPRINT]" : "";
-                String countStr = player.getSelectedBlockCount() == -1 ? "∞" : String.valueOf(player.getSelectedBlockCount());
-                String modeStr = player.getGameMode().getDisplayName();
-                if (player.getGameMode() == GameMode.SURVIVAL) {
-                    modeStr += String.format(" (HP: %d/20)", player.getHealth());
-                } else if (player.isFlying()) {
-                    modeStr += " [Flyvende]";
-                }
-
-                String timeStr = world.isNight() ? "🌙 Natt" : "☀️ Dag";
-                String title = String.format("Minecraft Java Clone | Seed: %d | FPS: %d | Tid: %s | Mobs: %d | Modus: %s%s | Valgt: %s (x%s) | Drops: %d | E: Crafting%s",
-                        world.getSeed(),
-                        frameCount,
-                        timeStr,
-                        world.getMobs().size(),
-                        modeStr,
-                        sprintIndicator,
-                        player.getSelectedBlock() != null ? player.getSelectedBlock().getName() : "Ingen",
-                        countStr,
-                        world.getDroppedItems().size(),
-                        status);
+                String title = TitleBuilder.buildTitle(world, player, frameCount, sprintActive);
                 glfwSetWindowTitle(window, title);
                 frameCount = 0;
                 fpsTimer += 1.0;
@@ -1013,36 +881,7 @@ public class Main {
 
             // Calculate dynamic day/night sky color & lighting
             float sunLight = world.getSunLightLevel();
-            Vector3f daySky = new Vector3f(0.53f, 0.81f, 0.98f);    // Minecraft azure sky
-            Vector3f nightSky = new Vector3f(0.04f, 0.05f, 0.10f);  // Deep starry night sky
-            Vector3f sunsetColor = new Vector3f(0.85f, 0.42f, 0.22f); // Golden sunset orange
-
-            if (world.getCurrentDimension() == no.minecraft.world.Dimension.NETHER) {
-                skyColor.set(world.getCurrentDimension().getSkyR(), world.getCurrentDimension().getSkyG(), world.getCurrentDimension().getSkyB());
-            } else if (world.getCurrentDimension() == no.minecraft.world.Dimension.THE_END) {
-                skyColor.set(world.getCurrentDimension().getSkyR(), world.getCurrentDimension().getSkyG(), world.getCurrentDimension().getSkyB());
-            } else {
-                // Blend day and night sky
-                skyColor.set(
-                        nightSky.x + (daySky.x - nightSky.x) * sunLight,
-                        nightSky.y + (daySky.y - nightSky.y) * sunLight,
-                        nightSky.z + (daySky.z - nightSky.z) * sunLight
-                );
-
-                // Add warm sunset / sunrise tint when sun is on the horizon
-                float sunsetFactor = 1.0f - Math.abs(sunLight - 0.5f) * 2.0f;
-                if (sunsetFactor > 0.0f) {
-                    skyColor.lerp(sunsetColor, sunsetFactor * 0.45f);
-                }
-
-                // Underwater atmosphere if submerged
-                int hx = (int) Math.floor(player.getPosition().x);
-                int hy = (int) Math.floor(player.getPosition().y + Player.EYE_HEIGHT);
-                int hz = (int) Math.floor(player.getPosition().z);
-                if (world.getBlock(hx, hy, hz) == BlockType.WATER) {
-                    skyColor.set(0.06f, 0.22f, 0.55f);
-                }
-            }
+            SkyColorCalculator.calculateSkyColor(world, player, skyColor);
 
             // Clear buffers
             glClearColor(skyColor.x, skyColor.y, skyColor.z, 1.0f);
