@@ -55,6 +55,10 @@ public class Main {
     private float rightClickTimer = 0.0f;
     private boolean ignoreNextChar = false;
     private float dimensionPortalCooldown = 0.0f;
+    private float autoSaveTimer = 0.0f;
+    private boolean sprintActive = false;
+    private Raycast.HitResult targetedHit = null;
+    private static final float FIXED_TICK = 1.0f / 20.0f; // 20 ticks/s fixed simulation step
 
     private static final String WORLD_VERT = """
             #version 330 core
@@ -945,116 +949,28 @@ public class Main {
         double fpsTimer = lastTime;
         int frameCount = 0;
         int currentFps = 60;
+        float accumulator = 0.0f;
 
         Vector3f skyColor = new Vector3f(0.53f, 0.81f, 0.98f); // Minecraft sky blue
-        float autoSaveTimer = 0.0f;
 
         while (!glfwWindowShouldClose(window)) {
             double currentTime = glfwGetTime();
             float dt = (float) (currentTime - lastTime);
             lastTime = currentTime;
 
-            // Cap dt to prevent physics tunneling during lags
-            dt = Math.min(dt, 0.05f);
-
-            if (!mainMenu.isInMenu() && mainMenu.getActiveWorldInfo() != null) {
-                autoSaveTimer += dt;
-                if (autoSaveTimer >= 60.0f) {
-                    autoSaveTimer = 0.0f;
-                    no.minecraft.world.save.WorldSaveManager.saveWorld(world, player, mainMenu.getActiveWorldInfo());
-                }
+            // Fixed-step simulation at 20 ticks/s; frame dt is capped so hitches cannot spiral
+            accumulator += Math.min(dt, 0.25f);
+            while (accumulator >= FIXED_TICK) {
+                tick(FIXED_TICK);
+                accumulator -= FIXED_TICK;
             }
 
             no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
-            boolean isPaused = mainMenu.isInMenu() || pauseMenu.isOpen();
-            boolean inGui = isPaused || hud.isInventoryOpen() || chatManager.isOpen();
-            if (inGui) {
-                isLeftMouseDown = false;
-                isRightMouseDown = false;
-            }
 
-            chatManager.update(dt);
-
-            // Input handling (multi-key simultaneous support)
-            boolean fwd = !inGui && isKeyDown(gs.keyForward);
-            boolean bwd = !inGui && isKeyDown(gs.keyBackward);
-            boolean left = !inGui && isKeyDown(gs.keyLeft);
-            boolean right = !inGui && isKeyDown(gs.keyRight);
-            boolean jump = !inGui && isKeyDown(gs.keyJump);
-
-            // Sprinting via double-tap W, Left Shift, Tab, R, or Left/Right Control
-            boolean sprintKey = isKeyDown(GLFW_KEY_LEFT_SHIFT) ||
-                                isKeyDown(GLFW_KEY_TAB) ||
-                                isKeyDown(GLFW_KEY_R) ||
-                                isKeyDown(GLFW_KEY_LEFT_CONTROL) ||
-                                isKeyDown(GLFW_KEY_RIGHT_CONTROL);
-
-            boolean sprint = (doubleTapSprint || sprintKey) && fwd;
-
-            boolean sneak = !inGui && (isKeyDown(gs.keySneak) ||
-                            isKeyDown(GLFW_KEY_RIGHT_SHIFT) ||
-                            isKeyDown(GLFW_KEY_C) ||
-                            isKeyDown(GLFW_KEY_LEFT_ALT));
-
-            if (!isPaused) {
-                player.update(dt, fwd, bwd, left, right, jump, sneak, sprint);
-                world.update(dt, player);
-                CombatTextManager.getInstance().update(dt);
-                no.minecraft.render.ParticleManager.getInstance().update(dt);
-
-                // Dimension Portal stepping check with cooldown
-                if (dimensionPortalCooldown > 0) {
-                    dimensionPortalCooldown -= dt;
-                } else {
-                    no.minecraft.player.AABB playerAABB = player.getBoundingBox();
-                    int minX = (int) Math.floor(playerAABB.minX);
-                    int maxX = (int) Math.floor(playerAABB.maxX);
-                    int minY = (int) Math.floor(playerAABB.minY);
-                    int maxY = (int) Math.floor(playerAABB.maxY);
-                    int minZ = (int) Math.floor(playerAABB.minZ);
-                    int maxZ = (int) Math.floor(playerAABB.maxZ);
-
-                    boolean inNetherPortal = false;
-                    boolean inEndPortal = false;
-
-                    for (int x = minX; x <= maxX; x++) {
-                        for (int y = minY; y <= maxY; y++) {
-                            for (int z = minZ; z <= maxZ; z++) {
-                                BlockType bt = world.getBlock(x, y, z);
-                                if (bt == BlockType.NETHER_PORTAL) {
-                                    inNetherPortal = true;
-                                    break;
-                                } else if (bt == BlockType.END_PORTAL) {
-                                    inEndPortal = true;
-                                    break;
-                                }
-                            }
-                            if (inNetherPortal || inEndPortal) break;
-                        }
-                        if (inNetherPortal || inEndPortal) break;
-                    }
-
-                    if (inNetherPortal) {
-                        dimensionPortalCooldown = 2.5f; // Wait 2.5s before next portal transition
-                        if (world.getCurrentDimension() == no.minecraft.world.Dimension.OVERWORLD) {
-                            world.teleportToDimension(no.minecraft.world.Dimension.NETHER, player);
-                        } else if (world.getCurrentDimension() == no.minecraft.world.Dimension.NETHER) {
-                            world.teleportToDimension(no.minecraft.world.Dimension.OVERWORLD, player);
-                        }
-                    } else if (inEndPortal) {
-                        dimensionPortalCooldown = 2.5f;
-                        if (world.getCurrentDimension() == no.minecraft.world.Dimension.OVERWORLD) {
-                            world.teleportToDimension(no.minecraft.world.Dimension.THE_END, player);
-                        } else if (world.getCurrentDimension() == no.minecraft.world.Dimension.THE_END) {
-                            world.teleportToDimension(no.minecraft.world.Dimension.OVERWORLD, player);
-                        }
-                    }
-                }
-            }
-
-            // Continuous Mining Logic (Left Click hold down)
-            Raycast.HitResult targetedHit = null;
-            if (!inGui) {
+            // Per-frame raycast for the block outline; the simulation tick uses the latest result
+            if (mainMenu.isInMenu() || pauseMenu.isOpen() || hud.isInventoryOpen() || chatManager.isOpen()) {
+                targetedHit = null;
+            } else {
                 targetedHit = Raycast.raycast(
                         world,
                         player.getEyePosition(),
@@ -1063,94 +979,12 @@ public class Main {
                 );
             }
 
-            if (isLeftMouseDown && targetedHit != null && !hud.isInventoryOpen()) {
-                int hx = targetedHit.hitX;
-                int hy = targetedHit.hitY;
-                int hz = targetedHit.hitZ;
-                BlockType targetBlock = world.getBlock(hx, hy, hz);
-
-                if (targetBlock != BlockType.AIR && targetBlock != BlockType.BEDROCK && targetBlock != BlockType.WATER && targetBlock != BlockType.LAVA && targetBlock.getHardness() >= 0.0f) {
-                    if (hx != miningBlockX || hy != miningBlockY || hz != miningBlockZ) {
-                        miningBlockX = hx;
-                        miningBlockY = hy;
-                        miningBlockZ = hz;
-                        miningDamage = 0.0f;
-                    }
-
-                    if (player.getGameMode() == GameMode.CREATIVE) {
-                        // Creative: Instant break
-                        world.setBlock(hx, hy, hz, BlockType.AIR);
-                        no.minecraft.sound.SoundManager.getInstance().play(targetBlock.getBreakSound(), 1.0f);
-                        miningDamage = 0.0f;
-                        miningBlockX = Integer.MIN_VALUE;
-                    } else {
-                        // Survival: Accumulate mining progress based on hardness & tool speed
-                        float hardness = targetBlock.getHardness();
-                        BlockType tool = player.getSelectedBlock();
-                        float multiplier = tool != null ? tool.getMiningSpeedMultiplier(targetBlock) : 1.0f;
-
-                        // Survival base mining rate (seconds to break = hardness / multiplier)
-                        float speed = (multiplier / Math.max(0.05f, hardness));
-                        miningDamage += speed * dt;
-
-                        // Periodic dig sound while mining
-                        miningSoundTimer += dt;
-                        if (miningSoundTimer >= 0.28f) {
-                            miningSoundTimer = 0.0f;
-                            no.minecraft.sound.SoundManager.getInstance().play(targetBlock.getDigSound(), 0.6f);
-                        }
-
-                        if (miningDamage >= 1.0f) {
-                            // Block broken!
-                            world.setBlock(hx, hy, hz, BlockType.AIR);
-                            no.minecraft.sound.SoundManager.getInstance().play(targetBlock.getBreakSound(), 1.0f);
-                            // Drop item if harvested correctly
-                            if (targetBlock.canHarvest(tool)) {
-                                world.spawnItemDrop(hx + 0.5f, hy + 0.5f, hz + 0.5f, targetBlock.getDrop(), 1);
-                            }
-
-                            // Damage tool
-                            if (tool != null && tool.isDamageable()) {
-                                player.getInventory().getSlot(player.getSelectedSlot()).damageTool(1);
-                            }
-
-                            miningDamage = 0.0f;
-                            miningSoundTimer = 0.0f;
-                            miningBlockX = Integer.MIN_VALUE;
-                        }
-                    }
-                } else {
-                    miningDamage = 0.0f;
-                    miningSoundTimer = 0.0f;
-                    miningBlockX = Integer.MIN_VALUE;
-                }
-            } else if (!isLeftMouseDown) {
-                miningDamage = 0.0f;
-                miningSoundTimer = 0.0f;
-                miningBlockX = Integer.MIN_VALUE;
-            }
-
-            // Continuous Block Placement Logic (Right Click hold down)
-            if (isRightMouseDown && !inGui) {
-                rightClickTimer -= dt;
-                if (rightClickTimer <= 0.0f) {
-                    if (tryPlaceBlock()) {
-                        rightClickTimer = 0.22f; // Minecraft default block placement cooldown (~4 ticks)
-                    } else {
-                        // Rapid polling so jumping upwards places block at the exact moment room clears
-                        rightClickTimer = 0.02f;
-                    }
-                }
-            } else if (!isRightMouseDown) {
-                rightClickTimer = 0.0f;
-            }
-
             // FPS Counter & Info
             frameCount++;
             if (currentTime - fpsTimer >= 1.0) {
                 currentFps = frameCount;
                 String status = player.getDeathFlashTimer() > 0 ? " [💀 DU DØDE - Falt ut av verden!]" : "";
-                String sprintIndicator = sprint ? " [⚡ SPRINT]" : "";
+                String sprintIndicator = sprintActive ? " [⚡ SPRINT]" : "";
                 String countStr = player.getSelectedBlockCount() == -1 ? "∞" : String.valueOf(player.getSelectedBlockCount());
                 String modeStr = player.getGameMode().getDisplayName();
                 if (player.getGameMode() == GameMode.SURVIVAL) {
@@ -1306,6 +1140,187 @@ public class Main {
 
             glfwSwapBuffers(window);
             glfwPollEvents();
+        }
+    }
+
+    private void tick(float dt) {
+        if (!mainMenu.isInMenu() && mainMenu.getActiveWorldInfo() != null) {
+            autoSaveTimer += dt;
+            if (autoSaveTimer >= 60.0f) {
+                autoSaveTimer = 0.0f;
+                no.minecraft.world.save.WorldSaveManager.saveWorld(world, player, mainMenu.getActiveWorldInfo());
+            }
+        }
+
+        no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
+        boolean isPaused = mainMenu.isInMenu() || pauseMenu.isOpen();
+        boolean inGui = isPaused || hud.isInventoryOpen() || chatManager.isOpen();
+        if (inGui) {
+            isLeftMouseDown = false;
+            isRightMouseDown = false;
+        }
+
+        chatManager.update(dt);
+
+        // Input handling (multi-key simultaneous support)
+        boolean fwd = !inGui && isKeyDown(gs.keyForward);
+        boolean bwd = !inGui && isKeyDown(gs.keyBackward);
+        boolean left = !inGui && isKeyDown(gs.keyLeft);
+        boolean right = !inGui && isKeyDown(gs.keyRight);
+        boolean jump = !inGui && isKeyDown(gs.keyJump);
+
+        // Sprinting via double-tap W, Left Shift, Tab, R, or Left/Right Control
+        boolean sprintKey = isKeyDown(GLFW_KEY_LEFT_SHIFT) ||
+                            isKeyDown(GLFW_KEY_TAB) ||
+                            isKeyDown(GLFW_KEY_R) ||
+                            isKeyDown(GLFW_KEY_LEFT_CONTROL) ||
+                            isKeyDown(GLFW_KEY_RIGHT_CONTROL);
+
+        boolean sprint = (doubleTapSprint || sprintKey) && fwd;
+        sprintActive = sprint;
+
+        boolean sneak = !inGui && (isKeyDown(gs.keySneak) ||
+                        isKeyDown(GLFW_KEY_RIGHT_SHIFT) ||
+                        isKeyDown(GLFW_KEY_C) ||
+                        isKeyDown(GLFW_KEY_LEFT_ALT));
+
+        if (!isPaused) {
+            player.update(dt, fwd, bwd, left, right, jump, sneak, sprint);
+            world.update(dt, player);
+            CombatTextManager.getInstance().update(dt);
+            no.minecraft.render.ParticleManager.getInstance().update(dt);
+
+            // Dimension Portal stepping check with cooldown
+            if (dimensionPortalCooldown > 0) {
+                dimensionPortalCooldown -= dt;
+            } else {
+                no.minecraft.player.AABB playerAABB = player.getBoundingBox();
+                int minX = (int) Math.floor(playerAABB.minX);
+                int maxX = (int) Math.floor(playerAABB.maxX);
+                int minY = (int) Math.floor(playerAABB.minY);
+                int maxY = (int) Math.floor(playerAABB.maxY);
+                int minZ = (int) Math.floor(playerAABB.minZ);
+                int maxZ = (int) Math.floor(playerAABB.maxZ);
+
+                boolean inNetherPortal = false;
+                boolean inEndPortal = false;
+
+                for (int x = minX; x <= maxX; x++) {
+                    for (int y = minY; y <= maxY; y++) {
+                        for (int z = minZ; z <= maxZ; z++) {
+                            BlockType bt = world.getBlock(x, y, z);
+                            if (bt == BlockType.NETHER_PORTAL) {
+                                inNetherPortal = true;
+                                break;
+                            } else if (bt == BlockType.END_PORTAL) {
+                                inEndPortal = true;
+                                break;
+                            }
+                        }
+                        if (inNetherPortal || inEndPortal) break;
+                    }
+                    if (inNetherPortal || inEndPortal) break;
+                }
+
+                if (inNetherPortal) {
+                    dimensionPortalCooldown = 2.5f; // Wait 2.5s before next portal transition
+                    if (world.getCurrentDimension() == no.minecraft.world.Dimension.OVERWORLD) {
+                        world.teleportToDimension(no.minecraft.world.Dimension.NETHER, player);
+                    } else if (world.getCurrentDimension() == no.minecraft.world.Dimension.NETHER) {
+                        world.teleportToDimension(no.minecraft.world.Dimension.OVERWORLD, player);
+                    }
+                } else if (inEndPortal) {
+                    dimensionPortalCooldown = 2.5f;
+                    if (world.getCurrentDimension() == no.minecraft.world.Dimension.OVERWORLD) {
+                        world.teleportToDimension(no.minecraft.world.Dimension.THE_END, player);
+                    } else if (world.getCurrentDimension() == no.minecraft.world.Dimension.THE_END) {
+                        world.teleportToDimension(no.minecraft.world.Dimension.OVERWORLD, player);
+                    }
+                }
+            }
+        }
+
+        // Continuous Mining Logic (Left Click hold down)
+        if (isLeftMouseDown && targetedHit != null && !hud.isInventoryOpen()) {
+            int hx = targetedHit.hitX;
+            int hy = targetedHit.hitY;
+            int hz = targetedHit.hitZ;
+            BlockType targetBlock = world.getBlock(hx, hy, hz);
+
+            if (targetBlock != BlockType.AIR && targetBlock != BlockType.BEDROCK && targetBlock != BlockType.WATER && targetBlock != BlockType.LAVA && targetBlock.getHardness() >= 0.0f) {
+                if (hx != miningBlockX || hy != miningBlockY || hz != miningBlockZ) {
+                    miningBlockX = hx;
+                    miningBlockY = hy;
+                    miningBlockZ = hz;
+                    miningDamage = 0.0f;
+                }
+
+                if (player.getGameMode() == GameMode.CREATIVE) {
+                    // Creative: Instant break
+                    world.setBlock(hx, hy, hz, BlockType.AIR);
+                    no.minecraft.sound.SoundManager.getInstance().play(targetBlock.getBreakSound(), 1.0f);
+                    miningDamage = 0.0f;
+                    miningBlockX = Integer.MIN_VALUE;
+                } else {
+                    // Survival: Accumulate mining progress based on hardness & tool speed
+                    float hardness = targetBlock.getHardness();
+                    BlockType tool = player.getSelectedBlock();
+                    float multiplier = tool != null ? tool.getMiningSpeedMultiplier(targetBlock) : 1.0f;
+
+                    // Survival base mining rate (seconds to break = hardness / multiplier)
+                    float speed = (multiplier / Math.max(0.05f, hardness));
+                    miningDamage += speed * dt;
+
+                    // Periodic dig sound while mining
+                    miningSoundTimer += dt;
+                    if (miningSoundTimer >= 0.28f) {
+                        miningSoundTimer = 0.0f;
+                        no.minecraft.sound.SoundManager.getInstance().play(targetBlock.getDigSound(), 0.6f);
+                    }
+
+                    if (miningDamage >= 1.0f) {
+                        // Block broken!
+                        world.setBlock(hx, hy, hz, BlockType.AIR);
+                        no.minecraft.sound.SoundManager.getInstance().play(targetBlock.getBreakSound(), 1.0f);
+                        // Drop item if harvested correctly
+                        if (targetBlock.canHarvest(tool)) {
+                            world.spawnItemDrop(hx + 0.5f, hy + 0.5f, hz + 0.5f, targetBlock.getDrop(), 1);
+                        }
+
+                        // Damage tool
+                        if (tool != null && tool.isDamageable()) {
+                            player.getInventory().getSlot(player.getSelectedSlot()).damageTool(1);
+                        }
+
+                        miningDamage = 0.0f;
+                        miningSoundTimer = 0.0f;
+                        miningBlockX = Integer.MIN_VALUE;
+                    }
+                }
+            } else {
+                miningDamage = 0.0f;
+                miningSoundTimer = 0.0f;
+                miningBlockX = Integer.MIN_VALUE;
+            }
+        } else if (!isLeftMouseDown) {
+            miningDamage = 0.0f;
+            miningSoundTimer = 0.0f;
+            miningBlockX = Integer.MIN_VALUE;
+        }
+
+        // Continuous Block Placement Logic (Right Click hold down)
+        if (isRightMouseDown && !inGui) {
+            rightClickTimer -= dt;
+            if (rightClickTimer <= 0.0f) {
+                if (tryPlaceBlock()) {
+                    rightClickTimer = 0.22f; // Minecraft default block placement cooldown (~4 ticks)
+                } else {
+                    // Rapid polling so jumping upwards places block at the exact moment room clears
+                    rightClickTimer = 0.02f;
+                }
+            }
+        } else if (!isRightMouseDown) {
+            rightClickTimer = 0.0f;
         }
     }
 
