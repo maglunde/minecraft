@@ -563,6 +563,66 @@ public class TextureAtlas {
             return rgba(bg, bg, bg, 255);
         });
 
+        // 76: Water (Animated cyan-blue fluid with rippling wave highlights)
+        loadOrPaint(pixelData, 76, "water.png", (x, y, rand) -> {
+            int wave = (x * 3 + y * 7 + (x ^ y)) % 11;
+            int b = 210 + rand.nextInt(40);
+            int r = 35 + wave * 2 + rand.nextInt(15);
+            int g = 90 + wave * 4 + rand.nextInt(25);
+            return rgba(r, g, b, 215);
+        });
+
+        // 77: Sandstone Top (Smooth warm golden sandstone)
+        loadOrPaint(pixelData, 77, "sandstone_top.png", (x, y, rand) -> {
+            int base = 215 + rand.nextInt(20);
+            return rgba(base, (int) (base * 0.94f), (int) (base * 0.72f), 255);
+        });
+
+        // 78: Sandstone Side (Horizontal layered sandstone strata)
+        loadOrPaint(pixelData, 78, "sandstone_side.png", (x, y, rand) -> {
+            int band = (y % 4 == 0) ? -20 : ((y % 8 == 3) ? 15 : 0);
+            int base = 205 + band + rand.nextInt(18);
+            return rgba(base, (int) (base * 0.93f), (int) (base * 0.70f), 255);
+        });
+
+        // 79: Sandstone Bottom (Rough textured sandstone)
+        loadOrPaint(pixelData, 79, "sandstone_bottom.png", (x, y, rand) -> {
+            int base = 190 + rand.nextInt(25);
+            return rgba(base, (int) (base * 0.92f), (int) (base * 0.68f), 255);
+        });
+
+        // 80: Snow Block (Crisp pure white with soft pastel-blue flecks)
+        loadOrPaint(pixelData, 80, "snow.png", (x, y, rand) -> {
+            int v = 240 + rand.nextInt(16);
+            return rgba(v - rand.nextInt(6), v - rand.nextInt(4), v, 255);
+        });
+
+        // 81: Gravel (Mottled gray, slate and beige pebble pattern)
+        loadOrPaint(pixelData, 81, "gravel.png", (x, y, rand) -> {
+            int v = 115 + rand.nextInt(35);
+            int r = (int) (v * 1.05f) + rand.nextInt(10);
+            int g = v + rand.nextInt(8);
+            int b = (int) (v * 0.95f) + rand.nextInt(8);
+            return rgba(r, g, b, 255);
+        });
+
+        // 82: Cactus Top / Bottom (Dark green perimeter with lighter fleshy interior)
+        loadOrPaint(pixelData, 82, "cactus_top.png", (x, y, rand) -> {
+            boolean border = (x == 0 || x == 15 || y == 0 || y == 15);
+            if (border) return rgba(25, 75, 25, 255);
+            int g = 110 + rand.nextInt(30);
+            return rgba((int) (g * 0.4f), g, (int) (g * 0.25f), 255);
+        });
+
+        // 83: Cactus Side (Vertical ribbed dark green stripes and spine dots)
+        loadOrPaint(pixelData, 83, "cactus_side.png", (x, y, rand) -> {
+            boolean stripe = (x % 3 == 0);
+            boolean spine = (x % 3 == 1 && y % 4 == 2);
+            if (spine) return rgba(240, 240, 240, 255);
+            int g = stripe ? (85 + rand.nextInt(20)) : (120 + rand.nextInt(30));
+            return rgba((int) (g * 0.35f), g, (int) (g * 0.25f), 255);
+        });
+
         for (int y = 0; y < ATLAS_SIZE; y++) {
             buffer.put(pixelData[y]);
         }

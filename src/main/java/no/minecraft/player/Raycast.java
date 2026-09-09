@@ -42,7 +42,7 @@ public class Raycast {
 
             if (blockX != prevBlockX || blockY != prevBlockY || blockZ != prevBlockZ) {
                 BlockType type = world.getBlock(blockX, blockY, blockZ);
-                if (type != BlockType.AIR && type != BlockType.BEDROCK) {
+                if (type != BlockType.AIR && type != BlockType.BEDROCK && type != BlockType.WATER) {
                     return new HitResult(blockX, blockY, blockZ, prevBlockX, prevBlockY, prevBlockZ, type);
                 }
                 prevBlockX = blockX;

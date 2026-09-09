@@ -959,6 +959,14 @@ public class Main {
                 if (sunsetFactor > 0.0f) {
                     skyColor.lerp(sunsetColor, sunsetFactor * 0.45f);
                 }
+
+                // Underwater atmosphere if submerged
+                int hx = (int) Math.floor(player.getPosition().x);
+                int hy = (int) Math.floor(player.getPosition().y + Player.EYE_HEIGHT);
+                int hz = (int) Math.floor(player.getPosition().z);
+                if (world.getBlock(hx, hy, hz) == BlockType.WATER) {
+                    skyColor.set(0.06f, 0.22f, 0.55f);
+                }
             }
 
             // Clear buffers
@@ -985,9 +993,17 @@ public class Main {
             if (world.getCurrentDimension() != no.minecraft.world.Dimension.OVERWORLD) {
                 fogStart = world.getCurrentDimension().getFogStart();
                 fogEnd = world.getCurrentDimension().getFogEnd();
+            } else if (world.getBlock((int) Math.floor(player.getPosition().x),
+                                      (int) Math.floor(player.getPosition().y + Player.EYE_HEIGHT),
+                                      (int) Math.floor(player.getPosition().z)) == BlockType.WATER) {
+                fogStart = 1.0f;
+                fogEnd = 20.0f;
             }
             float brightness = gs.getBrightness();
             float dynamicSunLight = Math.min(1.0f, sunLight * (1.0f + brightness * 0.4f) + brightness * 0.15f);
+
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
             worldShader.bind();
             worldShader.setUniform("uProjection", projection);
@@ -1005,6 +1021,7 @@ public class Main {
 
             atlas.unbind();
             worldShader.unbind();
+            glDisable(GL_BLEND);
 
             // 4. Render 3D Mobs (Zombie, Creeper, Spider, Skeleton, Blaze, Enderman, Ender Dragon, End Crystal) & Arrows
             mobRenderer.render(world.getMobs(), world.getArrows(), projection, view, sunLight);

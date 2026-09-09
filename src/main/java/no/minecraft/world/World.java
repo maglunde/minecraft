@@ -130,11 +130,16 @@ public class World {
     public int getSpawnHeight(int x, int z) {
         for (int y = Chunk.SIZE_Y - 1; y >= 0; y--) {
             BlockType type = getBlock(x, y, z);
-            if (type != BlockType.AIR && type.isSolid()) {
-                return y + 1;
+            if (type != BlockType.AIR) {
+                if (type == BlockType.WATER) {
+                    return Math.max(SEA_LEVEL + 1, y + 1);
+                }
+                if (type.isSolid()) {
+                    return y + 1;
+                }
             }
         }
-        return 25;
+        return SEA_LEVEL + 2;
     }
 
     private org.joml.Vector3f lastOverworldPortal = null;
@@ -468,17 +473,71 @@ public class World {
                 int wx = startX + lx;
                 int wz = startZ + lz;
                 int height = getTerrainHeight(wx, wz);
+                String biome = getBiomeName(wx, height, wz);
 
+                // Bedrock at y = 0
                 chunk.setBlock(lx, 0, lz, BlockType.BEDROCK);
+
+                // Underground stone layers
                 for (int y = 1; y < height - 3; y++) {
                     chunk.setBlock(lx, y, lz, BlockType.STONE);
                 }
-                boolean isSand = (height <= SEA_LEVEL + 1);
-                for (int y = Math.max(1, height - 3); y < height; y++) {
-                    chunk.setBlock(lx, y, lz, isSand ? BlockType.SAND : BlockType.DIRT);
-                }
-                if (height > 0 && height < Chunk.SIZE_Y) {
-                    chunk.setBlock(lx, height, lz, isSand ? BlockType.SAND : BlockType.GRASS);
+
+                // Biome-specific surface layers
+                if (biome.equals("minecraft:ocean")) {
+                    // Ocean floor: sand and gravel
+                    boolean isGravel = (Math.abs(wx * 7 + wz * 13) % 4 == 0);
+                    for (int y = Math.max(1, height - 3); y <= height; y++) {
+                        chunk.setBlock(lx, y, lz, isGravel ? BlockType.GRAVEL : BlockType.SAND);
+                    }
+                    // Fill water from ocean floor up to SEA_LEVEL
+                    for (int y = height + 1; y <= SEA_LEVEL; y++) {
+                        chunk.setBlock(lx, y, lz, BlockType.WATER);
+                    }
+                } else if (biome.equals("minecraft:desert")) {
+                    // Sandstone stratum under sand
+                    for (int y = Math.max(1, height - 6); y < height - 2; y++) {
+                        chunk.setBlock(lx, y, lz, BlockType.SANDSTONE);
+                    }
+                    // Sand layers on top
+                    for (int y = Math.max(1, height - 2); y <= height; y++) {
+                        chunk.setBlock(lx, y, lz, BlockType.SAND);
+                    }
+                } else if (biome.equals("minecraft:snowy_plains")) {
+                    for (int y = Math.max(1, height - 3); y < height; y++) {
+                        chunk.setBlock(lx, y, lz, BlockType.DIRT);
+                    }
+                    if (height > 0 && height < Chunk.SIZE_Y) {
+                        chunk.setBlock(lx, height, lz, BlockType.SNOW_BLOCK);
+                    }
+                } else if (biome.equals("minecraft:mountains")) {
+                    if (height >= 38) {
+                        // High peaks: Snow caps
+                        for (int y = Math.max(1, height - 2); y <= height; y++) {
+                            chunk.setBlock(lx, y, lz, BlockType.SNOW_BLOCK);
+                        }
+                    } else if (height >= 29) {
+                        // Rocky cliffs: Stone and gravel scree
+                        boolean isGravel = (Math.abs(wx * 11 + wz * 17) % 5 == 0);
+                        for (int y = Math.max(1, height - 3); y <= height; y++) {
+                            chunk.setBlock(lx, y, lz, isGravel ? BlockType.GRAVEL : BlockType.STONE);
+                        }
+                    } else {
+                        // Lower mountain base: Dirt and grass
+                        for (int y = Math.max(1, height - 3); y < height; y++) {
+                            chunk.setBlock(lx, y, lz, BlockType.DIRT);
+                        }
+                        chunk.setBlock(lx, height, lz, BlockType.GRASS);
+                    }
+                } else {
+                    // Plains or Forest
+                    boolean isBeach = (height <= SEA_LEVEL + 1);
+                    for (int y = Math.max(1, height - 3); y < height; y++) {
+                        chunk.setBlock(lx, y, lz, isBeach ? BlockType.SAND : BlockType.DIRT);
+                    }
+                    if (height > 0 && height < Chunk.SIZE_Y) {
+                        chunk.setBlock(lx, height, lz, isBeach ? BlockType.SAND : BlockType.GRASS);
+                    }
                 }
             }
         }
@@ -730,21 +789,151 @@ public class World {
         if (currentDimension != Dimension.OVERWORLD) return;
 
         long chunkSeed = ((long) cx * 341873128711L) ^ ((long) cz * 132897987541L) ^ seed;
-        Random treeRand = new Random(chunkSeed);
+        Random decRand = new Random(chunkSeed);
 
         int startX = cx * Chunk.SIZE_X;
         int startZ = cz * Chunk.SIZE_Z;
 
-        int numTrees = 1 + treeRand.nextInt(3);
+        // Sample biome in chunk center
+        int midX = startX + Chunk.SIZE_X / 2;
+        int midZ = startZ + Chunk.SIZE_Z / 2;
+        int midH = getTerrainHeight(midX, midZ);
+        String biome = getBiomeName(midX, midH, midZ);
+
+        if (biome.equals("minecraft:ocean")) {
+            return; // No vegetation in open ocean
+        }
+
+        if (biome.equals("minecraft:desert")) {
+            // Cacti: 1-3 per chunk on sand
+            int numCacti = 1 + decRand.nextInt(3);
+            for (int i = 0; i < numCacti; i++) {
+                int lx = 2 + decRand.nextInt(Chunk.SIZE_X - 4);
+                int lz = 2 + decRand.nextInt(Chunk.SIZE_Z - 4);
+                int wx = startX + lx;
+                int wz = startZ + lz;
+                int groundY = getTerrainHeight(wx, wz);
+                if (groundY > SEA_LEVEL && getBlock(wx, groundY, wz) == BlockType.SAND) {
+                    spawnCactus(wx, groundY + 1, wz, decRand);
+                }
+            }
+            return;
+        }
+
+        if (biome.equals("minecraft:snowy_plains")) {
+            // Pine/Spruce trees: 1-3 per chunk on snow
+            int numTrees = 1 + decRand.nextInt(3);
+            for (int t = 0; t < numTrees; t++) {
+                int lx = 2 + decRand.nextInt(Chunk.SIZE_X - 4);
+                int lz = 2 + decRand.nextInt(Chunk.SIZE_Z - 4);
+                int wx = startX + lx;
+                int wz = startZ + lz;
+                int groundY = getTerrainHeight(wx, wz);
+                if (groundY > SEA_LEVEL && getBlock(wx, groundY, wz) == BlockType.SNOW_BLOCK) {
+                    spawnPineTree(wx, groundY + 1, wz, decRand);
+                }
+            }
+            return;
+        }
+
+        if (biome.equals("minecraft:forest")) {
+            // Dense forest: 4-7 oak trees per chunk
+            int numTrees = 4 + decRand.nextInt(4);
+            for (int t = 0; t < numTrees; t++) {
+                int lx = 2 + decRand.nextInt(Chunk.SIZE_X - 4);
+                int lz = 2 + decRand.nextInt(Chunk.SIZE_Z - 4);
+                int wx = startX + lx;
+                int wz = startZ + lz;
+                int groundY = getTerrainHeight(wx, wz);
+                if (groundY > SEA_LEVEL && getBlock(wx, groundY, wz) == BlockType.GRASS) {
+                    spawnTree(wx, groundY + 1, wz, decRand);
+                }
+            }
+            return;
+        }
+
+        if (biome.equals("minecraft:mountains")) {
+            // Rare mountain tree on grassy terraces
+            if (decRand.nextInt(3) == 0) {
+                int lx = 2 + decRand.nextInt(Chunk.SIZE_X - 4);
+                int lz = 2 + decRand.nextInt(Chunk.SIZE_Z - 4);
+                int wx = startX + lx;
+                int wz = startZ + lz;
+                int groundY = getTerrainHeight(wx, wz);
+                if (groundY > SEA_LEVEL && groundY < 35 && getBlock(wx, groundY, wz) == BlockType.GRASS) {
+                    spawnTree(wx, groundY + 1, wz, decRand);
+                }
+            }
+            return;
+        }
+
+        // Plains: 0-2 trees per chunk
+        int numTrees = decRand.nextInt(3);
         for (int t = 0; t < numTrees; t++) {
-            int lx = 2 + treeRand.nextInt(Chunk.SIZE_X - 4);
-            int lz = 2 + treeRand.nextInt(Chunk.SIZE_Z - 4);
+            int lx = 2 + decRand.nextInt(Chunk.SIZE_X - 4);
+            int lz = 2 + decRand.nextInt(Chunk.SIZE_Z - 4);
             int wx = startX + lx;
             int wz = startZ + lz;
 
             int groundY = getTerrainHeight(wx, wz);
-            if (groundY > SEA_LEVEL + 1 && getBlock(wx, groundY, wz) == BlockType.GRASS) {
-                spawnTree(wx, groundY + 1, wz, treeRand);
+            if (groundY > SEA_LEVEL && getBlock(wx, groundY, wz) == BlockType.GRASS) {
+                spawnTree(wx, groundY + 1, wz, decRand);
+            }
+        }
+    }
+
+    private void spawnCactus(int rootX, int rootY, int rootZ, Random rand) {
+        int height = 1 + rand.nextInt(3);
+        for (int dy = 0; dy < height; dy++) {
+            if (getBlock(rootX, rootY + dy, rootZ) == BlockType.AIR) {
+                setBlock(rootX, rootY + dy, rootZ, BlockType.CACTUS);
+            }
+        }
+    }
+
+    private void spawnPineTree(int rootX, int rootY, int rootZ, Random rand) {
+        int trunkHeight = 6 + rand.nextInt(3);
+        for (int dy = 0; dy < trunkHeight; dy++) {
+            setBlock(rootX, rootY + dy, rootZ, BlockType.WOOD);
+        }
+        int topY = rootY + trunkHeight;
+        // Tip
+        setBlock(rootX, topY, rootZ, BlockType.LEAVES);
+
+        // Layer 1 (radius 1 cross)
+        setBlock(rootX + 1, topY - 1, rootZ, BlockType.LEAVES);
+        setBlock(rootX - 1, topY - 1, rootZ, BlockType.LEAVES);
+        setBlock(rootX, topY - 1, rootZ + 1, BlockType.LEAVES);
+        setBlock(rootX, topY - 1, rootZ - 1, BlockType.LEAVES);
+
+        // Layer 2 (3x3 square)
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (getBlock(rootX + dx, topY - 2, rootZ + dz) == BlockType.AIR) {
+                    setBlock(rootX + dx, topY - 2, rootZ + dz, BlockType.LEAVES);
+                }
+            }
+        }
+
+        // Layer 3 (radius 2 cross)
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                if (Math.abs(dx) == 2 && Math.abs(dz) == 2) continue;
+                if (getBlock(rootX + dx, topY - 3, rootZ + dz) == BlockType.AIR) {
+                    setBlock(rootX + dx, topY - 3, rootZ + dz, BlockType.LEAVES);
+                }
+            }
+        }
+
+        // Layer 4 (5x5 square with cut corners)
+        if (trunkHeight >= 7) {
+            for (int dx = -2; dx <= 2; dx++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    if (Math.abs(dx) == 2 && Math.abs(dz) == 2 && rand.nextBoolean()) continue;
+                    if (getBlock(rootX + dx, topY - 4, rootZ + dz) == BlockType.AIR) {
+                        setBlock(rootX + dx, topY - 4, rootZ + dz, BlockType.LEAVES);
+                    }
+                }
             }
         }
     }
@@ -776,13 +965,35 @@ public class World {
     private int getTerrainHeight(int x, int z) {
         double sx = x + offsetX;
         double sz = z + offsetZ;
-        double n1 = Math.sin(sx * 0.035) * Math.cos(sz * 0.035) * 8.0;
-        double n2 = Math.sin((sx + 100.0) * 0.07) * Math.cos((sz + 50.0) * 0.07) * 4.0;
-        double n3 = Math.sin(sx * 0.015 + sz * 0.015) * 6.0;
 
-        int baseHeight = 24;
-        int height = (int) Math.round(baseHeight + n1 + n2 + n3);
-        return Math.clamp(height, 5, Chunk.SIZE_Y - 10);
+        // Continentalness noise for ocean vs land
+        double cont = Math.sin(sx * 0.007) * Math.cos(sz * 0.007)
+                    + 0.5 * Math.sin((sx + 120.0) * 0.015) * Math.cos((sz + 60.0) * 0.015);
+
+        // Mountain ridge noise
+        double mNoise = Math.sin((sx + 350.0) * 0.011) * Math.cos((sz - 250.0) * 0.011)
+                      + 0.5 * Math.sin((sx + 100.0) * 0.023) * Math.cos((sz - 100.0) * 0.023);
+
+        // Fine terrain detail
+        double detail = Math.sin(sx * 0.035) * Math.cos(sz * 0.035) * 4.5
+                      + Math.sin((sx + 100.0) * 0.07) * Math.cos((sz + 50.0) * 0.07) * 2.0;
+
+        if (mNoise > 0.65) {
+            double base = 28.0 + (mNoise - 0.65) * 35.0;
+            return (int) Math.clamp(Math.round(base + detail * 1.5), 5, Chunk.SIZE_Y - 8);
+        }
+
+        double base;
+        if (cont < -0.30) {
+            base = 11.0 + (cont + 0.30) * 8.0; // Deep ocean
+        } else if (cont < -0.15) {
+            base = 15.0 + (cont + 0.15) * 12.0; // Shallow coast / beach
+        } else {
+            base = 21.0 + (cont + 0.15) * 6.0; // Inland hills
+        }
+
+        int height = (int) Math.round(base + detail);
+        return (int) Math.clamp(height, 5, Chunk.SIZE_Y - 8);
     }
 
     public void updateAndRender() {
@@ -806,10 +1017,25 @@ public class World {
             return "minecraft:the_end";
         } else {
             int h = getTerrainHeight(x, z);
-            if (h <= SEA_LEVEL + 1) {
+            if (h <= SEA_LEVEL) {
                 return "minecraft:ocean";
-            } else if (h >= 30) {
+            }
+            if (h >= 32) {
                 return "minecraft:mountains";
+            }
+            double sx = x + offsetX;
+            double sz = z + offsetZ;
+            double temp = Math.sin((sx + 800.0) * 0.010) * Math.cos((sz + 600.0) * 0.010)
+                        + 0.5 * Math.sin((sx + 180.0) * 0.022) * Math.cos((sz + 40.0) * 0.022);
+            double hum  = Math.sin((sx - 500.0) * 0.010) * Math.cos((sz - 300.0) * 0.010)
+                        + 0.5 * Math.sin((sx + 120.0) * 0.021) * Math.cos((sz - 160.0) * 0.021);
+
+            if (temp > 0.30) {
+                return "minecraft:desert";
+            } else if (temp < -0.30) {
+                return "minecraft:snowy_plains";
+            } else if (hum > 0.05) {
+                return "minecraft:forest";
             } else {
                 return "minecraft:plains";
             }

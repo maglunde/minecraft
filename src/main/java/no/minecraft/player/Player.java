@@ -68,13 +68,20 @@ public class Player {
         float baseSpeed = isSprinting ? SPRINT_SPEED : WALK_SPEED;
         // Soul Sand speed reduction
         int currX = (int) Math.floor(position.x);
-        int currY = (int) Math.floor(position.y - 0.2f);
+        int currY = (int) Math.floor(position.y);
         int currZ = (int) Math.floor(position.z);
-        if (world.getBlock(currX, currY, currZ) == BlockType.SOUL_SAND) {
+        BlockType bFeet = world.getBlock(currX, currY, currZ);
+        BlockType bHead = world.getBlock(currX, (int) Math.floor(position.y + 0.9f), currZ);
+        boolean inWater = (bFeet == BlockType.WATER || bHead == BlockType.WATER);
+
+        if (world.getBlock(currX, (int) Math.floor(position.y - 0.2f), currZ) == BlockType.SOUL_SAND) {
             baseSpeed *= 0.45f;
         }
+        if (inWater) {
+            baseSpeed *= 0.70f;
+        }
         // Sprint-jump momentum boost in air
-        if (!onGround && isSprinting) {
+        if (!onGround && isSprinting && !inWater) {
             baseSpeed *= 1.12f;
         }
         float speed = (flying && gameMode == GameMode.CREATIVE) ? FLY_SPEED : baseSpeed;
@@ -135,19 +142,30 @@ public class Player {
             if (sneak) velocity.y -= FLY_SPEED;
             moveWithCollision(velocity.x * dt, velocity.y * dt, velocity.z * dt);
         } else {
-            if (!onGround) {
-                lastAirVerticalSpeed = velocity.y;
-            }
+            if (inWater) {
+                if (jump) {
+                    velocity.y = 3.6f; // Swim upward
+                } else if (sneak) {
+                    velocity.y = -3.6f; // Dive downward
+                } else {
+                    velocity.y = Math.max(-2.5f, velocity.y + (GRAVITY * 0.22f) * dt); // Buoyant sink
+                }
+                lastAirVerticalSpeed = 0.0f;
+            } else {
+                if (!onGround) {
+                    lastAirVerticalSpeed = velocity.y;
+                }
 
-            // Apply gravity
-            velocity.y += GRAVITY * dt;
+                // Apply gravity
+                velocity.y += GRAVITY * dt;
 
-            // Jump trigger (support sprint-jumping and jump buffer)
-            if (jumpBufferTimer > 0 && coyoteTimer > 0) {
-                velocity.y = JUMP_SPEED;
-                onGround = false;
-                coyoteTimer = 0.0f;
-                jumpBufferTimer = 0.0f;
+                // Jump trigger (support sprint-jumping and jump buffer)
+                if (jumpBufferTimer > 0 && coyoteTimer > 0) {
+                    velocity.y = JUMP_SPEED;
+                    onGround = false;
+                    coyoteTimer = 0.0f;
+                    jumpBufferTimer = 0.0f;
+                }
             }
 
             boolean wasInAir = !onGround;
@@ -156,7 +174,7 @@ public class Player {
             moveWithCollision(velocity.x * dt, velocity.y * dt, velocity.z * dt);
 
             // Fall damage calculation on hard landing in Survival
-            if (wasInAir && onGround && gameMode != GameMode.CREATIVE) {
+            if (wasInAir && onGround && gameMode != GameMode.CREATIVE && !inWater) {
                 if (lastAirVerticalSpeed < -16.0f) {
                     int damage = (int) ((-lastAirVerticalSpeed - 16.0f) * 1.5f);
                     no.minecraft.sound.SoundManager.getInstance().play("fall_small", 0.9f);
@@ -166,14 +184,15 @@ public class Player {
             }
         }
 
-        // Environmental hazard checks (Lava burn damage and Soul Sand slowdown)
+        // Environmental hazard checks (Lava burn, Cactus touch, Void check)
         int px = (int) Math.floor(position.x);
         int pyFeet = (int) Math.floor(position.y);
-        int pyHead = (int) Math.floor(position.y + 0.9f);
         int pz = (int) Math.floor(position.z);
-        BlockType bFeet = world.getBlock(px, pyFeet, pz);
-        BlockType bHead = world.getBlock(px, pyHead, pz);
         BlockType bBelow = world.getBlock(px, pyFeet - 1, pz);
+
+        if (bFeet == BlockType.CACTUS || bHead == BlockType.CACTUS) {
+            damage(1); // Half-heart damage from touching cactus
+        }
 
         if (bFeet == BlockType.LAVA || bHead == BlockType.LAVA || bBelow == BlockType.LAVA) {
             lavaBurnTimer += dt;
