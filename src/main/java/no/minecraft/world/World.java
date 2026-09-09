@@ -131,8 +131,43 @@ public class World {
 
     public record BlockPos(int x, int y, int z, boolean inWater) {}
 
-    private final Set<BlockPos> fallingBlocks = new LinkedHashSet<>();
-    private float gravityTickTimer = 0.0f;
+    public static class FallingBlock {
+        private final int x;
+        private int y;
+        private final int z;
+        private final BlockType type;
+        private boolean inWater;
+        private float delayTimer;
+        private float velocity;
+        private float fallProgress;
+        private boolean finished = false;
+
+        public FallingBlock(int x, int y, int z, BlockType type, boolean inWater, float delayTimer) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.type = type;
+            this.inWater = inWater;
+            this.delayTimer = delayTimer;
+            this.velocity = 1.8f;
+            this.fallProgress = 0.0f;
+        }
+
+        public int getX() { return x; }
+        public int getY() { return y; }
+        public int getZ() { return z; }
+        public BlockType getType() { return type; }
+        public float getDelayTimer() { return delayTimer; }
+        public float getVelocity() { return velocity; }
+        public boolean isFinished() { return finished; }
+    }
+
+    private final List<FallingBlock> fallingBlocks = new ArrayList<>();
+    private final List<FallingBlock> pendingFallingBlocks = new ArrayList<>();
+
+    public List<FallingBlock> getFallingBlocks() {
+        return fallingBlocks;
+    }
 
     public static boolean isGravityBlock(BlockType type) {
         return type == BlockType.SAND || type == BlockType.GRAVEL;
@@ -170,6 +205,20 @@ public class World {
         checkAndAddFalling(x, y, z - 1);
     }
 
+    private boolean isAlreadyFalling(int x, int y, int z) {
+        for (FallingBlock fb : fallingBlocks) {
+            if (!fb.finished && fb.x == x && fb.y == y && fb.z == z) {
+                return true;
+            }
+        }
+        for (FallingBlock fb : pendingFallingBlocks) {
+            if (!fb.finished && fb.x == x && fb.y == y && fb.z == z) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public void checkAndAddFalling(int x, int y, int z) {
         if (y <= 1 || y >= Chunk.SIZE_Y) return;
         BlockType type = getBlock(x, y, z);
@@ -177,65 +226,97 @@ public class World {
         if (!canFallThrough(getBlock(x, y - 1, z))) return;
 
         int cy = y;
+        float delay = 0.22f; // Initial hesitation delay before gravity takes hold
         while (cy < Chunk.SIZE_Y && isGravityBlock(getBlock(x, cy, z))) {
-            boolean inWater = (getBlock(x, cy + 1, z) == BlockType.WATER);
-            fallingBlocks.add(new BlockPos(x, cy, z, inWater));
+            if (!isAlreadyFalling(x, cy, z)) {
+                boolean inWater = (getBlock(x, cy + 1, z) == BlockType.WATER);
+                pendingFallingBlocks.add(new FallingBlock(x, cy, z, getBlock(x, cy, z), inWater, delay));
+            }
             cy++;
         }
     }
 
-    private void updateFallingBlocks() {
+    private void updateFallingBlocks(float dt) {
+        if (!pendingFallingBlocks.isEmpty()) {
+            fallingBlocks.addAll(pendingFallingBlocks);
+            pendingFallingBlocks.clear();
+        }
         if (fallingBlocks.isEmpty()) return;
 
-        List<BlockPos> current = new ArrayList<>(fallingBlocks);
-        fallingBlocks.clear();
+        // 1. Advance delay and velocity/progress for active blocks
+        for (FallingBlock fb : fallingBlocks) {
+            if (fb.finished) continue;
 
-        current.sort(Comparator.comparingInt(BlockPos::y));
+            if (getBlock(fb.x, fb.y, fb.z) != fb.type) {
+                fb.finished = true;
+                continue;
+            }
+
+            if (fb.delayTimer > 0.0f) {
+                fb.delayTimer -= dt;
+                continue;
+            }
+
+            boolean submerged = (fb.inWater || getBlock(fb.x, fb.y, fb.z) == BlockType.WATER || getBlock(fb.x, fb.y - 1, fb.z) == BlockType.WATER);
+            float gravity = submerged ? 10.0f : 22.0f;
+            float maxSpeed = submerged ? 7.0f : 16.0f;
+
+            fb.velocity = Math.min(maxSpeed, fb.velocity + gravity * dt);
+            fb.fallProgress += fb.velocity * dt;
+        }
+
+        // 2. Process downward movement sorted from lowest Y to highest Y
+        fallingBlocks.sort(Comparator.comparingInt(fb -> fb.y));
 
         boolean playedLandSound = false;
 
-        for (BlockPos pos : current) {
-            int x = pos.x();
-            int y = pos.y();
-            int z = pos.z();
+        for (FallingBlock fb : fallingBlocks) {
+            if (fb.finished || fb.delayTimer > 0.0f) continue;
 
-            if (y <= 1) continue;
+            while (fb.fallProgress >= 1.0f && !fb.finished) {
+                fb.fallProgress -= 1.0f;
 
-            BlockType type = getBlock(x, y, z);
-            if (!isGravityBlock(type)) continue;
+                int x = fb.x;
+                int y = fb.y;
+                int z = fb.z;
 
-            BlockType below = getBlock(x, y - 1, z);
-            if (canFallThrough(below)) {
-                BlockType replacement = pos.inWater() ? BlockType.WATER : BlockType.AIR;
-
-                setBlockInternal(x, y, z, replacement);
-                setBlockInternal(x, y - 1, z, type);
-
-                boolean nextInWater = (below == BlockType.WATER || pos.inWater());
-
-                if (y - 1 > 1 && canFallThrough(getBlock(x, y - 2, z))) {
-                    fallingBlocks.add(new BlockPos(x, y - 1, z, nextInWater));
-                } else if (!playedLandSound) {
-                    no.minecraft.sound.SoundManager.getInstance().play(type.getDigSound(), 0.6f);
-                    playedLandSound = true;
+                if (y <= 1) {
+                    fb.finished = true;
+                    if (!playedLandSound) {
+                        no.minecraft.sound.SoundManager.getInstance().play(fb.type.getDigSound(), 0.6f);
+                        playedLandSound = true;
+                    }
+                    break;
                 }
 
-                if (y + 1 < Chunk.SIZE_Y && isGravityBlock(getBlock(x, y + 1, z))) {
-                    boolean aboveInWater = (replacement == BlockType.WATER);
-                    fallingBlocks.add(new BlockPos(x, y + 1, z, aboveInWater));
-                }
+                BlockType below = getBlock(x, y - 1, z);
+                if (canFallThrough(below)) {
+                    BlockType replacement = fb.inWater ? BlockType.WATER : BlockType.AIR;
 
-                checkAndAddFalling(x + 1, y, z);
-                checkAndAddFalling(x - 1, y, z);
-                checkAndAddFalling(x, y, z + 1);
-                checkAndAddFalling(x, y, z - 1);
-            } else {
-                if (!playedLandSound) {
-                    no.minecraft.sound.SoundManager.getInstance().play(type.getDigSound(), 0.6f);
-                    playedLandSound = true;
+                    setBlockInternal(x, y, z, replacement);
+                    setBlockInternal(x, y - 1, z, fb.type);
+
+                    fb.y = y - 1;
+                    fb.inWater = (below == BlockType.WATER);
+
+                    // Check above and horizontal neighbors in case they were supported by this block
+                    checkAndAddFalling(x, y + 1, z);
+                    checkAndAddFalling(x + 1, y, z);
+                    checkAndAddFalling(x - 1, y, z);
+                    checkAndAddFalling(x, y, z + 1);
+                    checkAndAddFalling(x, y, z - 1);
+                } else {
+                    fb.finished = true;
+                    if (!playedLandSound) {
+                        no.minecraft.sound.SoundManager.getInstance().play(fb.type.getDigSound(), 0.6f);
+                        playedLandSound = true;
+                    }
+                    break;
                 }
             }
         }
+
+        fallingBlocks.removeIf(fb -> fb.finished);
     }
 
     public boolean isSafeSolidSpawn(int x, int y, int z) {
@@ -494,14 +575,9 @@ public class World {
         int centerCz = Math.floorDiv((int) Math.floor(player.getPosition().z), Chunk.SIZE_Z);
         updateLoadedChunks(centerCx, centerCz);
 
-        // Falling blocks (sand & gravel gravity)
-        gravityTickTimer += dt;
-        while (gravityTickTimer >= 0.05f && !fallingBlocks.isEmpty()) {
-            gravityTickTimer -= 0.05f;
-            updateFallingBlocks();
-        }
-        if (fallingBlocks.isEmpty()) {
-            gravityTickTimer = 0.0f;
+        // Falling blocks (sand & gravel gravity with delay and acceleration)
+        if (!fallingBlocks.isEmpty() || !pendingFallingBlocks.isEmpty()) {
+            updateFallingBlocks(dt);
         }
 
         // Check if Ender Dragon died in The End -> win game
@@ -1388,7 +1464,7 @@ public class World {
 
     public void cleanup() {
         fallingBlocks.clear();
-        gravityTickTimer = 0.0f;
+        pendingFallingBlocks.clear();
         for (Map<Long, Chunk> map : dimensionChunks.values()) {
             for (Chunk chunk : map.values()) {
                 chunk.cleanup();
