@@ -266,11 +266,11 @@ public class HandRenderer {
                 buildBlockGeometry(held, 0.22f);
             } else {
                 // Flat 2D Tool / Item
-                itemMat.translate(-0.04f, 0.05f, -0.08f);
-                itemMat.rotateY((float) Math.toRadians(-25.0f));
-                itemMat.rotateX((float) Math.toRadians(20.0f));
-                itemMat.rotateZ((float) Math.toRadians(-25.0f));
-                buildItemGeometry(held, 0.32f);
+                itemMat.translate(0.0f, 0.01f, 0.02f);
+                itemMat.rotateY((float) Math.toRadians(45.0f));
+                itemMat.rotateX((float) Math.toRadians(-55.0f));
+                itemMat.rotateZ((float) Math.toRadians(40.0f));
+                buildItemGeometry(held, 0.36f);
             }
 
             buffer.flip();
@@ -355,19 +355,21 @@ public class HandRenderer {
 
     private void buildItemGeometry(BlockType item, float size) {
         float[] uv = TextureAtlas.getUVs(item.getTexture(BlockType.Face.NORTH));
+        float grip = 0.08f;
+        float halfThickness = 0.002f;
 
-        // Front Face
-        addQuad(-0.05f, -0.05f, 0.0f, uv[0], uv[3],
-                size - 0.05f, -0.05f, 0.0f, uv[2], uv[3],
-                size - 0.05f, size - 0.05f, 0.0f, uv[2], uv[1],
-                -0.05f, size - 0.05f, 0.0f, uv[0], uv[1],
+        // Front Face (Facing +Z)
+        addQuad(-grip, -grip, halfThickness, uv[0], uv[3],
+                size - grip, -grip, halfThickness, uv[2], uv[3],
+                size - grip, size - grip, halfThickness, uv[2], uv[1],
+                -grip, size - grip, halfThickness, uv[0], uv[1],
                 0.95f, 0.95f, 0.95f, 1.0f);
 
-        // Back Face (opposite winding so it renders double-sided)
-        addQuad(size - 0.05f, -0.05f, 0.0f, uv[2], uv[3],
-                -0.05f, -0.05f, 0.0f, uv[0], uv[3],
-                -0.05f, size - 0.05f, 0.0f, uv[0], uv[1],
-                size - 0.05f, size - 0.05f, 0.0f, uv[2], uv[1],
+        // Back Face (Facing -Z)
+        addQuad(size - grip, -grip, -halfThickness, uv[2], uv[3],
+                -grip, -grip, -halfThickness, uv[0], uv[3],
+                -grip, size - grip, -halfThickness, uv[0], uv[1],
+                size - grip, size - grip, -halfThickness, uv[2], uv[1],
                 0.80f, 0.80f, 0.80f, 1.0f);
     }
 
