@@ -129,7 +129,28 @@ public class World {
         return chunk.getBlock(localX, y, localZ);
     }
 
+    public record BlockPos(int x, int y, int z, boolean inWater) {}
+
+    private final Set<BlockPos> fallingBlocks = new LinkedHashSet<>();
+    private float gravityTickTimer = 0.0f;
+
+    public static boolean isGravityBlock(BlockType type) {
+        return type == BlockType.SAND || type == BlockType.GRAVEL;
+    }
+
+    public static boolean canFallThrough(BlockType type) {
+        if (type == null || type == BlockType.AIR || type == BlockType.WATER || type == BlockType.LAVA) {
+            return true;
+        }
+        return !type.isSolid();
+    }
+
     public void setBlock(int x, int y, int z, BlockType type) {
+        setBlockInternal(x, y, z, type);
+        triggerGravityUpdate(x, y, z);
+    }
+
+    public void setBlockInternal(int x, int y, int z, BlockType type) {
         if (y < 0 || y >= Chunk.SIZE_Y) return;
         int cx = Math.floorDiv(x, Chunk.SIZE_X);
         int cz = Math.floorDiv(z, Chunk.SIZE_Z);
@@ -140,11 +161,93 @@ public class World {
         chunk.setBlock(localX, y, localZ, type);
     }
 
+    public void triggerGravityUpdate(int x, int y, int z) {
+        checkAndAddFalling(x, y, z);
+        checkAndAddFalling(x, y + 1, z);
+        checkAndAddFalling(x + 1, y, z);
+        checkAndAddFalling(x - 1, y, z);
+        checkAndAddFalling(x, y, z + 1);
+        checkAndAddFalling(x, y, z - 1);
+    }
+
+    public void checkAndAddFalling(int x, int y, int z) {
+        if (y <= 1 || y >= Chunk.SIZE_Y) return;
+        BlockType type = getBlock(x, y, z);
+        if (!isGravityBlock(type)) return;
+        if (!canFallThrough(getBlock(x, y - 1, z))) return;
+
+        int cy = y;
+        while (cy < Chunk.SIZE_Y && isGravityBlock(getBlock(x, cy, z))) {
+            boolean inWater = (getBlock(x, cy + 1, z) == BlockType.WATER);
+            fallingBlocks.add(new BlockPos(x, cy, z, inWater));
+            cy++;
+        }
+    }
+
+    private void updateFallingBlocks() {
+        if (fallingBlocks.isEmpty()) return;
+
+        List<BlockPos> current = new ArrayList<>(fallingBlocks);
+        fallingBlocks.clear();
+
+        current.sort(Comparator.comparingInt(BlockPos::y));
+
+        boolean playedLandSound = false;
+
+        for (BlockPos pos : current) {
+            int x = pos.x();
+            int y = pos.y();
+            int z = pos.z();
+
+            if (y <= 1) continue;
+
+            BlockType type = getBlock(x, y, z);
+            if (!isGravityBlock(type)) continue;
+
+            BlockType below = getBlock(x, y - 1, z);
+            if (canFallThrough(below)) {
+                BlockType replacement = pos.inWater() ? BlockType.WATER : BlockType.AIR;
+
+                setBlockInternal(x, y, z, replacement);
+                setBlockInternal(x, y - 1, z, type);
+
+                boolean nextInWater = (below == BlockType.WATER || pos.inWater());
+
+                if (y - 1 > 1 && canFallThrough(getBlock(x, y - 2, z))) {
+                    fallingBlocks.add(new BlockPos(x, y - 1, z, nextInWater));
+                } else if (!playedLandSound) {
+                    no.minecraft.sound.SoundManager.getInstance().play(type.getDigSound(), 0.6f);
+                    playedLandSound = true;
+                }
+
+                if (y + 1 < Chunk.SIZE_Y && isGravityBlock(getBlock(x, y + 1, z))) {
+                    boolean aboveInWater = (replacement == BlockType.WATER);
+                    fallingBlocks.add(new BlockPos(x, y + 1, z, aboveInWater));
+                }
+
+                checkAndAddFalling(x + 1, y, z);
+                checkAndAddFalling(x - 1, y, z);
+                checkAndAddFalling(x, y, z + 1);
+                checkAndAddFalling(x, y, z - 1);
+            } else {
+                if (!playedLandSound) {
+                    no.minecraft.sound.SoundManager.getInstance().play(type.getDigSound(), 0.6f);
+                    playedLandSound = true;
+                }
+            }
+        }
+    }
+
     public boolean isSafeSolidSpawn(int x, int y, int z) {
         if (y < 1 || y >= Chunk.SIZE_Y - 2) return false;
 
         BlockType ground = getBlock(x, y, z);
         if (!ground.isSolid() || ground == BlockType.CACTUS || ground == BlockType.LAVA || ground == BlockType.WATER) {
+            return false;
+        }
+
+        // If ground is sand or gravel, make sure it has solid support below
+        if (isGravityBlock(ground) && canFallThrough(getBlock(x, y - 1, z))) {
             return false;
         }
 
@@ -375,6 +478,16 @@ public class World {
         int centerCx = Math.floorDiv((int) Math.floor(player.getPosition().x), Chunk.SIZE_X);
         int centerCz = Math.floorDiv((int) Math.floor(player.getPosition().z), Chunk.SIZE_Z);
         updateLoadedChunks(centerCx, centerCz);
+
+        // Falling blocks (sand & gravel gravity)
+        gravityTickTimer += dt;
+        while (gravityTickTimer >= 0.05f && !fallingBlocks.isEmpty()) {
+            gravityTickTimer -= 0.05f;
+            updateFallingBlocks();
+        }
+        if (fallingBlocks.isEmpty()) {
+            gravityTickTimer = 0.0f;
+        }
 
         // Check if Ender Dragon died in The End -> win game
         if (currentDimension == Dimension.THE_END && !gameWon) {
@@ -1155,6 +1268,8 @@ public class World {
     }
 
     public void cleanup() {
+        fallingBlocks.clear();
+        gravityTickTimer = 0.0f;
         for (Map<Long, Chunk> map : dimensionChunks.values()) {
             for (Chunk chunk : map.values()) {
                 chunk.cleanup();
