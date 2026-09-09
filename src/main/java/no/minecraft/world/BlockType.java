@@ -259,6 +259,30 @@ public enum BlockType {
         };
     }
 
+    public int getItemTexture() {
+        return switch (this) {
+            case FURNACE -> sideTexture;
+            default -> topTexture;
+        };
+    }
+
+    public boolean isPlaceable() {
+        return switch (this) {
+            case AIR, WATER, LAVA, END_PORTAL, NETHER_PORTAL, BOAT -> false;
+            case WOODEN_PICKAXE, WOODEN_AXE, WOODEN_SHOVEL, WOODEN_SWORD, WOODEN_HOE,
+                 STONE_PICKAXE, STONE_AXE, STONE_SHOVEL, STONE_SWORD,
+                 IRON_PICKAXE, IRON_AXE, IRON_SHOVEL, IRON_SWORD,
+                 DIAMOND_PICKAXE, DIAMOND_AXE, DIAMOND_SHOVEL, DIAMOND_SWORD,
+                 BOW, ARROW, FLINT_AND_STEEL -> false;
+            case STICK, BOWL, ROTTEN_FLESH, GUNPOWDER, STRING, BONE,
+                 BLAZE_ROD, BLAZE_POWDER, ENDER_PEARL, EYE_OF_ENDER,
+                 COAL, IRON_INGOT, GOLD_INGOT, DIAMOND, LEATHER, FEATHER -> false;
+            case APPLE, BREAD, PORKCHOP, COOKED_PORKCHOP, BEEF, COOKED_BEEF,
+                 CHICKEN_MEAT, COOKED_CHICKEN -> false;
+            default -> true;
+        };
+    }
+
     public BlockType getDrop() {
         return switch (this) {
             case GRASS -> DIRT;

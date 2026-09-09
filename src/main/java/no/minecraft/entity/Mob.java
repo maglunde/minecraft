@@ -39,6 +39,8 @@ public class Mob {
 
     private final Random random = new Random();
 
+    private Boat ridingBoat = null;
+
     public Mob(MobType type, float x, float y, float z) {
         this.type = type;
         this.position.set(x, y, z);
@@ -47,6 +49,14 @@ public class Mob {
 
     public void update(float dt, World world, Player player) {
         if (dead) return;
+
+        if (ridingBoat != null) {
+            if (ridingBoat.isDead()) {
+                ridingBoat = null;
+            } else {
+                return; // Trapped in boat! Position is managed by boat
+            }
+        }
 
         if (hurtTimer > 0) hurtTimer -= dt;
         if (attackCooldown > 0) attackCooldown -= dt;
@@ -507,6 +517,7 @@ public class Mob {
 
     public MobType getType() { return type; }
     public Vector3f getPosition() { return position; }
+    public Vector3f getVelocity() { return velocity; }
     public float getYaw() { return yaw; }
     public boolean isDead() { return dead; }
     public float getHurtTimer() { return hurtTimer; }
@@ -516,4 +527,6 @@ public class Mob {
     public void setHealth(int health) { this.health = health; }
     public boolean isOnFire() { return fireTimer > 0; }
     public boolean isAggressive() { return aggressive; }
+    public Boat getRidingBoat() { return ridingBoat; }
+    public void setRidingBoat(Boat boat) { this.ridingBoat = boat; }
 }

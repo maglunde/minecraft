@@ -320,6 +320,27 @@ public class Main {
                         miningDamage = 0.0f; // Reset mining
                         return;
                     }
+
+                    // 1.5 Check if hitting a boat
+                    no.minecraft.entity.Boat hitBoat = null;
+                    float minBoatDist = 4.0f;
+                    for (no.minecraft.entity.Boat boat : world.getBoats()) {
+                        if (boat.isDead()) continue;
+                        Vector3f toBoat = new Vector3f(boat.getPosition()).add(0, 0.25f, 0).sub(eye);
+                        float dist = toBoat.length();
+                        if (dist < minBoatDist) {
+                            toBoat.normalize();
+                            if (toBoat.dot(fwd) > 0.80f) {
+                                minBoatDist = dist;
+                                hitBoat = boat;
+                            }
+                        }
+                    }
+                    if (hitBoat != null) {
+                        hitBoat.breakBoat(world);
+                        miningDamage = 0.0f;
+                        return;
+                    }
                 } else if (action == GLFW_RELEASE) {
                     isLeftMouseDown = false;
                     miningDamage = 0.0f;
@@ -342,8 +363,12 @@ public class Main {
             }
         });
 
-        // Scroll for hotbar
+        // Scroll for hotbar / GUI
         glfwSetScrollCallback(window, (win, xoffset, yoffset) -> {
+            if (hud.isInventoryOpen()) {
+                hud.handleScroll(xoffset, yoffset);
+                return;
+            }
             if (yoffset > 0) {
                 player.scrollSlot(-1);
             } else if (yoffset < 0) {
@@ -586,6 +611,50 @@ public class Main {
             }
         }
 
+        // Mount boat if looking at a boat
+        for (no.minecraft.entity.Boat b : world.getBoats()) {
+            if (b.isDead()) continue;
+            float dx = b.getPosition().x - player.getPosition().x;
+            float dy = b.getPosition().y - player.getPosition().y;
+            float dz = b.getPosition().z - player.getPosition().z;
+            if (dx * dx + dy * dy + dz * dz < 16.0f) {
+                Vector3f eye = player.getEyePosition();
+                Vector3f fwd = player.getCamera().getForward();
+                float bx = b.getPosition().x - eye.x;
+                float by = (b.getPosition().y + 0.3f) - eye.y;
+                float bz = b.getPosition().z - eye.z;
+                float dot = bx * fwd.x + by * fwd.y + bz * fwd.z;
+                if (dot > 0) {
+                    float distSq = bx * bx + by * by + bz * bz;
+                    float perpSq = distSq - dot * dot;
+                    if (perpSq < 1.2f) {
+                        if (player.getRidingBoat() == b) {
+                            b.dismountDriver();
+                        } else {
+                            b.mountDriver(player);
+                        }
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Placing Boat item on ground or water
+        if (held == BlockType.BOAT) {
+            Raycast.HitResult hit = Raycast.raycast(world, player.getEyePosition(), player.getCamera().getForward(), 5.0f, true);
+            if (hit != null) {
+                float sx = hit.hitX + 0.5f;
+                float sy = (hit.blockType == BlockType.WATER) ? (hit.hitY + 0.85f) : (hit.hitY + 1.05f);
+                float sz = hit.hitZ + 0.5f;
+                world.spawnBoat(sx, sy, sz, player.getCamera().getYaw());
+                no.minecraft.sound.SoundManager.getInstance().play("wood_dig", 1.0f);
+                if (player.getGameMode() != GameMode.CREATIVE) {
+                    player.useSelectedBlock();
+                }
+                return true;
+            }
+        }
+
         return tryPlaceBlock();
     }
 
@@ -606,6 +675,13 @@ public class Main {
             if (!isSneaking || !canPlace) {
                 if (clickedBlock == BlockType.CRAFTING_TABLE) {
                     hud.openCraftingTable();
+                    setCursorLocked(false);
+                    isLeftMouseDown = false;
+                    isRightMouseDown = false;
+                    return true;
+                }
+                if (clickedBlock == BlockType.FURNACE) {
+                    hud.openFurnace(world.getOrCreateFurnace(hit.hitX, hit.hitY, hit.hitZ));
                     setCursorLocked(false);
                     isLeftMouseDown = false;
                     isRightMouseDown = false;
@@ -891,7 +967,7 @@ public class Main {
                 int hz = targetedHit.hitZ;
                 BlockType targetBlock = world.getBlock(hx, hy, hz);
 
-                if (targetBlock != BlockType.AIR && targetBlock != BlockType.BEDROCK) {
+                if (targetBlock != BlockType.AIR && targetBlock != BlockType.BEDROCK && targetBlock != BlockType.WATER && targetBlock != BlockType.LAVA && targetBlock.getHardness() >= 0.0f) {
                     if (hx != miningBlockX || hy != miningBlockY || hz != miningBlockZ) {
                         miningBlockX = hx;
                         miningBlockY = hy;
@@ -1085,8 +1161,8 @@ public class Main {
             worldShader.unbind();
             glDisable(GL_BLEND);
 
-            // 4. Render 3D Mobs (Zombie, Creeper, Spider, Skeleton, Blaze, Enderman, Ender Dragon, End Crystal) & Arrows
-            mobRenderer.render(world.getMobs(), world.getArrows(), projection, view, sunLight);
+            // 4. Render 3D Mobs (Zombie, Creeper, Spider, Skeleton, Blaze, Enderman, Ender Dragon, End Crystal), Arrows & Boats
+            mobRenderer.render(world.getMobs(), world.getArrows(), world.getBoats(), projection, view, sunLight);
 
             // 4.5 Render 3D Player character model (if in 3rd person mode)
             if (!mainMenu.isInMenu() && player.getCamera().getPerspective() != no.minecraft.player.Perspective.FIRST_PERSON) {

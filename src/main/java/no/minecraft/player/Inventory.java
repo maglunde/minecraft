@@ -23,6 +23,10 @@ public class Inventory {
         }
     }
 
+    public int getSize() {
+        return TOTAL_SLOTS;
+    }
+
     public ItemStack getSlot(int index) {
         if (index < 0 || index >= TOTAL_SLOTS) {
             return slots[0];

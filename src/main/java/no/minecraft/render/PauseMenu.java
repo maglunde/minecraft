@@ -642,7 +642,7 @@ public class PauseMenu {
             drawMinecraftMenuButton(geom, cardX, y, cardW, cardH, isUnlocked, p);
 
             // Icon on left
-            float[] uv = TextureAtlas.getUVs(adv.getIcon().getTexture(BlockType.Face.TOP));
+            float[] uv = TextureAtlas.getUVs(adv.getIcon().getItemTexture());
             addRect(tex, cardX + 6.0f * p, y + 6.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3],
                     isUnlocked ? 1.0f : 0.45f, isUnlocked ? 1.0f : 0.45f, isUnlocked ? 1.0f : 0.45f, 1.0f);
 

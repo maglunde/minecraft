@@ -67,6 +67,10 @@ public class Player {
     private float regenTimer = 0.0f;
     private float starveTimer = 0.0f;
 
+    private boolean movingForward = false;
+    private boolean movingBackward = false;
+    private no.minecraft.entity.Boat ridingBoat = null;
+
     public Player(World world, float startX, float startY, float startZ) {
         this.world = world;
         this.spawnPosition.set(startX, startY, startZ);
@@ -77,8 +81,20 @@ public class Player {
 
     public void update(float dt, boolean forward, boolean backward, boolean left, boolean right,
                        boolean jump, boolean sneak, boolean sprint) {
+        this.movingForward = forward;
+        this.movingBackward = backward;
         this.isSneaking = sneak && !flying;
         this.isSprinting = sprint && forward && !isSneaking;
+
+        if (ridingBoat != null) {
+            if (ridingBoat.isDead()) {
+                ridingBoat = null;
+            } else {
+                camera.getPosition().set(position.x, position.y + EYE_HEIGHT, position.z);
+                return;
+            }
+        }
+
         float baseSpeed = isSneaking ? SNEAK_SPEED : (isSprinting ? SPRINT_SPEED : WALK_SPEED);
         // Soul Sand speed reduction
         int currX = (int) Math.floor(position.x);
@@ -486,6 +502,10 @@ public class Player {
     }
 
     public boolean canPlaceSelectedBlock() {
+        BlockType type = getSelectedBlock();
+        if (type == null || !type.isPlaceable()) {
+            return false;
+        }
         if (gameMode == GameMode.CREATIVE) {
             return true;
         } else {
@@ -615,4 +635,9 @@ public class Player {
     public World getWorld() {
         return world;
     }
+
+    public boolean isMovingForward() { return movingForward; }
+    public boolean isMovingBackward() { return movingBackward; }
+    public no.minecraft.entity.Boat getRidingBoat() { return ridingBoat; }
+    public void setRidingBoat(no.minecraft.entity.Boat boat) { this.ridingBoat = boat; }
 }

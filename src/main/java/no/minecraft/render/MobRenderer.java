@@ -69,7 +69,11 @@ public class MobRenderer {
     }
 
     public void render(List<Mob> mobs, List<Arrow> arrows, Matrix4f projection, Matrix4f view, float sunLight) {
-        if (mobs.isEmpty() && arrows.isEmpty()) return;
+        render(mobs, arrows, java.util.Collections.emptyList(), projection, view, sunLight);
+    }
+
+    public void render(List<Mob> mobs, List<Arrow> arrows, List<no.minecraft.entity.Boat> boats, Matrix4f projection, Matrix4f view, float sunLight) {
+        if (mobs.isEmpty() && arrows.isEmpty() && (boats == null || boats.isEmpty())) return;
 
         List<Float> verts = new ArrayList<>();
 
@@ -389,6 +393,37 @@ public class MobRenderer {
             }
         }
 
+        if (boats != null) {
+            for (no.minecraft.entity.Boat boat : boats) {
+                if (boat.isDead()) continue;
+                float bx = boat.getPosition().x;
+                float by = boat.getPosition().y;
+                float bz = boat.getPosition().z;
+                float yaw = boat.getYaw();
+
+                float wr = 0.58f, wg = 0.38f, wb = 0.22f; // Oak wood plank color
+                float rr = 0.50f, rg = 0.32f, rb = 0.18f; // Oak wood rim color
+                float sr = 0.45f, sg = 0.28f, sb = 0.15f; // Seat bench color
+
+                // 1. Bottom floor
+                addRotatedBox(verts, bx, by, bz, 0, 0, 0, 1.1f, 0.08f, 1.5f, yaw, wr, wg, wb);
+                // 2. Left rim
+                addRotatedBox(verts, bx, by, bz, -0.52f, 0.08f, 0, 0.10f, 0.38f, 1.5f, yaw, rr, rg, rb);
+                // 3. Right rim
+                addRotatedBox(verts, bx, by, bz, 0.52f, 0.08f, 0, 0.10f, 0.38f, 1.5f, yaw, rr, rg, rb);
+                // 4. Back rim
+                addRotatedBox(verts, bx, by, bz, 0, 0.08f, -0.72f, 1.14f, 0.38f, 0.10f, yaw, rr, rg, rb);
+                // 5. Front bow rim
+                addRotatedBox(verts, bx, by, bz, 0, 0.08f, 0.72f, 1.14f, 0.38f, 0.10f, yaw, rr, rg, rb);
+                // 6. Center seat bench
+                addRotatedBox(verts, bx, by, bz, 0, 0.15f, 0, 0.94f, 0.08f, 0.24f, yaw, sr, sg, sb);
+                // 7. Oars
+                float or = 0.65f, og = 0.48f, ob = 0.28f;
+                addRotatedBox(verts, bx, by, bz, -0.62f, 0.24f, 0.1f, 0.06f, 0.06f, 0.7f, yaw + 25.0f, or, og, ob);
+                addRotatedBox(verts, bx, by, bz, 0.62f, 0.24f, 0.1f, 0.06f, 0.06f, 0.7f, yaw - 25.0f, or, og, ob);
+            }
+        }
+
         if (verts.isEmpty()) return;
 
         shader.bind();
@@ -409,6 +444,46 @@ public class MobRenderer {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
         shader.unbind();
+    }
+
+    private void addRotatedBox(List<Float> v, float cx, float cy, float cz,
+                               float lx, float ly, float lz,
+                               float w, float h, float d,
+                               float yaw, float r, float g, float b) {
+        float rad = (float) Math.toRadians(-yaw);
+        float cos = (float) Math.cos(rad);
+        float sin = (float) Math.sin(rad);
+
+        float x0 = lx - w * 0.5f;
+        float x1 = lx + w * 0.5f;
+        float y0 = cy + ly;
+        float y1 = cy + ly + h;
+        float z0 = lz - d * 0.5f;
+        float z1 = lz + d * 0.5f;
+
+        float p00x = cx + x0 * cos - z0 * sin; float p00z = cz + x0 * sin + z0 * cos;
+        float p10x = cx + x1 * cos - z0 * sin; float p10z = cz + x1 * sin + z0 * cos;
+        float p11x = cx + x1 * cos - z1 * sin; float p11z = cz + x1 * sin + z1 * cos;
+        float p01x = cx + x0 * cos - z1 * sin; float p01z = cz + x0 * sin + z1 * cos;
+
+        // Top face
+        float topL = 1.0f;
+        addQuad(v, p01x, y1, p01z, p11x, y1, p11z, p10x, y1, p10z, p00x, y1, p00z, r * topL, g * topL, b * topL);
+        // Bottom face
+        float botL = 0.55f;
+        addQuad(v, p00x, y0, p00z, p10x, y0, p10z, p11x, y0, p11z, p01x, y0, p01z, r * botL, g * botL, b * botL);
+        // North face
+        float nL = 0.75f;
+        addQuad(v, p10x, y0, p10z, p00x, y0, p00z, p00x, y1, p00z, p10x, y1, p10z, r * nL, g * nL, b * nL);
+        // South face
+        float sL = 0.75f;
+        addQuad(v, p01x, y0, p01z, p11x, y0, p11z, p11x, y1, p11z, p01x, y1, p01z, r * sL, g * sL, b * sL);
+        // West face
+        float wL = 0.65f;
+        addQuad(v, p00x, y0, p00z, p01x, y0, p01z, p01x, y1, p01z, p00x, y1, p00z, r * wL, g * wL, b * wL);
+        // East face
+        float eL = 0.65f;
+        addQuad(v, p11x, y0, p11z, p10x, y0, p10z, p10x, y1, p10z, p11x, y1, p11z, r * eL, g * eL, b * eL);
     }
 
     private void addBox(List<Float> v, float x, float y, float z, float w, float h, float d, float r, float g, float b) {

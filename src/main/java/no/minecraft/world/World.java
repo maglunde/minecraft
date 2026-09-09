@@ -181,6 +181,10 @@ public class World {
     }
 
     public void setBlock(int x, int y, int z, BlockType type) {
+        BlockType old = getBlock(x, y, z);
+        if (old == BlockType.FURNACE && type != BlockType.FURNACE) {
+            removeFurnace(x, y, z);
+        }
         setBlockInternal(x, y, z, type);
         triggerGravityUpdate(x, y, z);
     }
@@ -518,6 +522,46 @@ public class World {
     public List<DroppedItem> getDroppedItems() { return droppedItems; }
     public List<no.minecraft.entity.Mob> getMobs() { return mobs; }
     public List<no.minecraft.entity.Arrow> getArrows() { return arrows; }
+    private final List<no.minecraft.entity.Boat> boats = new ArrayList<>();
+    public List<no.minecraft.entity.Boat> getBoats() { return boats; }
+
+    public no.minecraft.entity.Boat spawnBoat(float x, float y, float z, float yaw) {
+        no.minecraft.entity.Boat boat = new no.minecraft.entity.Boat(x, y, z, yaw);
+        boats.add(boat);
+        return boat;
+    }
+
+    private final Map<Long, FurnaceData> furnaces = new HashMap<>();
+
+    public static long blockPosKey(int x, int y, int z) {
+        return (((long) x & 0x3FFFFFFL) << 38) | (((long) (y & 0xFFF)) << 26) | ((long) z & 0x3FFFFFFL);
+    }
+
+    public FurnaceData getOrCreateFurnace(int x, int y, int z) {
+        return furnaces.computeIfAbsent(blockPosKey(x, y, z), k -> new FurnaceData(x, y, z));
+    }
+
+    public FurnaceData getFurnace(int x, int y, int z) {
+        return furnaces.get(blockPosKey(x, y, z));
+    }
+
+    public void removeFurnace(int x, int y, int z) {
+        FurnaceData fd = furnaces.remove(blockPosKey(x, y, z));
+        if (fd != null) {
+            if (!fd.getInput().isEmpty()) {
+                spawnItemDrop(x + 0.5f, y + 0.5f, z + 0.5f, fd.getInput().getType(), fd.getInput().getCount());
+                fd.getInput().clear();
+            }
+            if (!fd.getFuel().isEmpty()) {
+                spawnItemDrop(x + 0.5f, y + 0.5f, z + 0.5f, fd.getFuel().getType(), fd.getFuel().getCount());
+                fd.getFuel().clear();
+            }
+            if (!fd.getOutput().isEmpty()) {
+                spawnItemDrop(x + 0.5f, y + 0.5f, z + 0.5f, fd.getOutput().getType(), fd.getOutput().getCount());
+                fd.getOutput().clear();
+            }
+        }
+    }
 
     public float getWorldTime() { return worldTime; }
     public void setWorldTime(float time) { this.worldTime = Math.max(0.0f, time); }
@@ -586,6 +630,21 @@ public class World {
         // Falling blocks (sand & gravel gravity with delay and acceleration)
         if (!fallingBlocks.isEmpty() || !pendingFallingBlocks.isEmpty()) {
             updateFallingBlocks(dt);
+        }
+
+        // Active furnaces (smelting / cooking)
+        if (!furnaces.isEmpty()) {
+            for (FurnaceData fd : furnaces.values()) {
+                fd.update(dt);
+            }
+        }
+
+        // Boats
+        if (!boats.isEmpty()) {
+            for (no.minecraft.entity.Boat b : boats) {
+                b.update(dt, this, player);
+            }
+            boats.removeIf(no.minecraft.entity.Boat::isDead);
         }
 
         // Check if Ender Dragon died in The End -> win game
@@ -1473,6 +1532,8 @@ public class World {
     public void cleanup() {
         fallingBlocks.clear();
         pendingFallingBlocks.clear();
+        furnaces.clear();
+        boats.clear();
         for (Map<Long, Chunk> map : dimensionChunks.values()) {
             for (Chunk chunk : map.values()) {
                 chunk.cleanup();

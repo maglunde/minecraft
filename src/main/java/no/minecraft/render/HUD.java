@@ -28,7 +28,10 @@ public class HUD {
 
     private boolean inventoryOpen = false;
     private boolean craftingTableOpen = false;
+    private boolean furnaceOpen = false;
+    private no.minecraft.world.FurnaceData activeFurnace = null;
     private boolean recipeBookOpen = false;
+    private int recipeScrollRow = 0;
     private boolean showDebugInfo = false;
     private int lastFps = 60;
     private no.minecraft.player.Raycast.HitResult lastTargetedHit = null;
@@ -119,16 +122,44 @@ public class HUD {
     }
 
     public boolean isInventoryOpen() {
-        return inventoryOpen || craftingTableOpen;
+        return inventoryOpen || craftingTableOpen || furnaceOpen;
     }
 
     public boolean isCraftingTableOpen() {
         return craftingTableOpen;
     }
 
+    public boolean isFurnaceOpen() {
+        return furnaceOpen;
+    }
+
     public void openCraftingTable() {
         this.inventoryOpen = false;
+        this.furnaceOpen = false;
         this.craftingTableOpen = true;
+    }
+
+    public void openFurnace(no.minecraft.world.FurnaceData furnace) {
+        this.inventoryOpen = false;
+        this.craftingTableOpen = false;
+        this.furnaceOpen = true;
+        this.activeFurnace = furnace;
+    }
+
+    public no.minecraft.world.FurnaceData getActiveFurnace() {
+        return activeFurnace;
+    }
+
+    public void handleScroll(double xoffset, double yoffset) {
+        if (recipeBookOpen) {
+            int totalRows = (recipes.size() + 3) / 4;
+            int maxScroll = Math.max(0, totalRows - 5);
+            if (yoffset > 0) {
+                recipeScrollRow = Math.max(0, recipeScrollRow - 1);
+            } else if (yoffset < 0) {
+                recipeScrollRow = Math.min(maxScroll, recipeScrollRow + 1);
+            }
+        }
     }
 
     public void setInventoryOpen(boolean open) {
@@ -136,7 +167,7 @@ public class HUD {
     }
 
     public void setInventoryOpen(boolean open, Player player) {
-        if (!open && (inventoryOpen || craftingTableOpen)) {
+        if (!open && (inventoryOpen || craftingTableOpen || furnaceOpen)) {
             closeInventory(player);
         } else {
             this.inventoryOpen = open;
@@ -148,7 +179,7 @@ public class HUD {
     }
 
     public void toggleInventory(Player player) {
-        if (inventoryOpen || craftingTableOpen) {
+        if (inventoryOpen || craftingTableOpen || furnaceOpen) {
             closeInventory(player);
         } else {
             this.inventoryOpen = true;
@@ -174,9 +205,11 @@ public class HUD {
     }
 
     public void closeInventory(Player player) {
-        if (inventoryOpen || craftingTableOpen) {
+        if (inventoryOpen || craftingTableOpen || furnaceOpen) {
             inventoryOpen = false;
             craftingTableOpen = false;
+            furnaceOpen = false;
+            activeFurnace = null;
             if (!carriedItem.isEmpty()) {
                 player.getInventory().addItem(carriedItem.getType(), carriedItem.getCount());
                 carriedItem.clear();
@@ -587,6 +620,78 @@ public class HUD {
         }
     }
 
+    private void handleFurnaceShiftClick(ItemStack slot, Player player) {
+        if (slot.isEmpty() || activeFurnace == null) return;
+        // Try smelting input first
+        if (no.minecraft.world.FurnaceData.canSmelt(slot.getType())) {
+            ItemStack in = activeFurnace.getInput();
+            if (in.isEmpty()) {
+                in.setType(slot.getType());
+                in.setCount(slot.getCount());
+                slot.clear();
+                no.minecraft.sound.SoundManager.getInstance().play("click");
+                return;
+            } else if (in.getType() == slot.getType() && in.getCount() < no.minecraft.player.Inventory.MAX_STACK_SIZE) {
+                int move = Math.min(slot.getCount(), no.minecraft.player.Inventory.MAX_STACK_SIZE - in.getCount());
+                in.add(move);
+                slot.add(-move);
+                no.minecraft.sound.SoundManager.getInstance().play("click");
+                return;
+            }
+        }
+        // Try fuel next
+        if (no.minecraft.world.FurnaceData.isFuel(slot.getType())) {
+            ItemStack fl = activeFurnace.getFuel();
+            if (fl.isEmpty()) {
+                fl.setType(slot.getType());
+                fl.setCount(slot.getCount());
+                slot.clear();
+                no.minecraft.sound.SoundManager.getInstance().play("click");
+                return;
+            } else if (fl.getType() == slot.getType() && fl.getCount() < no.minecraft.player.Inventory.MAX_STACK_SIZE) {
+                int move = Math.min(slot.getCount(), no.minecraft.player.Inventory.MAX_STACK_SIZE - fl.getCount());
+                fl.add(move);
+                slot.add(-move);
+                no.minecraft.sound.SoundManager.getInstance().play("click");
+                return;
+            }
+        }
+        // Move between hotbar and main inventory if not accepted by furnace
+        int currentIdx = -1;
+        for (int i = 0; i < player.getInventory().getSize(); i++) {
+            if (player.getInventory().getSlot(i) == slot) {
+                currentIdx = i;
+                break;
+            }
+        }
+        if (currentIdx != -1) {
+            if (currentIdx < 9) {
+                for (int i = 9; i < 36; i++) {
+                    ItemStack target = player.getInventory().getSlot(i);
+                    if (target.isEmpty() || (target.getType() == slot.getType() && target.getCount() < 64)) {
+                        int move = Math.min(slot.getCount(), 64 - target.getCount());
+                        target.setType(slot.getType());
+                        target.add(move);
+                        slot.add(-move);
+                        if (slot.isEmpty()) break;
+                    }
+                }
+            } else {
+                for (int i = 0; i < 9; i++) {
+                    ItemStack target = player.getInventory().getSlot(i);
+                    if (target.isEmpty() || (target.getType() == slot.getType() && target.getCount() < 64)) {
+                        int move = Math.min(slot.getCount(), 64 - target.getCount());
+                        target.setType(slot.getType());
+                        target.add(move);
+                        slot.add(-move);
+                        if (slot.isEmpty()) break;
+                    }
+                }
+            }
+            no.minecraft.sound.SoundManager.getInstance().play("click");
+        }
+    }
+
     public boolean handleMouseClick(double mx, double my, Player player, int windowWidth, int windowHeight) {
         return handleMouseClick(mx, my, GLFW_MOUSE_BUTTON_LEFT, player, windowWidth, windowHeight);
     }
@@ -596,7 +701,7 @@ public class HUD {
     }
 
     public boolean handleMouseClick(double mx, double my, int button, boolean isShiftDown, Player player, int windowWidth, int windowHeight) {
-        if (!inventoryOpen && !craftingTableOpen) return false;
+        if (!inventoryOpen && !craftingTableOpen && !furnaceOpen) return false;
 
         float scale = 2.4f;
         float invW = 176.0f * scale;
@@ -638,17 +743,35 @@ public class HUD {
             if (recipeBookOpen) {
                 float popW = 126.0f * scale;
                 float popX = ix - popW - 6.0f;
-                float popY = iy;
                 float slotW = 22.0f * scale;
                 float slotStep = 26.0f * scale;
                 float startGridX = popX + 11.0f * scale;
-                float startGridY = popY + 20.0f * scale;
+                float startGridY = iy + 20.0f * scale;
 
-                for (int i = 0; i < recipes.size(); i++) {
-                    int row = i / 4;
-                    int col = i % 4;
+                int totalRows = (recipes.size() + 3) / 4;
+                int maxScroll = Math.max(0, totalRows - 5);
+
+                // Scrollbar click
+                if (maxScroll > 0) {
+                    float sbX = popX + popW - 10.0f * scale;
+                    float sbY = startGridY;
+                    float sbW = 6.0f * scale;
+                    float sbH = 5 * slotStep - 4.0f * scale;
+                    if (mx >= sbX - 3.0f * scale && mx <= sbX + sbW + 3.0f * scale && my >= sbY && my <= sbY + sbH) {
+                        float frac = Math.clamp((float) (my - sbY) / sbH, 0.0f, 1.0f);
+                        recipeScrollRow = Math.round(frac * maxScroll);
+                        return true;
+                    }
+                }
+
+                int startIdx = recipeScrollRow * 4;
+                int endIdx = Math.min(recipes.size(), startIdx + 5 * 4);
+
+                for (int i = startIdx; i < endIdx; i++) {
+                    int visualRow = (i - startIdx) / 4;
+                    int col = (i - startIdx) % 4;
                     float sx = startGridX + col * slotStep;
-                    float sy = startGridY + row * slotStep;
+                    float sy = startGridY + visualRow * slotStep;
 
                     if (mx >= sx && mx <= sx + slotW && my >= sy && my <= sy + slotW) {
                         CraftingRecipe r = recipes.get(i);
@@ -754,6 +877,111 @@ public class HUD {
             return true;
         }
 
+        // --- Handle Furnace GUI clicks ---
+        if (furnaceOpen && activeFurnace != null) {
+            float inX = ix + 56.0f * scale;
+            float inY = iy + 17.0f * scale;
+            float fuelX = ix + 56.0f * scale;
+            float fuelY = iy + 53.0f * scale;
+            float outX = ix + 116.0f * scale;
+            float outY = iy + 31.0f * scale;
+
+            // 1. Input slot click
+            if (mx >= inX && mx <= inX + 18.0f * scale && my >= inY && my <= inY + 18.0f * scale) {
+                if (isShiftDown) {
+                    ItemStack in = activeFurnace.getInput();
+                    if (!in.isEmpty() && player.getInventory().hasSpaceFor(in.getType(), in.getCount())) {
+                        player.getInventory().addItem(in.getType(), in.getCount());
+                        in.clear();
+                        no.minecraft.sound.SoundManager.getInstance().play("click");
+                    }
+                } else {
+                    handleSlotClick(activeFurnace.getInput(), button);
+                }
+                return true;
+            }
+
+            // 2. Fuel slot click
+            if (mx >= fuelX && mx <= fuelX + 18.0f * scale && my >= fuelY && my <= fuelY + 18.0f * scale) {
+                if (isShiftDown) {
+                    ItemStack fl = activeFurnace.getFuel();
+                    if (!fl.isEmpty() && player.getInventory().hasSpaceFor(fl.getType(), fl.getCount())) {
+                        player.getInventory().addItem(fl.getType(), fl.getCount());
+                        fl.clear();
+                        no.minecraft.sound.SoundManager.getInstance().play("click");
+                    }
+                } else {
+                    handleSlotClick(activeFurnace.getFuel(), button);
+                }
+                return true;
+            }
+
+            // 3. Output slot click
+            if (mx >= outX && mx <= outX + 24.0f * scale && my >= outY && my <= outY + 24.0f * scale) {
+                ItemStack out = activeFurnace.getOutput();
+                if (!out.isEmpty()) {
+                    if (isShiftDown) {
+                        if (player.getInventory().hasSpaceFor(out.getType(), out.getCount())) {
+                            player.getInventory().addItem(out.getType(), out.getCount());
+                            out.clear();
+                            no.minecraft.sound.SoundManager.getInstance().play("click");
+                            no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.HOT_TOPIC);
+                        }
+                    } else {
+                        if (carriedItem.isEmpty()) {
+                            carriedItem.setType(out.getType());
+                            carriedItem.setCount(out.getCount());
+                            out.clear();
+                            no.minecraft.sound.SoundManager.getInstance().play("click");
+                            no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.HOT_TOPIC);
+                        } else if (carriedItem.getType() == out.getType() && carriedItem.getCount() + out.getCount() <= no.minecraft.player.Inventory.MAX_STACK_SIZE) {
+                            carriedItem.add(out.getCount());
+                            out.clear();
+                            no.minecraft.sound.SoundManager.getInstance().play("click");
+                            no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.HOT_TOPIC);
+                        }
+                    }
+                }
+                return true;
+            }
+
+            // 4. Main Inventory Grid (3 rows x 9 columns)
+            float mainInvX = ix + 8.0f * scale;
+            float mainInvY = iy + 84.0f * scale;
+            for (int row = 0; row < 3; row++) {
+                for (int col = 0; col < 9; col++) {
+                    int slotIndex = 9 + row * 9 + col;
+                    float sx = mainInvX + col * 18.0f * scale;
+                    float sy = mainInvY + row * 18.0f * scale;
+                    if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
+                        ItemStack slot = player.getInventory().getSlot(slotIndex);
+                        if (isShiftDown) {
+                            handleFurnaceShiftClick(slot, player);
+                        } else {
+                            handleSlotClick(slot, button);
+                        }
+                        return true;
+                    }
+                }
+            }
+
+            // 5. Hotbar Grid (1 row x 9 columns)
+            float hotbarInvY = iy + 142.0f * scale;
+            for (int col = 0; col < 9; col++) {
+                float sx = mainInvX + col * 18.0f * scale;
+                if (mx >= sx && mx <= sx + 18.0f * scale && my >= hotbarInvY && my <= hotbarInvY + 18.0f * scale) {
+                    ItemStack slot = player.getInventory().getSlot(col);
+                    if (isShiftDown) {
+                        handleFurnaceShiftClick(slot, player);
+                    } else {
+                        handleSlotClick(slot, button);
+                    }
+                    return true;
+                }
+            }
+            return true;
+        }
+
         // Recipe book toggle button (under crafting grid)
         float rbX = ix + 104.0f * scale;
         float rbY = iy + 61.0f * scale;
@@ -768,18 +996,35 @@ public class HUD {
         if (recipeBookOpen) {
             float popW = 126.0f * scale;
             float popX = ix - popW - 6.0f;
-            float popY = iy;
-
             float slotW = 22.0f * scale;
             float slotStep = 26.0f * scale;
             float startGridX = popX + 11.0f * scale;
-            float startGridY = popY + 20.0f * scale;
+            float startGridY = iy + 20.0f * scale;
 
-            for (int i = 0; i < recipes.size(); i++) {
-                int row = i / 4;
-                int col = i % 4;
+            int totalRows = (recipes.size() + 3) / 4;
+            int maxScroll = Math.max(0, totalRows - 5);
+
+            // Scrollbar click
+            if (maxScroll > 0) {
+                float sbX = popX + popW - 10.0f * scale;
+                float sbY = startGridY;
+                float sbW = 6.0f * scale;
+                float sbH = 5 * slotStep - 4.0f * scale;
+                if (mx >= sbX - 3.0f * scale && mx <= sbX + sbW + 3.0f * scale && my >= sbY && my <= sbY + sbH) {
+                    float frac = Math.clamp((float) (my - sbY) / sbH, 0.0f, 1.0f);
+                    recipeScrollRow = Math.round(frac * maxScroll);
+                    return true;
+                }
+            }
+
+            int startIdx = recipeScrollRow * 4;
+            int endIdx = Math.min(recipes.size(), startIdx + 5 * 4);
+
+            for (int i = startIdx; i < endIdx; i++) {
+                int visualRow = (i - startIdx) / 4;
+                int col = (i - startIdx) % 4;
                 float sx = startGridX + col * slotStep;
-                float sy = startGridY + row * slotStep;
+                float sy = startGridY + visualRow * slotStep;
 
                 if (mx >= sx && mx <= sx + slotW && my >= sy && my <= sy + slotW) {
                     CraftingRecipe r = recipes.get(i);
@@ -923,7 +1168,7 @@ public class HUD {
     }
 
     public boolean handleInventoryKeyPress(int key, double mx, double my, Player player, int windowWidth, int windowHeight) {
-        if (!inventoryOpen && !craftingTableOpen) return false;
+        if (!inventoryOpen && !craftingTableOpen && (!furnaceOpen || activeFurnace == null)) return false;
         if (key < GLFW_KEY_1 || key > GLFW_KEY_9) return false;
         int hotbarIndex = key - GLFW_KEY_1;
         if (!player.getInventory().getSlot(hotbarIndex).isEmpty()) {
@@ -936,7 +1181,46 @@ public class HUD {
         float ix = (windowWidth - invW) / 2.0f;
         float iy = (windowHeight - invH) / 2.0f;
 
-        if (craftingTableOpen) {
+        if (furnaceOpen && activeFurnace != null) {
+            float outX = ix + 116.0f * scale;
+            float outY = iy + 31.0f * scale;
+            float outSize = 24.0f * scale;
+            if (mx >= outX && mx <= outX + outSize && my >= outY && my <= outY + outSize) {
+                ItemStack res = activeFurnace.getOutput();
+                if (!res.isEmpty()) {
+                    player.getInventory().getSlot(hotbarIndex).setType(res.getType());
+                    player.getInventory().getSlot(hotbarIndex).setCount(res.getCount());
+                    res.clear();
+                    no.minecraft.sound.SoundManager.getInstance().play("click");
+                    no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.HOT_TOPIC);
+                    return true;
+                }
+            }
+            float inX = ix + 56.0f * scale;
+            float inY = iy + 17.0f * scale;
+            if (mx >= inX && mx <= inX + 18.0f * scale && my >= inY && my <= inY + 18.0f * scale) {
+                ItemStack in = activeFurnace.getInput();
+                if (!in.isEmpty()) {
+                    player.getInventory().getSlot(hotbarIndex).setType(in.getType());
+                    player.getInventory().getSlot(hotbarIndex).setCount(in.getCount());
+                    in.clear();
+                    no.minecraft.sound.SoundManager.getInstance().play("click");
+                    return true;
+                }
+            }
+            float fuelX = ix + 56.0f * scale;
+            float fuelY = iy + 53.0f * scale;
+            if (mx >= fuelX && mx <= fuelX + 18.0f * scale && my >= fuelY && my <= fuelY + 18.0f * scale) {
+                ItemStack fuel = activeFurnace.getFuel();
+                if (!fuel.isEmpty()) {
+                    player.getInventory().getSlot(hotbarIndex).setType(fuel.getType());
+                    player.getInventory().getSlot(hotbarIndex).setCount(fuel.getCount());
+                    fuel.clear();
+                    no.minecraft.sound.SoundManager.getInstance().play("click");
+                    return true;
+                }
+            }
+        } else if (craftingTableOpen) {
             float resX = ix + 124.0f * scale;
             float resY = iy + 31.0f * scale;
             float resSize = 24.0f * scale;
@@ -978,7 +1262,7 @@ public class HUD {
     }
 
     public boolean handleDropKeyPress(double mx, double my, boolean dropAll, Player player, int windowWidth, int windowHeight) {
-        if (!inventoryOpen && !craftingTableOpen) return false;
+        if (!inventoryOpen && !craftingTableOpen && (!furnaceOpen || activeFurnace == null)) return false;
 
         float scale = 2.4f;
         float invW = 176.0f * scale;
@@ -991,7 +1275,31 @@ public class HUD {
             return dropFromSlot(carriedItem, dropAll, player);
         }
 
-        if (craftingTableOpen) {
+        if (furnaceOpen && activeFurnace != null) {
+            float outX = ix + 116.0f * scale;
+            float outY = iy + 31.0f * scale;
+            float outSize = 24.0f * scale;
+            if (mx >= outX && mx <= outX + outSize && my >= outY && my <= outY + outSize) {
+                ItemStack out = activeFurnace.getOutput();
+                if (!out.isEmpty()) {
+                    boolean dropped = dropFromSlot(out, dropAll, player);
+                    if (dropped) {
+                        no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.HOT_TOPIC);
+                    }
+                    return dropped;
+                }
+            }
+            float inX = ix + 56.0f * scale;
+            float inY = iy + 17.0f * scale;
+            if (mx >= inX && mx <= inX + 18.0f * scale && my >= inY && my <= inY + 18.0f * scale) {
+                return dropFromSlot(activeFurnace.getInput(), dropAll, player);
+            }
+            float fuelX = ix + 56.0f * scale;
+            float fuelY = iy + 53.0f * scale;
+            if (mx >= fuelX && mx <= fuelX + 18.0f * scale && my >= fuelY && my <= fuelY + 18.0f * scale) {
+                return dropFromSlot(activeFurnace.getFuel(), dropAll, player);
+            }
+        } else if (craftingTableOpen) {
             // 1. 3x3 Bench Slots
             float gridX = ix + 30.0f * scale;
             float gridY = iy + 17.0f * scale;
@@ -1164,6 +1472,8 @@ public class HUD {
         // 4. Minecraft Inventory & Crafting GUI
         if (craftingTableOpen) {
             renderCraftingTableGUI(geom, tex, overlayGeom, windowWidth, windowHeight, player, atlas);
+        } else if (furnaceOpen && activeFurnace != null) {
+            renderFurnaceGUI(geom, tex, overlayGeom, windowWidth, windowHeight, player, atlas);
         } else if (inventoryOpen) {
             renderMinecraftInventoryGUI(geom, tex, overlayGeom, windowWidth, windowHeight, player, atlas);
         }
@@ -1254,7 +1564,7 @@ public class HUD {
                     : player.getInventory().getSlot(i).getCount();
 
             if (block != null && block != BlockType.AIR && (count > 0 || count == -1)) {
-                int tileId = block.getTexture(BlockType.Face.TOP);
+                int tileId = block.getItemTexture();
                 float[] uv = TextureAtlas.getUVs(tileId);
                 addRect(tex, slotX, slotY, slotInnerSize, slotInnerSize, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
 
@@ -1355,7 +1665,7 @@ public class HUD {
                     if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
                         hoveredStack = stack;
                     }
-                    int tId = stack.getType().getTexture(BlockType.Face.TOP);
+                    int tId = stack.getType().getItemTexture();
                     float[] uv = TextureAtlas.getUVs(tId);
                     addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
                     if (stack.getCount() > 0) {
@@ -1382,7 +1692,7 @@ public class HUD {
                 hoveredStack = craftResult;
             }
             BlockType outBlock = craftResult.getType();
-            int tileId = outBlock.getTexture(BlockType.Face.TOP);
+            int tileId = outBlock.getItemTexture();
             float[] uv = TextureAtlas.getUVs(tileId);
             addRect(tex, resultSlotX + 3.0f * p, resultSlotY + 3.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
             if (craftResult.getCount() > 0) {
@@ -1411,7 +1721,7 @@ public class HUD {
                     if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
                         hoveredStack = stack;
                     }
-                    int tId = stack.getType().getTexture(BlockType.Face.TOP);
+                    int tId = stack.getType().getItemTexture();
                     float[] uv = TextureAtlas.getUVs(tId);
                     addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
                     if (stack.getCount() > 0) {
@@ -1432,7 +1742,7 @@ public class HUD {
                 if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= hotbarInvY && mouseY <= hotbarInvY + 18.0f * p) {
                     hoveredStack = stack;
                 }
-                int tId = stack.getType().getTexture(BlockType.Face.TOP);
+                int tId = stack.getType().getItemTexture();
                 float[] uv = TextureAtlas.getUVs(tId);
                 addRect(tex, sx + 2.0f * p, hotbarInvY + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
                 if (stack.getCount() > 0) {
@@ -1445,59 +1755,15 @@ public class HUD {
         if (recipeBookOpen) {
             float popW = 126.0f * p;
             float popX = ix - popW - 6.0f;
-            float popY = iy;
-            drawMinecraftWindowFrame(geom, popX, popY, popW, invH, p);
-
-            // Small header bar for recipe book
-            addRect(geom, popX + 8.0f * p, popY + 8.0f * p, popW - 16.0f * p, 6.0f * p, 0, 0, 0, 0, 0.28f, 0.28f, 0.28f, 1.0f);
-            drawInsetBorder(geom, popX + 8.0f * p, popY + 8.0f * p, popW - 16.0f * p, 6.0f * p, p);
-
-            float slotW = 22.0f * p;
-            float slotStep = 26.0f * p;
-            float startGridX = popX + 11.0f * p;
-            float startGridY = popY + 20.0f * p;
-
-            for (int i = 0; i < recipes.size(); i++) {
-                int row = i / 4;
-                int col = i % 4;
-                float sx = startGridX + col * slotStep;
-                float sy = startGridY + row * slotStep;
-
-                CraftingRecipe r = recipes.get(i);
-                boolean canCraft = r.canCraft(player.getInventory());
-
-                if (mouseX >= sx && mouseX <= sx + slotW && mouseY >= sy && mouseY <= sy + slotW) {
-                    hoveredStack = r.getOutput();
-                }
-
-                // Slot background
-                drawPixelSlot(geom, sx, sy, slotW, p);
-
-                // Highlight border if craftable
-                if (canCraft) {
-                    addRect(geom, sx, sy, slotW, p, 0, 0, 0, 0, 0.30f, 0.88f, 0.30f, 1.0f);
-                    addRect(geom, sx, sy + slotW - p, slotW, p, 0, 0, 0, 0, 0.20f, 0.65f, 0.20f, 1.0f);
-                    addRect(geom, sx, sy, p, slotW, 0, 0, 0, 0, 0.30f, 0.88f, 0.30f, 1.0f);
-                    addRect(geom, sx + slotW - p, sy, p, slotW, 0, 0, 0, 0, 0.20f, 0.65f, 0.20f, 1.0f);
-                }
-
-                // Item icon
-                int tId = r.getOutput().getType().getTexture(BlockType.Face.TOP);
-                float[] uv = TextureAtlas.getUVs(tId);
-                float bright = canCraft ? 1.0f : 0.45f;
-                float alpha = canCraft ? 1.0f : 0.55f;
-                addRect(tex, sx + 3.0f * p, sy + 3.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], bright, bright, bright, alpha);
-
-                // Stack count if > 1
-                if (r.getOutput().getCount() > 1) {
-                    drawMinecraftNumber(overlayGeom, r.getOutput().getCount(), sx + 20.5f * p, sy + 20.5f * p, p * 0.95f);
-                }
+            ItemStack rbHover = renderRecipeBookPanel(geom, tex, overlayGeom, popX, iy, popW, invH, p, player);
+            if (rbHover != null) {
+                hoveredStack = rbHover;
             }
         }
 
         // 14. Carried item on mouse cursor
         if (!carriedItem.isEmpty()) {
-            int tId = carriedItem.getType().getTexture(BlockType.Face.TOP);
+            int tId = carriedItem.getType().getItemTexture();
             float[] uv = TextureAtlas.getUVs(tId);
             float cx = mouseX - 8.0f * p;
             float cy = mouseY - 8.0f * p;
@@ -1546,7 +1812,7 @@ public class HUD {
                     if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
                         hoveredStack = stack;
                     }
-                    int tId = stack.getType().getTexture(BlockType.Face.TOP);
+                    int tId = stack.getType().getItemTexture();
                     float[] uv = TextureAtlas.getUVs(tId);
                     addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
                     if (stack.getCount() > 0) {
@@ -1573,7 +1839,7 @@ public class HUD {
                 hoveredStack = craftResult;
             }
             BlockType outBlock = craftResult.getType();
-            int tileId = outBlock.getTexture(BlockType.Face.TOP);
+            int tileId = outBlock.getItemTexture();
             float[] uv = TextureAtlas.getUVs(tileId);
             addRect(tex, resX + 4.0f * p, resY + 4.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
             if (craftResult.getCount() > 0) {
@@ -1602,7 +1868,7 @@ public class HUD {
                     if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
                         hoveredStack = stack;
                     }
-                    int tId = stack.getType().getTexture(BlockType.Face.TOP);
+                    int tId = stack.getType().getItemTexture();
                     float[] uv = TextureAtlas.getUVs(tId);
                     addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
                     if (stack.getCount() > 0) {
@@ -1623,7 +1889,7 @@ public class HUD {
                 if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= hotbarInvY && mouseY <= hotbarInvY + 18.0f * p) {
                     hoveredStack = stack;
                 }
-                int tId = stack.getType().getTexture(BlockType.Face.TOP);
+                int tId = stack.getType().getItemTexture();
                 float[] uv = TextureAtlas.getUVs(tId);
                 addRect(tex, sx + 2.0f * p, hotbarInvY + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
                 if (stack.getCount() > 0) {
@@ -1636,59 +1902,15 @@ public class HUD {
         if (recipeBookOpen) {
             float popW = 126.0f * p;
             float popX = ix - popW - 6.0f;
-            float popY = iy;
-            drawMinecraftWindowFrame(geom, popX, popY, popW, invH, p);
-
-            // Small header bar for recipe book
-            addRect(geom, popX + 8.0f * p, popY + 8.0f * p, popW - 16.0f * p, 6.0f * p, 0, 0, 0, 0, 0.28f, 0.28f, 0.28f, 1.0f);
-            drawInsetBorder(geom, popX + 8.0f * p, popY + 8.0f * p, popW - 16.0f * p, 6.0f * p, p);
-
-            float slotW = 22.0f * p;
-            float slotStep = 26.0f * p;
-            float startGridX = popX + 11.0f * p;
-            float startGridY = popY + 20.0f * p;
-
-            for (int i = 0; i < recipes.size(); i++) {
-                int row = i / 4;
-                int col = i % 4;
-                float sx = startGridX + col * slotStep;
-                float sy = startGridY + row * slotStep;
-
-                CraftingRecipe r = recipes.get(i);
-                boolean canCraft = r.canCraft(player.getInventory());
-
-                if (mouseX >= sx && mouseX <= sx + slotW && mouseY >= sy && mouseY <= sy + slotW) {
-                    hoveredStack = r.getOutput();
-                }
-
-                // Slot background
-                drawPixelSlot(geom, sx, sy, slotW, p);
-
-                // Highlight border if craftable
-                if (canCraft) {
-                    addRect(geom, sx, sy, slotW, p, 0, 0, 0, 0, 0.30f, 0.88f, 0.30f, 1.0f);
-                    addRect(geom, sx, sy + slotW - p, slotW, p, 0, 0, 0, 0, 0.20f, 0.65f, 0.20f, 1.0f);
-                    addRect(geom, sx, sy, p, slotW, 0, 0, 0, 0, 0.30f, 0.88f, 0.30f, 1.0f);
-                    addRect(geom, sx + slotW - p, sy, p, slotW, 0, 0, 0, 0, 0.20f, 0.65f, 0.20f, 1.0f);
-                }
-
-                // Item icon
-                int tId = r.getOutput().getType().getTexture(BlockType.Face.TOP);
-                float[] uv = TextureAtlas.getUVs(tId);
-                float bright = canCraft ? 1.0f : 0.45f;
-                float alpha = canCraft ? 1.0f : 0.55f;
-                addRect(tex, sx + 3.0f * p, sy + 3.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], bright, bright, bright, alpha);
-
-                // Stack count if > 1
-                if (r.getOutput().getCount() > 1) {
-                    drawMinecraftNumber(overlayGeom, r.getOutput().getCount(), sx + 20.5f * p, sy + 20.5f * p, p * 0.95f);
-                }
+            ItemStack rbHover = renderRecipeBookPanel(geom, tex, overlayGeom, popX, iy, popW, invH, p, player);
+            if (rbHover != null) {
+                hoveredStack = rbHover;
             }
         }
 
         // 11. Carried item on mouse cursor
         if (!carriedItem.isEmpty()) {
-            int tId = carriedItem.getType().getTexture(BlockType.Face.TOP);
+            int tId = carriedItem.getType().getItemTexture();
             float[] uv = TextureAtlas.getUVs(tId);
             float cx = mouseX - 8.0f * p;
             float cy = mouseY - 8.0f * p;
@@ -1903,6 +2125,270 @@ public class HUD {
         addRect(g, x + 8 * p, y + 1 * p, 3 * p, 3 * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
         addRect(g, x + 8 * p, y + 8 * p, 3 * p, 3 * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
         addRect(g, x + 11 * p, y + 3 * p, 2 * p, 6 * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
+    }
+
+    private ItemStack renderRecipeBookPanel(List<Float> geom, List<Float> tex, List<Float> overlayGeom,
+                                            float popX, float popY, float popW, float invH, float p, Player player) {
+        drawMinecraftWindowFrame(geom, popX, popY, popW, invH, p);
+
+        // Header bar
+        addRect(geom, popX + 8.0f * p, popY + 8.0f * p, popW - 16.0f * p, 6.0f * p, 0, 0, 0, 0, 0.28f, 0.28f, 0.28f, 1.0f);
+        drawInsetBorder(geom, popX + 8.0f * p, popY + 8.0f * p, popW - 16.0f * p, 6.0f * p, p);
+
+        float slotW = 22.0f * p;
+        float slotStep = 26.0f * p;
+        float startGridX = popX + 11.0f * p;
+        float startGridY = popY + 20.0f * p;
+
+        int totalRows = (recipes.size() + 3) / 4;
+        int maxScroll = Math.max(0, totalRows - 5);
+        recipeScrollRow = Math.max(0, Math.min(maxScroll, recipeScrollRow));
+
+        int startIdx = recipeScrollRow * 4;
+        int endIdx = Math.min(recipes.size(), startIdx + 5 * 4);
+        ItemStack hovered = null;
+
+        for (int i = startIdx; i < endIdx; i++) {
+            int visualRow = (i - startIdx) / 4;
+            int col = (i - startIdx) % 4;
+            float sx = startGridX + col * slotStep;
+            float sy = startGridY + visualRow * slotStep;
+
+            CraftingRecipe r = recipes.get(i);
+            boolean canCraft = r.canCraft(player.getInventory());
+
+            if (mouseX >= sx && mouseX <= sx + slotW && mouseY >= sy && mouseY <= sy + slotW) {
+                hovered = r.getOutput();
+            }
+
+            // Slot background
+            drawPixelSlot(geom, sx, sy, slotW, p);
+
+            // Highlight border if craftable
+            if (canCraft) {
+                addRect(geom, sx, sy, slotW, p, 0, 0, 0, 0, 0.30f, 0.88f, 0.30f, 1.0f);
+                addRect(geom, sx, sy + slotW - p, slotW, p, 0, 0, 0, 0, 0.20f, 0.65f, 0.20f, 1.0f);
+                addRect(geom, sx, sy, p, slotW, 0, 0, 0, 0, 0.30f, 0.88f, 0.30f, 1.0f);
+                addRect(geom, sx + slotW - p, sy, p, slotW, 0, 0, 0, 0, 0.20f, 0.65f, 0.20f, 1.0f);
+            }
+
+            // Item icon
+            int tId = r.getOutput().getType().getItemTexture();
+            float[] uv = TextureAtlas.getUVs(tId);
+            float bright = canCraft ? 1.0f : 0.45f;
+            float alpha = canCraft ? 1.0f : 0.55f;
+            addRect(tex, sx + 3.0f * p, sy + 3.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], bright, bright, bright, alpha);
+
+            // Stack count if > 1
+            if (r.getOutput().getCount() > 1) {
+                drawMinecraftNumber(overlayGeom, r.getOutput().getCount(), sx + 20.5f * p, sy + 20.5f * p, p * 0.95f);
+            }
+        }
+
+        // Scrollbar on the right side
+        if (maxScroll > 0) {
+            float sbX = popX + popW - 10.0f * p;
+            float sbY = startGridY;
+            float sbW = 5.0f * p;
+            float sbH = 5 * slotStep - 4.0f * p;
+            // Track
+            addRect(geom, sbX, sbY, sbW, sbH, 0, 0, 0, 0, 0.15f, 0.15f, 0.15f, 1.0f);
+            // Thumb
+            float thumbH = Math.max(16.0f * p, sbH * (5.0f / totalRows));
+            float thumbY = sbY + (sbH - thumbH) * ((float) recipeScrollRow / maxScroll);
+            addRect(geom, sbX, thumbY, sbW, thumbH, 0, 0, 0, 0, 0.65f, 0.65f, 0.65f, 1.0f);
+            drawInsetBorder(geom, sbX, thumbY, sbW, thumbH, p * 0.5f);
+        }
+
+        return hovered;
+    }
+
+    private void renderFurnaceGUI(List<Float> geom, List<Float> tex, List<Float> overlayGeom,
+                                  int windowWidth, int windowHeight, Player player, TextureAtlas atlas) {
+        if (activeFurnace == null) return;
+
+        float p = 2.4f; // Scale
+        float invW = 176.0f * p;
+        float invH = 166.0f * p;
+        float ix = (windowWidth - invW) / 2.0f;
+        float iy = (windowHeight - invH) / 2.0f;
+
+        ItemStack hoveredStack = null;
+
+        // 1. Dark background overlay
+        addRect(geom, 0, 0, windowWidth, windowHeight, 0, 0, 0, 0, 0, 0, 0, 0.65f);
+
+        // 2. Main Window Panel
+        drawMinecraftWindowFrame(geom, ix, iy, invW, invH, p);
+
+        // 3. Titles: "OVN" and "INVENTAR"
+        drawHudText(overlayGeom, "OVN", ix + 64.0f * p, iy + 6.0f * p, p * 0.48f, 0.25f, 0.25f, 0.25f);
+        drawHudText(overlayGeom, "INVENTAR", ix + 8.0f * p, iy + 73.0f * p, p * 0.48f, 0.25f, 0.25f, 0.25f);
+
+        // 4. Input Slot (Top)
+        float inX = ix + 56.0f * p;
+        float inY = iy + 17.0f * p;
+        drawPixelSlot(geom, inX, inY, 18.0f * p, p);
+        ItemStack inStack = activeFurnace.getInput();
+        if (!inStack.isEmpty()) {
+            if (mouseX >= inX && mouseX <= inX + 18.0f * p && mouseY >= inY && mouseY <= inY + 18.0f * p) {
+                hoveredStack = inStack;
+            }
+            int tId = inStack.getType().getItemTexture();
+            float[] uv = TextureAtlas.getUVs(tId);
+            addRect(tex, inX + 2.0f * p, inY + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
+            if (inStack.getCount() > 0) {
+                drawMinecraftNumber(overlayGeom, inStack.getCount(), inX + 17.0f * p, inY + 17.0f * p, p * 0.95f);
+            }
+        }
+
+        // 5. Burning Flame Icon (Between Input and Fuel)
+        float flameX = ix + 58.0f * p;
+        float flameY = iy + 37.0f * p;
+        drawFurnaceFlame(geom, flameX, flameY, 14.0f * p, 12.0f * p, activeFurnace.getBurnTime(), activeFurnace.getMaxBurnTime(), p);
+
+        // 6. Fuel Slot (Bottom)
+        float fuelX = ix + 56.0f * p;
+        float fuelY = iy + 53.0f * p;
+        drawPixelSlot(geom, fuelX, fuelY, 18.0f * p, p);
+        ItemStack fuelStack = activeFurnace.getFuel();
+        if (!fuelStack.isEmpty()) {
+            if (mouseX >= fuelX && mouseX <= fuelX + 18.0f * p && mouseY >= fuelY && mouseY <= fuelY + 18.0f * p) {
+                hoveredStack = fuelStack;
+            }
+            int tId = fuelStack.getType().getItemTexture();
+            float[] uv = TextureAtlas.getUVs(tId);
+            addRect(tex, fuelX + 2.0f * p, fuelY + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
+            if (fuelStack.getCount() > 0) {
+                drawMinecraftNumber(overlayGeom, fuelStack.getCount(), fuelX + 17.0f * p, fuelY + 17.0f * p, p * 0.95f);
+            }
+        }
+
+        // 7. Cooking Progress Arrow (pointing to output)
+        float arrowX = ix + 79.0f * p;
+        float arrowY = iy + 35.0f * p;
+        drawFurnaceArrow(geom, arrowX, arrowY, activeFurnace.getCookTime(), no.minecraft.world.FurnaceData.COOK_TIME_TOTAL, p);
+
+        // 8. Output Slot (Right, 24x24 slot)
+        float outX = ix + 116.0f * p;
+        float outY = iy + 31.0f * p;
+        drawPixelSlot(geom, outX, outY, 24.0f * p, p);
+        ItemStack outStack = activeFurnace.getOutput();
+        if (!outStack.isEmpty()) {
+            if (mouseX >= outX && mouseX <= outX + 24.0f * p && mouseY >= outY && mouseY <= outY + 24.0f * p) {
+                hoveredStack = outStack;
+            }
+            int tId = outStack.getType().getItemTexture();
+            float[] uv = TextureAtlas.getUVs(tId);
+            addRect(tex, outX + 4.0f * p, outY + 4.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
+            if (outStack.getCount() > 0) {
+                drawMinecraftNumber(overlayGeom, outStack.getCount(), outX + 22.0f * p, outY + 22.0f * p, p * 0.95f);
+            }
+        }
+
+        // 9. Main Inventory Grid (3 rows x 9 columns)
+        float mainInvX = ix + 8.0f * p;
+        float mainInvY = iy + 84.0f * p;
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                int slotIndex = 9 + row * 9 + col;
+                float sx = mainInvX + col * 18.0f * p;
+                float sy = mainInvY + row * 18.0f * p;
+                drawPixelSlot(geom, sx, sy, 18.0f * p, p);
+
+                ItemStack stack = player.getInventory().getSlot(slotIndex);
+                if (!stack.isEmpty()) {
+                    if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
+                        hoveredStack = stack;
+                    }
+                    int tId = stack.getType().getItemTexture();
+                    float[] uv = TextureAtlas.getUVs(tId);
+                    addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
+                    if (stack.getCount() > 0) {
+                        drawMinecraftNumber(overlayGeom, stack.getCount(), sx + 17.0f * p, sy + 17.0f * p, p * 0.95f);
+                    }
+                }
+            }
+        }
+
+        // 10. Hotbar Grid (1 row x 9 columns)
+        float hotbarInvY = iy + 142.0f * p;
+        for (int col = 0; col < 9; col++) {
+            float sx = mainInvX + col * 18.0f * p;
+            drawPixelSlot(geom, sx, hotbarInvY, 18.0f * p, p);
+
+            ItemStack stack = player.getInventory().getSlot(col);
+            if (!stack.isEmpty()) {
+                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= hotbarInvY && mouseY <= hotbarInvY + 18.0f * p) {
+                    hoveredStack = stack;
+                }
+                int tId = stack.getType().getItemTexture();
+                float[] uv = TextureAtlas.getUVs(tId);
+                addRect(tex, sx + 2.0f * p, hotbarInvY + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
+                if (stack.getCount() > 0) {
+                    drawMinecraftNumber(overlayGeom, stack.getCount(), sx + 17.0f * p, hotbarInvY + 17.0f * p, p * 0.95f);
+                }
+            }
+        }
+
+        // 11. Carried item on cursor
+        if (!carriedItem.isEmpty()) {
+            int tId = carriedItem.getType().getItemTexture();
+            float[] uv = TextureAtlas.getUVs(tId);
+            float cx = mouseX - 8.0f * p;
+            float cy = mouseY - 8.0f * p;
+            addRect(tex, cx, cy, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 1.0f);
+            if (carriedItem.getCount() > 0) {
+                drawMinecraftNumber(overlayGeom, carriedItem.getCount(), cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
+            }
+        }
+
+        // 12. Hover tooltip popup
+        if (carriedItem.isEmpty() && hoveredStack != null && !hoveredStack.isEmpty()) {
+            renderItemTooltip(overlayGeom, hoveredStack, mouseX, mouseY, windowWidth, windowHeight);
+        }
+    }
+
+    private void drawFurnaceFlame(List<Float> g, float x, float y, float w, float h, float burnTime, float maxBurnTime, float p) {
+        // Dark outline of flame
+        addRect(g, x, y, w, h, 0, 0, 0, 0, 0.35f, 0.35f, 0.35f, 0.6f);
+        if (burnTime > 0.0f && maxBurnTime > 0.0f) {
+            float frac = Math.clamp(burnTime / maxBurnTime, 0.0f, 1.0f);
+            float activeH = h * frac;
+            float activeY = y + (h - activeH);
+            // Fiery orange base
+            addRect(g, x + p, activeY, w - 2 * p, activeH, 0, 0, 0, 0, 0.95f, 0.45f, 0.08f, 1.0f);
+            // Bright yellow inner core
+            if (activeH > 2 * p) {
+                addRect(g, x + 3 * p, activeY + p, w - 6 * p, activeH - p, 0, 0, 0, 0, 1.0f, 0.90f, 0.20f, 1.0f);
+            }
+        }
+    }
+
+    private void drawFurnaceArrow(List<Float> g, float x, float y, float cookTime, float totalCookTime, float p) {
+        float aw = 22 * p;
+        float ah = 15 * p;
+        // Base arrow shape
+        addRect(g, x, y + 4 * p, 14 * p, 7 * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
+        addRect(g, x + 14 * p, y + 1 * p, 4 * p, 13 * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
+        addRect(g, x + 18 * p, y + 4 * p, 4 * p, 7 * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
+
+        // Inset border
+        drawInsetBorder(g, x, y, aw, ah, p * 0.5f);
+
+        // Progress fill (left to right)
+        if (cookTime > 0.0f) {
+            float frac = Math.clamp(cookTime / totalCookTime, 0.0f, 1.0f);
+            float progressW = aw * frac;
+            addRect(g, x + p, y + 4 * p, Math.min(progressW, 14 * p), 7 * p, 0, 0, 0, 0, 0.90f, 0.90f, 0.90f, 1.0f);
+            if (progressW > 14 * p) {
+                float headW = Math.min(progressW - 14 * p, 8 * p);
+                addRect(g, x + 14 * p, y + 1 * p, Math.min(headW, 4 * p), 13 * p, 0, 0, 0, 0, 0.90f, 0.90f, 0.90f, 1.0f);
+                if (headW > 4 * p) {
+                    addRect(g, x + 18 * p, y + 4 * p, headW - 4 * p, 7 * p, 0, 0, 0, 0, 0.90f, 0.90f, 0.90f, 1.0f);
+                }
+            }
+        }
     }
 
     private void drawPixelRecipeBookButton(List<Float> g, float x, float y, float size, float p) {
