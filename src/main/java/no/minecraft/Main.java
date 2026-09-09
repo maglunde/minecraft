@@ -59,6 +59,7 @@ public class Main {
     private boolean sprintActive = false;
     private Raycast.HitResult targetedHit = null;
     private static final float FIXED_TICK = 1.0f / 60.0f; // 60 ticks/s fixed simulation step (smooth without interpolation on 60 Hz displays)
+    private final no.minecraft.math.Frustum frustum = new no.minecraft.math.Frustum();
 
     private static final String WORLD_VERT = """
             #version 330 core
@@ -1055,6 +1056,7 @@ public class Main {
                     300.0f
             );
             Matrix4f view = player.getCamera().getViewMatrix();
+            frustum.update(projection, view);
 
             // 1. Render Moving Celestial Bodies (Sun & Moon in Sky) in Overworld
             if (world.getCurrentDimension() == no.minecraft.world.Dimension.OVERWORLD) {
@@ -1090,7 +1092,7 @@ public class Main {
             atlas.bind();
             int playerCx = Math.floorDiv((int) Math.floor(player.getPosition().x), Chunk.SIZE_X);
             int playerCz = Math.floorDiv((int) Math.floor(player.getPosition().z), Chunk.SIZE_Z);
-            world.updateAndRender(playerCx, playerCz, gs.getRenderDistance());
+            world.updateAndRender(playerCx, playerCz, gs.getRenderDistance(), frustum);
 
             // 3. Render 3D Dropped Items on ground (spinning & bobbing)
             itemRenderer.render(world.getDroppedItems(), worldShader, view, projection, atlas);

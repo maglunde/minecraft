@@ -1588,6 +1588,10 @@ public class World {
     }
 
     public void updateAndRender(int centerCx, int centerCz, int renderDistance) {
+        updateAndRender(centerCx, centerCz, renderDistance, null);
+    }
+
+    public void updateAndRender(int centerCx, int centerCz, int renderDistance, no.minecraft.math.Frustum frustum) {
         this.lastCenterCx = centerCx;
         this.lastCenterCz = centerCz;
         Map<Long, Chunk> activeChunks = getActiveChunks();
@@ -1600,8 +1604,12 @@ public class World {
                 Chunk chunk = activeChunks.get(chunkKey(cx, cz));
                 if (chunk != null) {
                     chunk.updateMeshIfNeeded();
-                    chunk.render();
-                    renderedChunkCount++;
+                    if (frustum == null || frustum.intersectsAabb(
+                            chunk.getWorldStartX(), 0, chunk.getWorldStartZ(),
+                            chunk.getWorldStartX() + Chunk.SIZE_X, Chunk.SIZE_Y, chunk.getWorldStartZ() + Chunk.SIZE_Z)) {
+                        chunk.render();
+                        renderedChunkCount++;
+                    }
                 }
             }
         }
