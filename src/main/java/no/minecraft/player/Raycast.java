@@ -26,36 +26,55 @@ public class Raycast {
     }
 
     public static HitResult raycast(World world, Vector3f origin, Vector3f direction, float maxDistance, boolean includeWater) {
-        float step = 0.05f;
-        Vector3f currentPos = new Vector3f(origin);
-        Vector3f rayStep = new Vector3f(direction).mul(step);
+        // DDA voxel traversal: step through grid cells exactly, no brute-force sampling
+        int x = (int) Math.floor(origin.x);
+        int y = (int) Math.floor(origin.y);
+        int z = (int) Math.floor(origin.z);
 
-        int prevBlockX = (int) Math.floor(currentPos.x);
-        int prevBlockY = (int) Math.floor(currentPos.y);
-        int prevBlockZ = (int) Math.floor(currentPos.z);
+        int stepX = direction.x > 0 ? 1 : -1;
+        int stepY = direction.y > 0 ? 1 : -1;
+        int stepZ = direction.z > 0 ? 1 : -1;
 
-        float distanceTraveled = 0.0f;
+        double tMaxX = (direction.x == 0) ? Double.POSITIVE_INFINITY
+                : ((stepX > 0 ? x + 1 : x) - origin.x) / direction.x;
+        double tMaxY = (direction.y == 0) ? Double.POSITIVE_INFINITY
+                : ((stepY > 0 ? y + 1 : y) - origin.y) / direction.y;
+        double tMaxZ = (direction.z == 0) ? Double.POSITIVE_INFINITY
+                : ((stepZ > 0 ? z + 1 : z) - origin.z) / direction.z;
 
-        while (distanceTraveled <= maxDistance) {
-            currentPos.add(rayStep);
-            distanceTraveled += step;
+        double tDeltaX = (direction.x == 0) ? Double.POSITIVE_INFINITY : Math.abs(1.0 / direction.x);
+        double tDeltaY = (direction.y == 0) ? Double.POSITIVE_INFINITY : Math.abs(1.0 / direction.y);
+        double tDeltaZ = (direction.z == 0) ? Double.POSITIVE_INFINITY : Math.abs(1.0 / direction.z);
 
-            int blockX = (int) Math.floor(currentPos.x);
-            int blockY = (int) Math.floor(currentPos.y);
-            int blockZ = (int) Math.floor(currentPos.z);
+        double t = 0.0;
+        int prevX = x, prevY = y, prevZ = z;
 
-            if (blockX != prevBlockX || blockY != prevBlockY || blockZ != prevBlockZ) {
-                BlockType type = world.getBlock(blockX, blockY, blockZ);
-                boolean isHit = (type != BlockType.AIR && type != BlockType.BEDROCK && type != BlockType.LAVA);
-                if (!includeWater) {
-                    isHit = isHit && (type != BlockType.WATER);
-                }
-                if (isHit) {
-                    return new HitResult(blockX, blockY, blockZ, prevBlockX, prevBlockY, prevBlockZ, type);
-                }
-                prevBlockX = blockX;
-                prevBlockY = blockY;
-                prevBlockZ = blockZ;
+        while (t <= maxDistance) {
+            if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+                prevX = x; prevY = y; prevZ = z;
+                x += stepX;
+                t = tMaxX;
+                tMaxX += tDeltaX;
+            } else if (tMaxY < tMaxZ) {
+                prevX = x; prevY = y; prevZ = z;
+                y += stepY;
+                t = tMaxY;
+                tMaxY += tDeltaY;
+            } else {
+                prevX = x; prevY = y; prevZ = z;
+                z += stepZ;
+                t = tMaxZ;
+                tMaxZ += tDeltaZ;
+            }
+            if (t > maxDistance) break;
+
+            BlockType type = world.getBlock(x, y, z);
+            boolean isHit = (type != BlockType.AIR && type != BlockType.BEDROCK && type != BlockType.LAVA);
+            if (!includeWater) {
+                isHit = isHit && (type != BlockType.WATER);
+            }
+            if (isHit) {
+                return new HitResult(x, y, z, prevX, prevY, prevZ, type);
             }
         }
 

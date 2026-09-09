@@ -2,7 +2,9 @@ package no.minecraft.world;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class NetherFortressGenerator {
 
@@ -63,7 +65,19 @@ public class NetherFortressGenerator {
     // Grid spacing for Nether Fortresses (every 24 chunks)
     public static final int FORTRESS_GRID = 24;
 
+    private record FortressKey(int regionX, int regionZ, long worldSeed) {}
+
+    // Fortresses are deterministic per region; caching avoids re-deriving
+    // 9 full fortresses per spawn tick and per chunk generation
+    private static final Map<FortressKey, Fortress> FORTRESS_CACHE = new ConcurrentHashMap<>();
+
     public static Fortress getFortressForRegion(int regionX, int regionZ, long worldSeed) {
+        return FORTRESS_CACHE.computeIfAbsent(
+                new FortressKey(regionX, regionZ, worldSeed),
+                key -> buildFortress(key.regionX(), key.regionZ(), key.worldSeed()));
+    }
+
+    private static Fortress buildFortress(int regionX, int regionZ, long worldSeed) {
         long fortressSeed = (regionX * 341873128712L) ^ (regionZ * 132897987543L) ^ worldSeed;
         Random rand = new Random(fortressSeed);
 
