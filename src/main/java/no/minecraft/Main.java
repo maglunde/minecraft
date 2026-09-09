@@ -409,6 +409,12 @@ public class Main {
             no.minecraft.settings.GameSettings gs = no.minecraft.settings.GameSettings.getInstance();
 
             if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+                if (hud.isRecipeSearchFocused()) {
+                    if (key == GLFW_KEY_BACKSPACE) {
+                        hud.recipeSearchBackspace();
+                        return;
+                    }
+                }
                 if ((key == GLFW_KEY_Q || key == gs.keyDrop) && !pauseMenu.isOpen() && !mainMenu.isInMenu() && !chatManager.isOpen()) {
                     boolean isCtrl = (mods & (GLFW_MOD_CONTROL | GLFW_MOD_SUPER)) != 0
                             || keyPressed[GLFW_KEY_LEFT_CONTROL] || keyPressed[GLFW_KEY_RIGHT_CONTROL];
@@ -433,6 +439,13 @@ public class Main {
             }
 
             if (action == GLFW_PRESS) {
+                if (hud.isRecipeSearchFocused()) {
+                    if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_ENTER) {
+                        hud.setRecipeSearchFocused(false);
+                        return;
+                    }
+                    return;
+                }
                 if (pauseMenu.isOpen()) {
                     pauseMenu.handleKey(key, action);
                     if (!pauseMenu.isOpen()) {
@@ -566,7 +579,7 @@ public class Main {
             }
         });
 
-        // Text character typing callback for Chat
+        // Text character typing callback for Chat and Recipe Search
         glfwSetCharCallback(window, (win, codepoint) -> {
             if (ignoreNextChar) {
                 ignoreNextChar = false;
@@ -574,6 +587,8 @@ public class Main {
             }
             if (chatManager.isOpen()) {
                 chatManager.addChar((char) codepoint);
+            } else if (hud.isRecipeSearchFocused()) {
+                hud.addRecipeSearchChar((char) codepoint);
             }
         });
     }

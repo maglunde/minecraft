@@ -32,6 +32,8 @@ public class HUD {
     private no.minecraft.world.FurnaceData activeFurnace = null;
     private boolean recipeBookOpen = false;
     private int recipeScrollRow = 0;
+    private String recipeSearchText = "";
+    private boolean recipeSearchFocused = false;
     private boolean showDebugInfo = false;
     private int lastFps = 60;
     private no.minecraft.player.Raycast.HitResult lastTargetedHit = null;
@@ -150,9 +152,61 @@ public class HUD {
         return activeFurnace;
     }
 
+    public boolean isRecipeSearchFocused() {
+        return (inventoryOpen || craftingTableOpen) && recipeBookOpen && recipeSearchFocused;
+    }
+
+    public void setRecipeSearchFocused(boolean focused) {
+        this.recipeSearchFocused = focused;
+    }
+
+    public void addRecipeSearchChar(char c) {
+        if (!isRecipeSearchFocused()) return;
+        if (Character.isISOControl(c)) return;
+        if (recipeSearchText.length() < 24) {
+            recipeSearchText += c;
+            recipeScrollRow = 0;
+        }
+    }
+
+    public void recipeSearchBackspace() {
+        if (!isRecipeSearchFocused()) return;
+        if (!recipeSearchText.isEmpty()) {
+            recipeSearchText = recipeSearchText.substring(0, recipeSearchText.length() - 1);
+            recipeScrollRow = 0;
+        }
+    }
+
+    public void clearRecipeSearch() {
+        recipeSearchText = "";
+        recipeScrollRow = 0;
+    }
+
+    public String getRecipeSearchText() {
+        return recipeSearchText;
+    }
+
+    public List<CraftingRecipe> getFilteredRecipes() {
+        if (recipeSearchText == null || recipeSearchText.trim().isEmpty()) {
+            return recipes;
+        }
+        String q = recipeSearchText.trim().toLowerCase();
+        List<CraftingRecipe> list = new ArrayList<>();
+        for (CraftingRecipe r : recipes) {
+            String name = r.getName().toLowerCase();
+            String disp = r.getOutput().getType().getName().toLowerCase();
+            String enumName = r.getOutput().getType().name().toLowerCase();
+            if (name.contains(q) || disp.contains(q) || enumName.contains(q)) {
+                list.add(r);
+            }
+        }
+        return list;
+    }
+
     public void handleScroll(double xoffset, double yoffset) {
         if (recipeBookOpen) {
-            int totalRows = (recipes.size() + 3) / 4;
+            List<CraftingRecipe> activeRecipes = getFilteredRecipes();
+            int totalRows = (activeRecipes.size() + 3) / 4;
             int maxScroll = Math.max(0, totalRows - 5);
             if (yoffset > 0) {
                 recipeScrollRow = Math.max(0, recipeScrollRow - 1);
@@ -216,6 +270,7 @@ public class HUD {
             }
             returnCraftSlotsToInventory(player);
             returnBenchSlotsToInventory(player);
+            recipeSearchFocused = false;
         }
     }
 
@@ -748,7 +803,29 @@ public class HUD {
                 float startGridX = popX + 11.0f * scale;
                 float startGridY = iy + 20.0f * scale;
 
-                int totalRows = (recipes.size() + 3) / 4;
+                // Check search bar click
+                float searchX = popX + 10.0f * scale;
+                float searchY = iy + 6.0f * scale;
+                float searchW = popW - 20.0f * scale;
+                float searchH = 11.0f * scale;
+                if (mx >= searchX && mx <= searchX + searchW && my >= searchY && my <= searchY + searchH) {
+                    float clearBtnX = searchX + searchW - 10.0f * scale;
+                    if (!recipeSearchText.isEmpty() && mx >= clearBtnX - 2.0f * scale) {
+                        clearRecipeSearch();
+                        no.minecraft.sound.SoundManager.getInstance().play("click");
+                        return true;
+                    }
+                    recipeSearchFocused = true;
+                    no.minecraft.sound.SoundManager.getInstance().play("click");
+                    return true;
+                } else if (mx >= popX && mx <= popX + popW && my >= iy && my <= iy + invH) {
+                    recipeSearchFocused = false;
+                } else {
+                    recipeSearchFocused = false;
+                }
+
+                List<CraftingRecipe> activeRecipes = getFilteredRecipes();
+                int totalRows = (activeRecipes.size() + 3) / 4;
                 int maxScroll = Math.max(0, totalRows - 5);
 
                 // Scrollbar click
@@ -765,7 +842,7 @@ public class HUD {
                 }
 
                 int startIdx = recipeScrollRow * 4;
-                int endIdx = Math.min(recipes.size(), startIdx + 5 * 4);
+                int endIdx = Math.min(activeRecipes.size(), startIdx + 5 * 4);
 
                 for (int i = startIdx; i < endIdx; i++) {
                     int visualRow = (i - startIdx) / 4;
@@ -774,7 +851,7 @@ public class HUD {
                     float sy = startGridY + visualRow * slotStep;
 
                     if (mx >= sx && mx <= sx + slotW && my >= sy && my <= sy + slotW) {
-                        CraftingRecipe r = recipes.get(i);
+                        CraftingRecipe r = activeRecipes.get(i);
                         populate3x3Recipe(r, player);
                         return true;
                     }
@@ -1001,7 +1078,29 @@ public class HUD {
             float startGridX = popX + 11.0f * scale;
             float startGridY = iy + 20.0f * scale;
 
-            int totalRows = (recipes.size() + 3) / 4;
+            // Check search bar click
+            float searchX = popX + 10.0f * scale;
+            float searchY = iy + 6.0f * scale;
+            float searchW = popW - 20.0f * scale;
+            float searchH = 11.0f * scale;
+            if (mx >= searchX && mx <= searchX + searchW && my >= searchY && my <= searchY + searchH) {
+                float clearBtnX = searchX + searchW - 10.0f * scale;
+                if (!recipeSearchText.isEmpty() && mx >= clearBtnX - 2.0f * scale) {
+                    clearRecipeSearch();
+                    no.minecraft.sound.SoundManager.getInstance().play("click");
+                    return true;
+                }
+                recipeSearchFocused = true;
+                no.minecraft.sound.SoundManager.getInstance().play("click");
+                return true;
+            } else if (mx >= popX && mx <= popX + popW && my >= iy && my <= iy + invH) {
+                recipeSearchFocused = false;
+            } else {
+                recipeSearchFocused = false;
+            }
+
+            List<CraftingRecipe> activeRecipes = getFilteredRecipes();
+            int totalRows = (activeRecipes.size() + 3) / 4;
             int maxScroll = Math.max(0, totalRows - 5);
 
             // Scrollbar click
@@ -1018,7 +1117,7 @@ public class HUD {
             }
 
             int startIdx = recipeScrollRow * 4;
-            int endIdx = Math.min(recipes.size(), startIdx + 5 * 4);
+            int endIdx = Math.min(activeRecipes.size(), startIdx + 5 * 4);
 
             for (int i = startIdx; i < endIdx; i++) {
                 int visualRow = (i - startIdx) / 4;
@@ -1027,7 +1126,7 @@ public class HUD {
                 float sy = startGridY + visualRow * slotStep;
 
                 if (mx >= sx && mx <= sx + slotW && my >= sy && my <= sy + slotW) {
-                    CraftingRecipe r = recipes.get(i);
+                    CraftingRecipe r = activeRecipes.get(i);
                     // 2x2 recipes: populate the 2x2 grid from inventory
                     if (r.getOutput().getType() == BlockType.PLANKS) {
                         if (player.getInventory().getItemCount(BlockType.WOOD) >= 1) {
@@ -2131,21 +2230,62 @@ public class HUD {
                                             float popX, float popY, float popW, float invH, float p, Player player) {
         drawMinecraftWindowFrame(geom, popX, popY, popW, invH, p);
 
-        // Header bar
-        addRect(geom, popX + 8.0f * p, popY + 8.0f * p, popW - 16.0f * p, 6.0f * p, 0, 0, 0, 0, 0.28f, 0.28f, 0.28f, 1.0f);
-        drawInsetBorder(geom, popX + 8.0f * p, popY + 8.0f * p, popW - 16.0f * p, 6.0f * p, p);
+        // Search bar at the top
+        float searchX = popX + 10.0f * p;
+        float searchY = popY + 6.0f * p;
+        float searchW = popW - 20.0f * p;
+        float searchH = 11.0f * p;
+
+        // Dark inset search bar background
+        addRect(geom, searchX, searchY, searchW, searchH, 0, 0, 0, 0, 0.09f, 0.09f, 0.09f, 1.0f);
+        if (recipeSearchFocused) {
+            drawInsetBorder(geom, searchX, searchY, searchW, searchH, p * 0.6f);
+            addRect(geom, searchX, searchY, searchW, p * 0.6f, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 0.85f);
+            addRect(geom, searchX, searchY + searchH - p * 0.6f, searchW, p * 0.6f, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 0.85f);
+            addRect(geom, searchX, searchY, p * 0.6f, searchH, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 0.85f);
+            addRect(geom, searchX + searchW - p * 0.6f, searchY, p * 0.6f, searchH, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 0.85f);
+        } else {
+            drawInsetBorder(geom, searchX, searchY, searchW, searchH, p * 0.6f);
+        }
+
+        // Search text / placeholder
+        if (recipeSearchText.isEmpty()) {
+            if (!recipeSearchFocused) {
+                drawHudText(overlayGeom, "SOK...", searchX + 3.0f * p, searchY + 2.5f * p, p * 0.42f, 0.45f, 0.45f, 0.45f);
+            } else {
+                boolean blink = (System.currentTimeMillis() % 1000) < 500;
+                if (blink) {
+                    drawHudText(overlayGeom, "_", searchX + 3.0f * p, searchY + 2.5f * p, p * 0.42f, 1.0f, 1.0f, 1.0f);
+                }
+            }
+        } else {
+            boolean blink = recipeSearchFocused && (System.currentTimeMillis() % 1000) < 500;
+            String displayTxt = recipeSearchText + (blink ? "_" : "");
+            drawHudText(overlayGeom, displayTxt, searchX + 3.0f * p, searchY + 2.5f * p, p * 0.42f, 1.0f, 1.0f, 1.0f);
+
+            // Clear 'X' button
+            float clearX = searchX + searchW - 8.5f * p;
+            float clearY = searchY + 2.0f * p;
+            boolean hClear = (mouseX >= clearX - p && mouseX <= clearX + 7.0f * p && mouseY >= clearY - p && mouseY <= clearY + 8.0f * p);
+            drawHudText(overlayGeom, "X", clearX, clearY, p * 0.45f, hClear ? 1.0f : 0.60f, hClear ? 0.35f : 0.60f, hClear ? 0.35f : 0.60f);
+        }
 
         float slotW = 22.0f * p;
         float slotStep = 26.0f * p;
         float startGridX = popX + 11.0f * p;
         float startGridY = popY + 20.0f * p;
 
-        int totalRows = (recipes.size() + 3) / 4;
+        List<CraftingRecipe> activeRecipes = getFilteredRecipes();
+        int totalRows = (activeRecipes.size() + 3) / 4;
         int maxScroll = Math.max(0, totalRows - 5);
         recipeScrollRow = Math.max(0, Math.min(maxScroll, recipeScrollRow));
 
+        if (activeRecipes.isEmpty()) {
+            drawHudText(overlayGeom, "INGEN TREFF", popX + 22.0f * p, popY + 55.0f * p, p * 0.48f, 0.50f, 0.50f, 0.50f);
+        }
+
         int startIdx = recipeScrollRow * 4;
-        int endIdx = Math.min(recipes.size(), startIdx + 5 * 4);
+        int endIdx = Math.min(activeRecipes.size(), startIdx + 5 * 4);
         ItemStack hovered = null;
 
         for (int i = startIdx; i < endIdx; i++) {
@@ -2154,7 +2294,7 @@ public class HUD {
             float sx = startGridX + col * slotStep;
             float sy = startGridY + visualRow * slotStep;
 
-            CraftingRecipe r = recipes.get(i);
+            CraftingRecipe r = activeRecipes.get(i);
             boolean canCraft = r.canCraft(player.getInventory());
 
             if (mouseX >= sx && mouseX <= sx + slotW && mouseY >= sy && mouseY <= sy + slotW) {
