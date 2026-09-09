@@ -301,6 +301,13 @@ public class Main {
                         BlockType tool = player.getSelectedBlock();
                         int dmg = tool != null ? tool.getAttackDamage() : 1;
                         hitMob.takeDamage(dmg, fwd.x, fwd.z, world);
+                        float mobH = hitMob.getType().getHeight();
+                        CombatTextManager.getInstance().add(
+                                hitMob.getPosition().x,
+                                hitMob.getPosition().y + mobH * 0.75f,
+                                hitMob.getPosition().z,
+                                dmg / 2.0f
+                        );
                         // Damage tool in survival
                         if (player.getGameMode() == GameMode.SURVIVAL) {
                             player.getInventory().getSlot(player.getSelectedSlot()).damageTool(1);
@@ -750,6 +757,7 @@ public class Main {
             if (!isPaused) {
                 player.update(dt, fwd, bwd, left, right, jump, sneak, sprint);
                 world.update(dt, player);
+                CombatTextManager.getInstance().update(dt);
 
                 // Dimension Portal stepping check with cooldown
                 if (dimensionPortalCooldown > 0) {

@@ -6,6 +6,7 @@ import no.minecraft.player.ItemStack;
 import no.minecraft.player.Player;
 import no.minecraft.world.BlockType;
 import org.joml.Matrix4f;
+import org.joml.Vector4f;
 import org.lwjgl.BufferUtils;
 
 import java.nio.FloatBuffer;
@@ -922,6 +923,9 @@ public class HUD {
             renderDebugMenu(geom, overlayGeom, windowWidth, windowHeight, player, world);
         }
 
+        // 3f. Scrolling Combat Text (damage dealt to mobs in hearts)
+        renderCombatTexts(overlayGeom, windowWidth, windowHeight, player);
+
         // 4. Minecraft Inventory & Crafting GUI
         if (craftingTableOpen) {
             renderCraftingTableGUI(geom, tex, overlayGeom, windowWidth, windowHeight, player, atlas);
@@ -1551,6 +1555,10 @@ public class HUD {
     }
 
     private void drawPixelHeart(List<Float> g, float x, float y, float p, int state) {
+        drawPixelHeart(g, x, y, p, state, 1.0f);
+    }
+
+    private void drawPixelHeart(List<Float> g, float x, float y, float p, int state, float a) {
         // 9x9 Pixel Heart matching Minecraft reference image 2
         int[][] pat = {
                 {0,1,1,0,0,0,1,1,0},
@@ -1572,16 +1580,16 @@ public class HUD {
                 float ry = y + py * p;
 
                 if (c == 1) {
-                    addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.08f, 0.08f, 0.08f, 1.0f); // Black border
+                    addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.08f, 0.08f, 0.08f, a); // Black border
                 } else {
                     if (state == 0 || (state == 1 && px >= 5)) {
-                        addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.22f, 0.12f, 0.12f, 1.0f); // Empty
+                        addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.22f, 0.12f, 0.12f, a); // Empty
                     } else if (c == 3) {
-                        addRect(g, rx, ry, p, p, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 1.0f); // White sheen
+                        addRect(g, rx, ry, p, p, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, a); // White sheen
                     } else if (c == 4) {
-                        addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.65f, 0.05f, 0.05f, 1.0f); // Dark shadow
+                        addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.65f, 0.05f, 0.05f, a); // Dark shadow
                     } else {
-                        addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.95f, 0.12f, 0.12f, 1.0f); // Red
+                        addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.95f, 0.12f, 0.12f, a); // Red
                     }
                 }
             }
@@ -1964,21 +1972,29 @@ public class HUD {
     }
 
     private void drawHudText(List<Float> g, String text, float startX, float startY, float s, float r, float gr, float b) {
+        drawHudText(g, text, startX, startY, s, r, gr, b, 1.0f);
+    }
+
+    private void drawHudText(List<Float> g, String text, float startX, float startY, float s, float r, float gr, float b, float a) {
         for (int i = 0; i < text.length(); i++) {
             float px = startX + i * (6.0f * s);
             char c = Character.toUpperCase(text.charAt(i));
-            drawHudChar(g, c, px + s * 0.5f, startY + s * 0.5f, s, 0.12f, 0.12f, 0.12f);
-            drawHudChar(g, c, px, startY, s, r, gr, b);
+            drawHudChar(g, c, px + s * 0.5f, startY + s * 0.5f, s, 0.12f, 0.12f, 0.12f, a * 0.85f);
+            drawHudChar(g, c, px, startY, s, r, gr, b, a);
         }
     }
 
     private void drawHudChar(List<Float> g, char ch, float x, float y, float s, float r, float gr, float b) {
+        drawHudChar(g, ch, x, y, s, r, gr, b, 1.0f);
+    }
+
+    private void drawHudChar(List<Float> g, char ch, float x, float y, float s, float r, float gr, float b, float a) {
         int[][] glyph = getGlyph(ch);
         if (glyph == null) return;
         for (int row = 0; row < glyph.length; row++) {
             for (int col = 0; col < glyph[row].length; col++) {
                 if (glyph[row][col] == 1) {
-                    addRect(g, x + col * s, y + row * s, s, s, 0, 0, 0, 0, r, gr, b, 1.0f);
+                    addRect(g, x + col * s, y + row * s, s, s, 0, 0, 0, 0, r, gr, b, a);
                 }
             }
         }
@@ -2137,6 +2153,65 @@ public class HUD {
             float rx = windowWidth - 8.0f - textW;
             addRect(geom, rx - 2.0f, y - 1.0f, textW + 4.0f, lineHeight - 1.0f, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.55f);
             drawHudText(overlayGeom, line, rx, y, scale, 0.90f, 0.90f, 0.90f);
+        }
+    }
+
+    private void renderCombatTexts(List<Float> overlayGeom, int windowWidth, int windowHeight, Player player) {
+        List<CombatTextManager.CombatText> list = CombatTextManager.getInstance().getTexts();
+        if (list.isEmpty()) return;
+
+        float fov = no.minecraft.settings.GameSettings.getInstance().getFov();
+        Matrix4f proj = new Matrix4f().perspective(
+                (float) Math.toRadians(fov),
+                (float) windowWidth / (float) Math.max(1, windowHeight),
+                0.05f,
+                300.0f
+        );
+        Matrix4f vp = new Matrix4f(proj).mul(player.getCamera().getViewMatrix());
+        Vector4f clip = new Vector4f();
+
+        for (CombatTextManager.CombatText ct : list) {
+            float t = ct.age / ct.maxLifetime;
+            float floatUp = (float) Math.sin(Math.min(1.0f, ct.age * 2.2f) * (Math.PI * 0.5)) * 0.75f + ct.age * 0.35f;
+
+            clip.set(ct.worldPos.x + ct.driftX * t, ct.worldPos.y + floatUp, ct.worldPos.z + ct.driftZ * t, 1.0f);
+            vp.transform(clip);
+
+            if (clip.w <= 0.05f) continue; // Behind camera
+
+            float ndcX = clip.x / clip.w;
+            float ndcY = clip.y / clip.w;
+            if (ndcX < -1.15f || ndcX > 1.15f || ndcY < -1.15f || ndcY > 1.15f) continue;
+
+            float sx = (ndcX + 1.0f) * 0.5f * windowWidth;
+            float sy = (1.0f - ndcY) * 0.5f * windowHeight;
+
+            float alpha = t < 0.65f ? 1.0f : Math.max(0.0f, 1.0f - (t - 0.65f) / 0.35f);
+            float scale = t < 0.12f ? (1.8f - (t / 0.12f) * 0.4f) : 1.4f;
+
+            String text;
+            if (ct.hearts == (int) ct.hearts) {
+                text = "-" + ((int) ct.hearts) + " ";
+            } else {
+                text = String.format(java.util.Locale.ROOT, "-%.1f ", ct.hearts);
+            }
+
+            float textW = text.length() * (6.0f * scale);
+            float heartW = 9.0f * scale;
+            float totalW = textW + heartW;
+
+            float startX = sx - totalW * 0.5f;
+            float startY = sy - 4.5f * scale;
+
+            // Semi-transparent background pill for contrast against any scenery
+            addRect(overlayGeom, startX - 3.0f * scale, startY - 2.0f * scale, totalW + 6.0f * scale, 12.0f * scale, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.35f * alpha);
+
+            // Red damage text with drop shadow
+            drawHudText(overlayGeom, text, startX, startY, scale, 1.0f, 0.22f, 0.22f, alpha);
+
+            // Red pixel heart icon (half heart if <= 0.5, else full heart)
+            int heartState = ct.hearts <= 0.5f ? 1 : 2;
+            drawPixelHeart(overlayGeom, startX + textW, startY - 0.5f * scale, scale, heartState, alpha);
         }
     }
 
