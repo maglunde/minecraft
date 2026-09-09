@@ -103,13 +103,4 @@ public class Inventory {
         }
         return true;
     }
-
-    public void swapSlots(int from, int to) {
-        if (from < 0 || from >= TOTAL_SLOTS || to < 0 || to >= TOTAL_SLOTS) return;
-        ItemStack temp = new ItemStack(slots[from].getType(), slots[from].getCount());
-        slots[from].setType(slots[to].getType());
-        slots[from].setCount(slots[to].getCount());
-        slots[to].setType(temp.getType());
-        slots[to].setCount(temp.getCount());
-    }
 }
