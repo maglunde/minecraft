@@ -209,6 +209,12 @@ public class World {
     public List<no.minecraft.entity.Arrow> getArrows() { return arrows; }
 
     public float getWorldTime() { return worldTime; }
+    public void setWorldTime(float time) { this.worldTime = Math.max(0.0f, time); }
+    public void setTimeOfDay(float dayFraction) {
+        float norm = ((dayFraction % 1.0f) + 1.0f) % 1.0f;
+        long dayCount = (long) (this.worldTime / DAY_LENGTH_SECONDS);
+        this.worldTime = dayCount * DAY_LENGTH_SECONDS + norm * DAY_LENGTH_SECONDS;
+    }
     public float getDayFraction() { return (worldTime % DAY_LENGTH_SECONDS) / DAY_LENGTH_SECONDS; }
 
     public boolean isNight() {

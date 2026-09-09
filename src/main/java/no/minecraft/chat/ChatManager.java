@@ -50,7 +50,7 @@ public class ChatManager {
     // Available root commands
     private static final String[] COMMAND_ROOTS = {
             "/help", "/give", "/tp", "/teleport", "/locate",
-            "/gamemode", "/dimension", "/heal", "/clear", "/kill"
+            "/gamemode", "/dimension", "/time", "/tid", "/heal", "/clear", "/kill"
     };
 
     public boolean isOpen() {
@@ -209,6 +209,24 @@ public class ChatManager {
                             tabCompletions.add("/dimension " + opt);
                         }
                     }
+                } else if (root.equals("/time") || root.equals("/tid")) {
+                    String[] subCommands = {"set", "day", "night", "noon", "midnight", "sunrise", "sunset"};
+                    if (parts.length >= 2 && (parts[1].equalsIgnoreCase("set") || parts[1].equalsIgnoreCase("sett"))) {
+                        String[] setOptions = {"day", "night", "noon", "midnight", "sunrise", "sunset"};
+                        String optPrefix = (parts.length >= 3 && !trailingSpace) ? parts[2].toLowerCase() : "";
+                        for (String opt : setOptions) {
+                            if (opt.startsWith(optPrefix)) {
+                                tabCompletions.add(root + " set " + opt);
+                            }
+                        }
+                    } else {
+                        String timePrefix = (parts.length >= 2 && !trailingSpace) ? parts[1].toLowerCase() : "";
+                        for (String opt : subCommands) {
+                            if (opt.startsWith(timePrefix)) {
+                                tabCompletions.add(root + " " + opt);
+                            }
+                        }
+                    }
                 } else if (root.equals("/kill")) {
                     tabCompletions.add("/kill @e");
                 }
@@ -281,6 +299,7 @@ public class ChatManager {
                 addSystemMessage("/locate <stronghold|fortress|portal> - Finn struktur");
                 addSystemMessage("/gamemode <survival|creative> - Bytt spillmodus");
                 addSystemMessage("/dimension <overworld|nether|end> - Bytt dimensjon");
+                addSystemMessage("/time set <day|night|noon|midnight|sunrise|sunset> - Sett tid på døgnet");
                 addSystemMessage("/clear - Tom inventory");
                 addSystemMessage("/heal - Fyll helse");
                 addSystemMessage("/kill - Drep spiller eller monstre (/kill @e)");
@@ -399,6 +418,63 @@ public class ChatManager {
                 } else {
                     player.damage(100);
                     addSuccessMessage("Drepte spiller.");
+                }
+            }
+            case "time", "tid" -> {
+                if (parts.length < 2) {
+                    addErrorMessage("Bruk: /time set <day|noon|night|midnight|sunrise|sunset|tall>");
+                    return;
+                }
+                String arg = parts[1].toLowerCase();
+                if (arg.equals("set") || arg.equals("sett")) {
+                    if (parts.length < 3) {
+                        addErrorMessage("Bruk: /time set <day|noon|night|midnight|sunrise|sunset|tall>");
+                        return;
+                    }
+                    arg = parts[2].toLowerCase();
+                }
+
+                switch (arg) {
+                    case "day", "dag" -> {
+                        world.setTimeOfDay(0.10f);
+                        addSuccessMessage("Satte tiden til dag");
+                    }
+                    case "noon", "midday", "middag" -> {
+                        world.setTimeOfDay(0.25f);
+                        addSuccessMessage("Satte tiden til middag (kl. 12:00)");
+                    }
+                    case "sunset", "dusk", "solnedgang", "kveld" -> {
+                        world.setTimeOfDay(0.50f);
+                        addSuccessMessage("Satte tiden til solnedgang");
+                    }
+                    case "night", "natt" -> {
+                        world.setTimeOfDay(0.65f);
+                        addSuccessMessage("Satte tiden til natt");
+                    }
+                    case "midnight", "midnatt" -> {
+                        world.setTimeOfDay(0.75f);
+                        addSuccessMessage("Satte tiden til midnatt (kl. 00:00)");
+                    }
+                    case "sunrise", "dawn", "soloppgang", "morgen" -> {
+                        world.setTimeOfDay(0.0f);
+                        addSuccessMessage("Satte tiden til soloppgang");
+                    }
+                    default -> {
+                        try {
+                            float val = Float.parseFloat(arg);
+                            if (val >= 240.0f) {
+                                float frac = (val % 24000.0f) / 24000.0f;
+                                world.setTimeOfDay(frac);
+                                addSuccessMessage(String.format(java.util.Locale.ROOT, "Satte tiden til %.0f ticks (%.1f%% av døgnet)", val, frac * 100.0f));
+                            } else {
+                                float frac = (val % World.DAY_LENGTH_SECONDS) / World.DAY_LENGTH_SECONDS;
+                                world.setTimeOfDay(frac);
+                                addSuccessMessage(String.format(java.util.Locale.ROOT, "Satte tiden til %.1f sekunder (%.1f%% av døgnet)", val, frac * 100.0f));
+                            }
+                        } catch (NumberFormatException e) {
+                            addErrorMessage("Ukjent tidsverdi: " + arg + ". Bruk day, noon, night, midnight, sunrise, sunset eller tall.");
+                        }
+                    }
                 }
             }
             default -> addErrorMessage("Ukjent kommando: /" + cmd + ". Skriv /help for liste over kommandoer.");
