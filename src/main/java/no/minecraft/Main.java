@@ -58,7 +58,7 @@ public class Main {
     private float autoSaveTimer = 0.0f;
     private boolean sprintActive = false;
     private Raycast.HitResult targetedHit = null;
-    private static final float FIXED_TICK = 1.0f / 20.0f; // 20 ticks/s fixed simulation step
+    private static final float FIXED_TICK = 1.0f / 60.0f; // 60 ticks/s fixed simulation step (smooth without interpolation on 60 Hz displays)
 
     private static final String WORLD_VERT = """
             #version 330 core
