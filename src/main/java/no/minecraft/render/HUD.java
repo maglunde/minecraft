@@ -871,6 +871,7 @@ public class HUD {
 
     public void render(int windowWidth, int windowHeight, Player player, TextureAtlas atlas, no.minecraft.world.World world, no.minecraft.chat.ChatManager chatManager) {
         glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -950,6 +951,7 @@ public class HUD {
         hudShader.unbind();
 
         glEnable(GL_DEPTH_TEST);
+        glEnable(GL_CULL_FACE);
         glDisable(GL_BLEND);
     }
 
@@ -1662,13 +1664,13 @@ public class HUD {
         float nx = -dy / len * (thickness * 0.5f);
         float ny = dx / len * (thickness * 0.5f);
 
-        addVertex(g, x0 + nx, y0 + ny, 0, 0, r, gr, b, a);
         addVertex(g, x0 - nx, y0 - ny, 0, 0, r, gr, b, a);
-        addVertex(g, x1 - nx, y1 - ny, 0, 0, r, gr, b, a);
-
         addVertex(g, x0 + nx, y0 + ny, 0, 0, r, gr, b, a);
-        addVertex(g, x1 - nx, y1 - ny, 0, 0, r, gr, b, a);
         addVertex(g, x1 + nx, y1 + ny, 0, 0, r, gr, b, a);
+
+        addVertex(g, x0 - nx, y0 - ny, 0, 0, r, gr, b, a);
+        addVertex(g, x1 + nx, y1 + ny, 0, 0, r, gr, b, a);
+        addVertex(g, x1 - nx, y1 - ny, 0, 0, r, gr, b, a);
     }
 
     private static class AxisData {
