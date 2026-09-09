@@ -43,7 +43,26 @@ public class Mob {
     // Animation state
     private float walkTime = 0.0f;
 
+    // Per-tick movement decided by the active brain
+    private float moveX = 0.0f;
+    private float moveZ = 0.0f;
+
     private final Random random = new Random();
+
+    @FunctionalInterface
+    private interface MobBrain {
+        /** Decides movement for this tick; returns false to abort the rest of the update (e.g. after exploding). */
+        boolean think(Mob self, float dt, World world, Player player, float distToPlayer, float dx, float dz);
+    }
+
+    private static final java.util.Map<MobType, MobBrain> BRAINS = java.util.Map.of(
+            MobType.CREEPER, Mob::thinkCreeper,
+            MobType.SKELETON, Mob::thinkSkeleton,
+            MobType.SPIDER, Mob::thinkSpider,
+            MobType.BLAZE, Mob::thinkBlaze,
+            MobType.ENDERMAN, Mob::thinkEnderman,
+            MobType.ZOMBIE, Mob::thinkMelee
+    );
 
     private Boat ridingBoat = null;
 
@@ -91,10 +110,7 @@ public class Mob {
 
         float distToPlayer = position.distance(player.getPosition());
 
-        // AI Behaviors
-        float moveX = 0;
-        float moveZ = 0;
-
+        // AI behaviors
         boolean canTargetPlayer = player.getGameMode() != no.minecraft.player.GameMode.CREATIVE
                 && player.getHealth() > 0
                 && distToPlayer < 32.0f;
@@ -106,7 +122,11 @@ public class Mob {
             return;
         }
 
-        if (canTargetPlayer && !type.isPassive()) {
+        moveX = 0.0f;
+        moveZ = 0.0f;
+
+        MobBrain brain = BRAINS.get(type);
+        if (brain != null && canTargetPlayer && !type.isPassive()) {
             float dx = player.getPosition().x - position.x;
             float dz = player.getPosition().z - position.z;
             float len = (float) Math.sqrt(dx * dx + dz * dz);
@@ -114,177 +134,11 @@ public class Mob {
                 dx /= len;
                 dz /= len;
             }
-
-            if (type == MobType.CREEPER) {
-                yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
-                if (distToPlayer < 3.2f) {
-                    if (!ignited) {
-                        no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.0f);
-                    }
-                    ignited = true;
-                    fuseTime += dt;
-                    if (fuseTime >= FUSE_MAX) {
-                        explode(world, player);
-                        return;
-                    }
-                } else {
-                    ignited = false;
-                    fuseTime = Math.max(0.0f, fuseTime - dt * 0.5f);
-                    moveX = dx * type.getMoveSpeed();
-                    moveZ = dz * type.getMoveSpeed();
-                }
-            } else if (type == MobType.SKELETON) {
-                yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
-                // Skeleton keeps distance (around 8-12 blocks) and shoots
-                if (distToPlayer > 10.0f) {
-                    moveX = dx * type.getMoveSpeed();
-                    moveZ = dz * type.getMoveSpeed();
-                } else if (distToPlayer < 6.0f) {
-                    moveX = -dx * type.getMoveSpeed();
-                    moveZ = -dz * type.getMoveSpeed();
-                }
-
-                shootCooldown -= dt;
-                if (shootCooldown <= 0 && distToPlayer < 18.0f) {
-                    shootCooldown = 2.0f + random.nextFloat() * 0.5f;
-                    no.minecraft.sound.SoundManager.getInstance().play("bow_shoot", 0.9f);
-                    float arrowVx = dx * 14.0f;
-                    float arrowVy = (player.getPosition().y - position.y) * 2.0f + 2.5f;
-                    float arrowVz = dz * 14.0f;
-                    world.spawnArrow(position.x, position.y + type.getHeight() * 0.7f, position.z, arrowVx, arrowVy, arrowVz, true);
-                }
-            } else if (type == MobType.SPIDER) {
-                yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
-                moveX = dx * type.getMoveSpeed();
-                moveZ = dz * type.getMoveSpeed();
-                if (position.distance(player.getPosition()) < 1.6f && attackCooldown <= 0) {
-                    player.damage(type.getAttackDamage());
-                    no.minecraft.sound.SoundManager.getInstance().play("spider_say", 0.85f);
-                    attackCooldown = 1.0f;
-                }
-            } else if (type == MobType.BLAZE) {
-                yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
-                if (distToPlayer > 8.0f) {
-                    moveX = dx * type.getMoveSpeed();
-                    moveZ = dz * type.getMoveSpeed();
-                } else if (distToPlayer < 4.0f) {
-                    moveX = -dx * type.getMoveSpeed();
-                    moveZ = -dz * type.getMoveSpeed();
-                }
-                float targetY = player.getPosition().y + 1.5f;
-                velocity.y += (targetY - position.y) * 2.0f * dt;
-                velocity.y *= 0.85f;
-
-                shootCooldown -= dt;
-                if (shootCooldown <= 0 && distToPlayer < 20.0f) {
-                    shootCooldown = 2.5f + random.nextFloat();
-                    no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.2f);
-                    float vx = dx * 16.0f;
-                    float vy = (player.getPosition().y - position.y) * 2.0f + 1.5f;
-                    float vz = dz * 16.0f;
-                    world.spawnArrow(position.x, position.y + 0.8f, position.z, vx, vy, vz, true);
-                }
-            } else if (type == MobType.ENDERMAN) {
-                if (!aggressive && distToPlayer < 40.0f) {
-                    org.joml.Vector3f pEye = player.getEyePosition();
-                    org.joml.Vector3f toHead = new org.joml.Vector3f(
-                            position.x - pEye.x,
-                            (position.y + type.getHeight() * 0.85f) - pEye.y,
-                            position.z - pEye.z
-                    );
-                    float dLen = toHead.length();
-                    if (dLen > 0.1f) {
-                        toHead.normalize();
-                        org.joml.Vector3f lookDir = player.getCamera().getForward();
-                        float dot = lookDir.dot(toHead);
-                        if (dot > 0.978f) {
-                            no.minecraft.player.Raycast.HitResult los = no.minecraft.player.Raycast.raycast(world, pEye, toHead, dLen);
-                            if (los == null) {
-                                aggressive = true;
-                                no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.6f);
-                            }
-                        }
-                    }
-                }
-
-                if (aggressive) {
-                    moveX = dx * (type.getMoveSpeed() * 1.35f);
-                    moveZ = dz * (type.getMoveSpeed() * 1.35f);
-                    yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
-                    if (distToPlayer < 1.6f && attackCooldown <= 0) {
-                        player.damage(type.getAttackDamage());
-                        attackCooldown = 0.8f;
-                    }
-                    if (random.nextFloat() < 0.015f) {
-                        teleportRandom(world);
-                    }
-                } else {
-                    wanderTimer -= dt;
-                    if (wanderTimer <= 0) {
-                        wanderTimer = 2.0f + random.nextFloat() * 4.0f;
-                        isWanderingMoving = random.nextFloat() < 0.6f;
-                        if (isWanderingMoving) {
-                            wanderYaw = random.nextFloat() * 360.0f;
-                        }
-                    }
-                    if (isWanderingMoving) {
-                        float rad = (float) Math.toRadians(wanderYaw);
-                        moveX = (float) Math.cos(rad) * (type.getMoveSpeed() * 0.25f);
-                        moveZ = (float) Math.sin(rad) * (type.getMoveSpeed() * 0.25f);
-                        yaw = wanderYaw;
-                    }
-                    if (random.nextFloat() < 0.001f) {
-                        teleportRandom(world);
-                    }
-                }
-            } else { // ZOMBIE
-                yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
-                moveX = dx * type.getMoveSpeed();
-                moveZ = dz * type.getMoveSpeed();
-                if (distToPlayer < 1.4f && attackCooldown <= 0) {
-                    player.damage(type.getAttackDamage());
-                    no.minecraft.sound.SoundManager.getInstance().play("zombie_say", 0.85f);
-                    attackCooldown = 1.0f;
-                }
+            if (!brain.think(this, dt, world, player, distToPlayer, dx, dz)) {
+                return;
             }
         } else {
-            // Idle wandering or panic flee
-            if (type == MobType.CREEPER) {
-                ignited = false;
-                fuseTime = Math.max(0.0f, fuseTime - dt * 0.5f);
-            }
-
-            if (type.isPassive() && hurtTimer > 0) {
-                // Panic and sprint away from player when attacked!
-                float dx = player.getPosition().x - position.x;
-                float dz = player.getPosition().z - position.z;
-                float len = (float) Math.sqrt(dx * dx + dz * dz);
-                if (len > 0.001f) {
-                    dx /= len;
-                    dz /= len;
-                }
-                moveX = -dx * type.getMoveSpeed() * 1.8f;
-                moveZ = -dz * type.getMoveSpeed() * 1.8f;
-                yaw = (float) Math.toDegrees(Math.atan2(-dz, -dx));
-            } else {
-                wanderTimer -= dt;
-                if (wanderTimer <= 0) {
-                    wanderTimer = 2.0f + random.nextFloat() * 4.0f;
-                    isWanderingMoving = random.nextFloat() < 0.6f;
-                    if (isWanderingMoving) {
-                        wanderYaw = random.nextFloat() * 360.0f;
-                    }
-                }
-                if (isWanderingMoving) {
-                    float rad = (float) Math.toRadians(wanderYaw);
-                    moveX = (float) Math.cos(rad) * (type.getMoveSpeed() * 0.35f);
-                    moveZ = (float) Math.sin(rad) * (type.getMoveSpeed() * 0.35f);
-                    yaw = wanderYaw;
-                }
-                if (type == MobType.ENDERMAN && random.nextFloat() < 0.001f) {
-                    teleportRandom(world);
-                }
-            }
+            updateIdle(dt, world, player);
         }
 
         // Apply movement and gravity
@@ -356,6 +210,188 @@ public class Mob {
 
         if (position.y < -10.0f) {
             dead = true;
+        }
+    }
+
+    private static boolean thinkCreeper(Mob m, float dt, World world, Player player, float dist, float dx, float dz) {
+        m.yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
+        if (dist < 3.2f) {
+            if (!m.ignited) {
+                no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.0f);
+            }
+            m.ignited = true;
+            m.fuseTime += dt;
+            if (m.fuseTime >= FUSE_MAX) {
+                m.explode(world, player);
+                return false;
+            }
+        } else {
+            m.ignited = false;
+            m.fuseTime = Math.max(0.0f, m.fuseTime - dt * 0.5f);
+            m.moveX = dx * m.type.getMoveSpeed();
+            m.moveZ = dz * m.type.getMoveSpeed();
+        }
+        return true;
+    }
+
+    private static boolean thinkSkeleton(Mob m, float dt, World world, Player player, float dist, float dx, float dz) {
+        m.yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
+        // Skeleton keeps distance (around 8-12 blocks) and shoots
+        if (dist > 10.0f) {
+            m.moveX = dx * m.type.getMoveSpeed();
+            m.moveZ = dz * m.type.getMoveSpeed();
+        } else if (dist < 6.0f) {
+            m.moveX = -dx * m.type.getMoveSpeed();
+            m.moveZ = -dz * m.type.getMoveSpeed();
+        }
+
+        m.shootCooldown -= dt;
+        if (m.shootCooldown <= 0 && dist < 18.0f) {
+            m.shootCooldown = 2.0f + m.random.nextFloat() * 0.5f;
+            no.minecraft.sound.SoundManager.getInstance().play("bow_shoot", 0.9f);
+            float arrowVx = dx * 14.0f;
+            float arrowVy = (player.getPosition().y - m.position.y) * 2.0f + 2.5f;
+            float arrowVz = dz * 14.0f;
+            world.spawnArrow(m.position.x, m.position.y + m.type.getHeight() * 0.7f, m.position.z, arrowVx, arrowVy, arrowVz, true);
+        }
+        return true;
+    }
+
+    private static boolean thinkSpider(Mob m, float dt, World world, Player player, float dist, float dx, float dz) {
+        m.yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
+        m.moveX = dx * m.type.getMoveSpeed();
+        m.moveZ = dz * m.type.getMoveSpeed();
+        if (m.position.distance(player.getPosition()) < 1.6f && m.attackCooldown <= 0) {
+            player.damage(m.type.getAttackDamage());
+            no.minecraft.sound.SoundManager.getInstance().play("spider_say", 0.85f);
+            m.attackCooldown = 1.0f;
+        }
+        return true;
+    }
+
+    private static boolean thinkBlaze(Mob m, float dt, World world, Player player, float dist, float dx, float dz) {
+        m.yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
+        if (dist > 8.0f) {
+            m.moveX = dx * m.type.getMoveSpeed();
+            m.moveZ = dz * m.type.getMoveSpeed();
+        } else if (dist < 4.0f) {
+            m.moveX = -dx * m.type.getMoveSpeed();
+            m.moveZ = -dz * m.type.getMoveSpeed();
+        }
+        float targetY = player.getPosition().y + 1.5f;
+        m.velocity.y += (targetY - m.position.y) * 2.0f * dt;
+        m.velocity.y *= 0.85f;
+
+        m.shootCooldown -= dt;
+        if (m.shootCooldown <= 0 && dist < 20.0f) {
+            m.shootCooldown = 2.5f + m.random.nextFloat();
+            no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.2f);
+            float vx = dx * 16.0f;
+            float vy = (player.getPosition().y - m.position.y) * 2.0f + 1.5f;
+            float vz = dz * 16.0f;
+            world.spawnArrow(m.position.x, m.position.y + 0.8f, m.position.z, vx, vy, vz, true);
+        }
+        return true;
+    }
+
+    private static boolean thinkEnderman(Mob m, float dt, World world, Player player, float dist, float dx, float dz) {
+        if (!m.aggressive && dist < 40.0f) {
+            org.joml.Vector3f pEye = player.getEyePosition();
+            org.joml.Vector3f toHead = new org.joml.Vector3f(
+                    m.position.x - pEye.x,
+                    (m.position.y + m.type.getHeight() * 0.85f) - pEye.y,
+                    m.position.z - pEye.z
+            );
+            float dLen = toHead.length();
+            if (dLen > 0.1f) {
+                toHead.normalize();
+                org.joml.Vector3f lookDir = player.getCamera().getForward();
+                float dot = lookDir.dot(toHead);
+                if (dot > 0.978f) {
+                    no.minecraft.player.Raycast.HitResult los = no.minecraft.player.Raycast.raycast(world, pEye, toHead, dLen);
+                    if (los == null) {
+                        m.aggressive = true;
+                        no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.6f);
+                    }
+                }
+            }
+        }
+
+        if (m.aggressive) {
+            m.moveX = dx * (m.type.getMoveSpeed() * 1.35f);
+            m.moveZ = dz * (m.type.getMoveSpeed() * 1.35f);
+            m.yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
+            if (dist < 1.6f && m.attackCooldown <= 0) {
+                player.damage(m.type.getAttackDamage());
+                m.attackCooldown = 0.8f;
+            }
+            if (m.random.nextFloat() < 0.015f) {
+                m.teleportRandom(world);
+            }
+        } else {
+            m.updateWander(dt, 0.25f);
+            if (m.random.nextFloat() < 0.001f) {
+                m.teleportRandom(world);
+            }
+        }
+        return true;
+    }
+
+    private static boolean thinkMelee(Mob m, float dt, World world, Player player, float dist, float dx, float dz) {
+        // Zombie-style: chase and attack on contact
+        m.yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
+        m.moveX = dx * m.type.getMoveSpeed();
+        m.moveZ = dz * m.type.getMoveSpeed();
+        if (dist < 1.4f && m.attackCooldown <= 0) {
+            player.damage(m.type.getAttackDamage());
+            no.minecraft.sound.SoundManager.getInstance().play("zombie_say", 0.85f);
+            m.attackCooldown = 1.0f;
+        }
+        return true;
+    }
+
+    /** Idle wandering or panic flee when no player can be targeted. */
+    private void updateIdle(float dt, World world, Player player) {
+        if (type == MobType.CREEPER) {
+            ignited = false;
+            fuseTime = Math.max(0.0f, fuseTime - dt * 0.5f);
+        }
+
+        if (type.isPassive() && hurtTimer > 0) {
+            // Panic and sprint away from player when attacked!
+            float dx = player.getPosition().x - position.x;
+            float dz = player.getPosition().z - position.z;
+            float len = (float) Math.sqrt(dx * dx + dz * dz);
+            if (len > 0.001f) {
+                dx /= len;
+                dz /= len;
+            }
+            moveX = -dx * type.getMoveSpeed() * 1.8f;
+            moveZ = -dz * type.getMoveSpeed() * 1.8f;
+            yaw = (float) Math.toDegrees(Math.atan2(-dz, -dx));
+        } else {
+            updateWander(dt, 0.35f);
+            if (type == MobType.ENDERMAN && random.nextFloat() < 0.001f) {
+                teleportRandom(world);
+            }
+        }
+    }
+
+    /** Random idle wandering shared by all non-targeting mobs. */
+    private void updateWander(float dt, float speedMultiplier) {
+        wanderTimer -= dt;
+        if (wanderTimer <= 0) {
+            wanderTimer = 2.0f + random.nextFloat() * 4.0f;
+            isWanderingMoving = random.nextFloat() < 0.6f;
+            if (isWanderingMoving) {
+                wanderYaw = random.nextFloat() * 360.0f;
+            }
+        }
+        if (isWanderingMoving) {
+            float rad = (float) Math.toRadians(wanderYaw);
+            moveX = (float) Math.cos(rad) * (type.getMoveSpeed() * speedMultiplier);
+            moveZ = (float) Math.sin(rad) * (type.getMoveSpeed() * speedMultiplier);
+            yaw = wanderYaw;
         }
     }
 
