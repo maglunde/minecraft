@@ -164,6 +164,10 @@ public class HUD {
         this.startDragSlot = null;
     }
 
+    public void openRecipeBook() {
+        this.recipeBookOpen = true;
+    }
+
     public void openFurnace(no.minecraft.world.FurnaceData furnace) {
         this.inventoryOpen = false;
         this.craftingTableOpen = false;

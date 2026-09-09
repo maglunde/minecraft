@@ -4,71 +4,59 @@ import no.minecraft.player.CraftingRecipe;
 import no.minecraft.world.BlockType;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class RecipeFilterTest {
 
-    private List<CraftingRecipe> filter(List<CraftingRecipe> recipes, String query) {
-        if (query == null || query.trim().isEmpty()) {
-            return recipes;
+    private HUD hudWithQuery(String query) {
+        HUD hud = new HUD(false);
+        hud.openCraftingTable();
+        hud.openRecipeBook();
+        hud.setRecipeSearchFocused(true);
+        for (char c : query.toCharArray()) {
+            hud.addRecipeSearchChar(c);
         }
-        String q = query.trim().toLowerCase();
-        List<CraftingRecipe> list = new ArrayList<>();
-        for (CraftingRecipe r : recipes) {
-            String name = r.getName().toLowerCase();
-            String disp = r.getOutput().getType().getName().toLowerCase();
-            String enumName = r.getOutput().getType().name().toLowerCase();
-            if (name.contains(q) || disp.contains(q) || enumName.contains(q)) {
-                list.add(r);
-            }
-        }
-        return list;
+        return hud;
     }
 
     @Test
     public void testRecipeFilterDefault() {
+        HUD hud = new HUD(false);
         List<CraftingRecipe> all = CraftingRecipe.getDefaultRecipes();
         assertFalse(all.isEmpty());
 
         // Empty filter returns all recipes
-        assertEquals(all.size(), filter(all, "").size());
-        assertEquals(all.size(), filter(all, "   ").size());
+        assertEquals(all.size(), hud.getFilteredRecipes().size());
     }
 
     @Test
     public void testRecipeFilterBoat() {
-        List<CraftingRecipe> all = CraftingRecipe.getDefaultRecipes();
-
         // Norwegian "Båt"
-        List<CraftingRecipe> norwegian = filter(all, "båt");
+        List<CraftingRecipe> norwegian = hudWithQuery("båt").getFilteredRecipes();
         assertFalse(norwegian.isEmpty());
         assertTrue(norwegian.stream().anyMatch(r -> r.getOutput().getType() == BlockType.BOAT));
 
         // English "Boat"
-        List<CraftingRecipe> english = filter(all, "boat");
+        List<CraftingRecipe> english = hudWithQuery("boat").getFilteredRecipes();
         assertFalse(english.isEmpty());
         assertTrue(english.stream().anyMatch(r -> r.getOutput().getType() == BlockType.BOAT));
     }
 
     @Test
     public void testRecipeFilterSwordsAndOvens() {
-        List<CraftingRecipe> all = CraftingRecipe.getDefaultRecipes();
-
-        List<CraftingRecipe> swords = filter(all, "sverd");
+        List<CraftingRecipe> swords = hudWithQuery("sverd").getFilteredRecipes();
         assertTrue(swords.size() >= 3);
 
-        List<CraftingRecipe> ovens = filter(all, "ovn");
+        List<CraftingRecipe> ovens = hudWithQuery("ovn").getFilteredRecipes();
         assertFalse(ovens.isEmpty());
         assertTrue(ovens.stream().anyMatch(r -> r.getOutput().getType() == BlockType.FURNACE));
     }
 
     @Test
     public void testRecipeFilterNoMatch() {
-        List<CraftingRecipe> all = CraftingRecipe.getDefaultRecipes();
-        List<CraftingRecipe> result = filter(all, "xyznonexistentitem123");
+        List<CraftingRecipe> result = hudWithQuery("xyznonexistentitem123").getFilteredRecipes();
         assertTrue(result.isEmpty());
     }
 }

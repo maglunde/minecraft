@@ -675,4 +675,9 @@ public class Player {
     public boolean canPerformCriticalHit() {
         return !onGround && velocity.y < 0.0f && !inWater && !onLadder && !flying && ridingBoat == null && !isSprinting;
     }
+
+    /** Minecraft critical hit damage: 1.5x base (rounded up), at least +1. */
+    public static int calculateAttackDamage(int baseDamage, boolean critical) {
+        return critical ? Math.max(baseDamage + 1, (int) Math.ceil(baseDamage * 1.5f)) : baseDamage;
+    }
 }

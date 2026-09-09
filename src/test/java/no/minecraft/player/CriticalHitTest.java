@@ -38,15 +38,16 @@ public class CriticalHitTest {
         // Base damage: 1 (hand), 4 (wood), 6 (iron), 7 (diamond)
         int[] baseDamages = {1, 4, 6, 7};
         for (int baseDmg : baseDamages) {
-            int critDmg = Math.max(baseDmg + 1, (int) Math.ceil(baseDmg * 1.5f));
+            int critDmg = Player.calculateAttackDamage(baseDmg, true);
             assertTrue(critDmg > baseDmg, "Critical hit must always deal more damage than base hit");
+            assertEquals(baseDmg, Player.calculateAttackDamage(baseDmg, false), "Non-critical hit deals base damage");
         }
 
         // Diamond sword crit: 7 * 1.5 = 10.5 -> ceil = 11
-        assertEquals(11, Math.max(7 + 1, (int) Math.ceil(7 * 1.5f)));
+        assertEquals(11, Player.calculateAttackDamage(7, true));
 
         // Hand crit: 1 * 1.5 = 1.5 -> ceil = 2
-        assertEquals(2, Math.max(1 + 1, (int) Math.ceil(1 * 1.5f)));
+        assertEquals(2, Player.calculateAttackDamage(1, true));
     }
 
     @Test

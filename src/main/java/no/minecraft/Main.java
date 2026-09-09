@@ -349,7 +349,7 @@ public class Main {
                         BlockType tool = player.getSelectedBlock();
                         int baseDmg = tool != null ? tool.getAttackDamage() : 1;
                         boolean isCrit = player.canPerformCriticalHit();
-                        int dmg = isCrit ? Math.max(baseDmg + 1, (int) Math.ceil(baseDmg * 1.5f)) : baseDmg;
+                        int dmg = Player.calculateAttackDamage(baseDmg, isCrit);
 
                         hitMob.takeDamage(dmg, fwd.x, fwd.z, world);
                         if (isCrit) {
