@@ -175,7 +175,9 @@ public class PauseMenu {
     }
 
     public boolean handleClick(double mx, double my, int button, int width, int height) {
-        if (!isOpen() || button != GLFW_MOUSE_BUTTON_LEFT) return false;
+        if (!isOpen()) return false;
+        if (button != GLFW_MOUSE_BUTTON_LEFT && button != GLFW_MOUSE_BUTTON_RIGHT) return false;
+        if (button == GLFW_MOUSE_BUTTON_RIGHT && currentScreen != Screen.OPTIONS) return false;
 
         float p = 2.4f;
         boolean norwegian = GameSettings.getInstance().getLanguage() == GameSettings.Language.NORWEGIAN;
@@ -183,7 +185,7 @@ public class PauseMenu {
         if (currentScreen == Screen.MAIN) {
             return handleMainClick(mx, my, width, height, p);
         } else if (currentScreen == Screen.OPTIONS) {
-            return handleOptionsClick(mx, my, width, height, p);
+            return handleOptionsClick(mx, my, width, height, p, button);
         } else if (currentScreen == Screen.CONTROLS) {
             return handleControlsClick(mx, my, width, height, p);
         } else if (currentScreen == Screen.ADVANCEMENTS) {
@@ -242,7 +244,7 @@ public class PauseMenu {
         return false;
     }
 
-    private boolean handleOptionsClick(double mx, double my, int width, int height, float p) {
+    private boolean handleOptionsClick(double mx, double my, int width, int height, float p, int button) {
         GameSettings s = GameSettings.getInstance();
         float btnW = 150.0f * p;
         float btnH = 20.0f * p;
@@ -280,8 +282,9 @@ public class PauseMenu {
         float y1 = startY + gap;
         if (mx >= leftX && mx <= leftX + btnW && my >= y1 && my <= y1 + btnH) {
             SoundManager.getInstance().play("click");
-            int rd = s.getRenderDistance() + 1;
-            if (rd > 8) rd = 3;
+            int rd = (button == GLFW_MOUSE_BUTTON_RIGHT) ? s.getRenderDistance() - 1 : s.getRenderDistance() + 1;
+            if (rd > 20) rd = 3;
+            if (rd < 3) rd = 20;
             s.setRenderDistance(rd);
             return true;
         }
