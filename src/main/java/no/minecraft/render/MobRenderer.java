@@ -461,9 +461,11 @@ public class MobRenderer {
                                float lx, float ly, float lz,
                                float w, float h, float d,
                                float yaw, float r, float g, float b) {
-        float rad = (float) Math.toRadians(-yaw);
-        float cos = (float) Math.cos(rad);
-        float sin = (float) Math.sin(rad);
+        float rad = (float) Math.toRadians(yaw);
+        float fwdX = (float) Math.cos(rad);
+        float fwdZ = (float) Math.sin(rad);
+        float rightX = -fwdZ;
+        float rightZ = fwdX;
 
         float x0 = lx - w * 0.5f;
         float x1 = lx + w * 0.5f;
@@ -472,10 +474,10 @@ public class MobRenderer {
         float z0 = lz - d * 0.5f;
         float z1 = lz + d * 0.5f;
 
-        float p00x = cx + x0 * cos - z0 * sin; float p00z = cz + x0 * sin + z0 * cos;
-        float p10x = cx + x1 * cos - z0 * sin; float p10z = cz + x1 * sin + z0 * cos;
-        float p11x = cx + x1 * cos - z1 * sin; float p11z = cz + x1 * sin + z1 * cos;
-        float p01x = cx + x0 * cos - z1 * sin; float p01z = cz + x0 * sin + z1 * cos;
+        float p00x = cx + x0 * rightX + z0 * fwdX; float p00z = cz + x0 * rightZ + z0 * fwdZ;
+        float p10x = cx + x1 * rightX + z0 * fwdX; float p10z = cz + x1 * rightZ + z0 * fwdZ;
+        float p11x = cx + x1 * rightX + z1 * fwdX; float p11z = cz + x1 * rightZ + z1 * fwdZ;
+        float p01x = cx + x0 * rightX + z1 * fwdX; float p01z = cz + x0 * rightZ + z1 * fwdZ;
 
         // Top face
         float topL = 1.0f;

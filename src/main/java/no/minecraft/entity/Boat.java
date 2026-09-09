@@ -64,13 +64,35 @@ public class Boat {
 
         // Steer / drive if player is onboard
         if (driver != null) {
-            this.yaw = driver.getCamera().getYaw();
+            float turnSpeed = inWater ? 135.0f : 80.0f; // degrees per second
+            boolean turningLeft = driver.isMovingLeft();
+            boolean turningRight = driver.isMovingRight();
+
+            if (turningLeft && !turningRight) {
+                yaw -= turnSpeed * dt;
+                driver.getCamera().rotate(-turnSpeed * dt, 0.0f);
+            } else if (turningRight && !turningLeft) {
+                yaw += turnSpeed * dt;
+                driver.getCamera().rotate(turnSpeed * dt, 0.0f);
+            } else {
+                // Smoothly align boat yaw with camera look direction (allows seamless mouse steering)
+                float camYaw = driver.getCamera().getYaw();
+                float diff = camYaw - yaw;
+                while (diff < -180.0f) diff += 360.0f;
+                while (diff > 180.0f) diff -= 360.0f;
+                if (driver.isMovingForward() || driver.isMovingBackward()) {
+                    yaw += diff * Math.min(1.0f, 9.0f * dt);
+                } else {
+                    yaw += diff * Math.min(1.0f, 4.0f * dt);
+                }
+            }
+
             float rad = (float) Math.toRadians(yaw);
             float fwdX = (float) Math.cos(rad);
             float fwdZ = (float) Math.sin(rad);
 
-            float accel = inWater ? 20.0f : 7.0f;
-            float maxSpeed = inWater ? 9.0f : 2.5f;
+            float accel = inWater ? 22.0f : 8.0f;
+            float maxSpeed = inWater ? 9.5f : 2.5f;
 
             float moveX = 0;
             float moveZ = 0;
@@ -79,15 +101,28 @@ public class Boat {
                 moveZ += fwdZ;
             }
             if (driver.isMovingBackward()) {
-                moveX -= fwdX;
-                moveZ -= fwdZ;
+                moveX -= fwdX * 0.5f;
+                moveZ -= fwdZ * 0.5f;
             }
 
             velocity.x += moveX * accel * dt;
             velocity.z += moveZ * accel * dt;
 
-            // Clamp horizontal speed
+            // Reorient existing momentum along the boat's heading so it carves smooth turns
             float hSpeed = (float) Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+            if (hSpeed > 0.05f) {
+                float turnResponse = inWater ? 8.0f : 4.0f;
+                float dot = (velocity.x * fwdX + velocity.z * fwdZ) / hSpeed;
+                float sign = (dot < -0.3f && driver.isMovingBackward()) ? -1.0f : 1.0f;
+                float targetVx = fwdX * hSpeed * sign;
+                float targetVz = fwdZ * hSpeed * sign;
+
+                velocity.x += (targetVx - velocity.x) * Math.min(1.0f, turnResponse * dt);
+                velocity.z += (targetVz - velocity.z) * Math.min(1.0f, turnResponse * dt);
+            }
+
+            // Clamp horizontal speed
+            hSpeed = (float) Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
             if (hSpeed > maxSpeed) {
                 velocity.x = (velocity.x / hSpeed) * maxSpeed;
                 velocity.z = (velocity.z / hSpeed) * maxSpeed;

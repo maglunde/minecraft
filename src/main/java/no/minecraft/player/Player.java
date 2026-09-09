@@ -69,6 +69,8 @@ public class Player {
 
     private boolean movingForward = false;
     private boolean movingBackward = false;
+    private boolean movingLeft = false;
+    private boolean movingRight = false;
     private boolean inWater = false;
     private boolean onLadder = false;
     private no.minecraft.entity.Boat ridingBoat = null;
@@ -85,6 +87,8 @@ public class Player {
                        boolean jump, boolean sneak, boolean sprint) {
         this.movingForward = forward;
         this.movingBackward = backward;
+        this.movingLeft = left;
+        this.movingRight = right;
         this.isSneaking = sneak && !flying;
         this.isSprinting = sprint && forward && !isSneaking;
 
@@ -641,6 +645,8 @@ public class Player {
 
     public boolean isMovingForward() { return movingForward; }
     public boolean isMovingBackward() { return movingBackward; }
+    public boolean isMovingLeft() { return movingLeft; }
+    public boolean isMovingRight() { return movingRight; }
     public no.minecraft.entity.Boat getRidingBoat() { return ridingBoat; }
     public void setRidingBoat(no.minecraft.entity.Boat boat) { this.ridingBoat = boat; }
     public boolean isInWater() { return inWater; }
