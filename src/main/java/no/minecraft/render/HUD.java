@@ -12,8 +12,11 @@ import org.lwjgl.BufferUtils;
 
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
@@ -43,6 +46,12 @@ public class HUD {
     private final ItemStack[] benchSlots = new ItemStack[9];
     private final ItemStack carriedItem = new ItemStack(BlockType.AIR, 0);
     private float mouseX, mouseY;
+
+    // Mouse drag distribution state
+    private boolean isLeftDragging = false;
+    private boolean isRightDragging = false;
+    private final Set<ItemStack> draggedSlots = new LinkedHashSet<>();
+    private ItemStack startDragSlot = null;
 
     private static final String VERTEX_SHADER = """
             #version 330 core
@@ -139,6 +148,10 @@ public class HUD {
         this.inventoryOpen = false;
         this.furnaceOpen = false;
         this.craftingTableOpen = true;
+        this.isLeftDragging = false;
+        this.isRightDragging = false;
+        this.draggedSlots.clear();
+        this.startDragSlot = null;
     }
 
     public void openFurnace(no.minecraft.world.FurnaceData furnace) {
@@ -146,6 +159,10 @@ public class HUD {
         this.craftingTableOpen = false;
         this.furnaceOpen = true;
         this.activeFurnace = furnace;
+        this.isLeftDragging = false;
+        this.isRightDragging = false;
+        this.draggedSlots.clear();
+        this.startDragSlot = null;
     }
 
     public no.minecraft.world.FurnaceData getActiveFurnace() {
@@ -237,6 +254,10 @@ public class HUD {
             closeInventory(player);
         } else {
             this.inventoryOpen = true;
+            this.isLeftDragging = false;
+            this.isRightDragging = false;
+            this.draggedSlots.clear();
+            this.startDragSlot = null;
         }
     }
 
@@ -271,6 +292,10 @@ public class HUD {
             returnCraftSlotsToInventory(player);
             returnBenchSlotsToInventory(player);
             recipeSearchFocused = false;
+            isLeftDragging = false;
+            isRightDragging = false;
+            draggedSlots.clear();
+            startDragSlot = null;
         }
     }
 
@@ -374,6 +399,276 @@ public class HUD {
                     carriedItem.setType(tempType);
                     carriedItem.setCount(tempCount);
                 }
+            }
+        }
+    }
+
+    public static void distributeLeftDrag(ItemStack carriedItem, Collection<ItemStack> draggedSlots) {
+        if (carriedItem == null || carriedItem.isEmpty() || draggedSlots == null || draggedSlots.isEmpty()) {
+            return;
+        }
+        int slotsCount = draggedSlots.size();
+        int perSlot = carriedItem.getCount() / slotsCount;
+        if (perSlot <= 0) return;
+
+        for (ItemStack s : draggedSlots) {
+            if (s.isEmpty()) {
+                s.setType(carriedItem.getType());
+                s.setCount(perSlot);
+                carriedItem.add(-perSlot);
+            } else if (s.getType() == carriedItem.getType()) {
+                int toAdd = Math.min(perSlot, no.minecraft.player.Inventory.MAX_STACK_SIZE - s.getCount());
+                s.add(toAdd);
+                carriedItem.add(-toAdd);
+            }
+        }
+    }
+
+    public static boolean distributeRightDragSlot(ItemStack carriedItem, ItemStack slot) {
+        if (carriedItem == null || carriedItem.isEmpty() || slot == null) {
+            return false;
+        }
+        if (slot.isEmpty()) {
+            slot.setType(carriedItem.getType());
+            slot.setCount(1);
+            carriedItem.add(-1);
+            return true;
+        } else if (slot.getType() == carriedItem.getType() && slot.getCount() < no.minecraft.player.Inventory.MAX_STACK_SIZE) {
+            slot.add(1);
+            carriedItem.add(-1);
+            return true;
+        }
+        return false;
+    }
+
+    private void onSlotClicked(ItemStack slot, int button) {
+        if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+            if (!carriedItem.isEmpty() && (slot.isEmpty() || (slot.getType() == carriedItem.getType() && slot.getCount() < no.minecraft.player.Inventory.MAX_STACK_SIZE))) {
+                if (distributeRightDragSlot(carriedItem, slot)) {
+                    draggedSlots.clear();
+                    draggedSlots.add(slot);
+                    isRightDragging = true;
+                    no.minecraft.sound.SoundManager.getInstance().play("click");
+                    return;
+                }
+            }
+            handleSlotClick(slot, button);
+        } else if (button == GLFW_MOUSE_BUTTON_LEFT) {
+            if (!carriedItem.isEmpty() && (slot.isEmpty() || (slot.getType() == carriedItem.getType() && slot.getCount() < no.minecraft.player.Inventory.MAX_STACK_SIZE))) {
+                isLeftDragging = true;
+                draggedSlots.clear();
+                draggedSlots.add(slot);
+                startDragSlot = slot;
+                return;
+            }
+            handleSlotClick(slot, button);
+        } else {
+            handleSlotClick(slot, button);
+        }
+    }
+
+    public ItemStack getSlotAt(double mx, double my, Player player, int windowWidth, int windowHeight) {
+        if (!isInventoryOpen()) return null;
+        float scale = 2.4f;
+        float invW = 176.0f * scale;
+        float invH = 166.0f * scale;
+        float ix = (windowWidth - invW) / 2.0f;
+        float iy = (windowHeight - invH) / 2.0f;
+
+        if (craftingTableOpen) {
+            float gridX = ix + 30.0f * scale;
+            float gridY = iy + 17.0f * scale;
+            for (int r = 0; r < 3; r++) {
+                for (int c = 0; c < 3; c++) {
+                    float sx = gridX + c * 18.0f * scale;
+                    float sy = gridY + r * 18.0f * scale;
+                    if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
+                        return benchSlots[r * 3 + c];
+                    }
+                }
+            }
+        } else if (furnaceOpen && activeFurnace != null) {
+            float inX = ix + 56.0f * scale;
+            float inY = iy + 17.0f * scale;
+            if (mx >= inX && mx <= inX + 18.0f * scale && my >= inY && my <= inY + 18.0f * scale) {
+                return activeFurnace.getInput();
+            }
+            float fuelX = ix + 56.0f * scale;
+            float fuelY = iy + 53.0f * scale;
+            if (mx >= fuelX && mx <= fuelX + 18.0f * scale && my >= fuelY && my <= fuelY + 18.0f * scale) {
+                return activeFurnace.getFuel();
+            }
+        } else if (inventoryOpen) {
+            float craftGridX = ix + 98.0f * scale;
+            float craftGridY = iy + 18.0f * scale;
+            for (int r = 0; r < 2; r++) {
+                for (int c = 0; c < 2; c++) {
+                    float sx = craftGridX + c * 18.0f * scale;
+                    float sy = craftGridY + r * 18.0f * scale;
+                    if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
+                        return craftSlots[r * 2 + c];
+                    }
+                }
+            }
+        }
+
+        // Main Inventory Grid (3x9)
+        float mainInvX = ix + 8.0f * scale;
+        float mainInvY = iy + 84.0f * scale;
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                int slotIndex = 9 + row * 9 + col;
+                float sx = mainInvX + col * 18.0f * scale;
+                float sy = mainInvY + row * 18.0f * scale;
+                if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
+                    return player.getInventory().getSlot(slotIndex);
+                }
+            }
+        }
+
+        // Hotbar Grid (1x9)
+        float hotbarInvY = iy + 142.0f * scale;
+        for (int col = 0; col < 9; col++) {
+            float sx = mainInvX + col * 18.0f * scale;
+            if (mx >= sx && mx <= sx + 18.0f * scale && my >= hotbarInvY && my <= hotbarInvY + 18.0f * scale) {
+                return player.getInventory().getSlot(col);
+            }
+        }
+
+        return null;
+    }
+
+    public void handleMouseMove(double mx, double my, Player player, int windowWidth, int windowHeight) {
+        if (!isInventoryOpen()) return;
+        this.mouseX = (float) mx;
+        this.mouseY = (float) my;
+
+        if (isRightDragging) {
+            if (carriedItem.isEmpty()) return;
+            ItemStack slot = getSlotAt(mx, my, player, windowWidth, windowHeight);
+            if (slot != null && !draggedSlots.contains(slot)) {
+                if (distributeRightDragSlot(carriedItem, slot)) {
+                    draggedSlots.add(slot);
+                    no.minecraft.sound.SoundManager.getInstance().play("click");
+                }
+            }
+        } else if (isLeftDragging) {
+            if (carriedItem.isEmpty()) return;
+            ItemStack slot = getSlotAt(mx, my, player, windowWidth, windowHeight);
+            if (slot != null && !draggedSlots.contains(slot)) {
+                if (slot.isEmpty() || (slot.getType() == carriedItem.getType() && slot.getCount() < no.minecraft.player.Inventory.MAX_STACK_SIZE)) {
+                    draggedSlots.add(slot);
+                }
+            }
+        }
+    }
+
+    public void handleMouseRelease(double mx, double my, int button, Player player, int windowWidth, int windowHeight) {
+        if (!isInventoryOpen()) return;
+
+        float scale = 2.4f;
+        float invW = 176.0f * scale;
+        float invH = 166.0f * scale;
+        float ix = (windowWidth - invW) / 2.0f;
+        float iy = (windowHeight - invH) / 2.0f;
+        float minGuiX = recipeBookOpen ? (ix - 126.0f * scale - 6.0f) : ix;
+        float maxGuiX = ix + invW;
+        float minGuiY = iy;
+        float maxGuiY = iy + invH;
+
+        if (mx < minGuiX || mx > maxGuiX || my < minGuiY || my > maxGuiY) {
+            if (!carriedItem.isEmpty()) {
+                int dropCount = (button == GLFW_MOUSE_BUTTON_RIGHT) ? 1 : carriedItem.getCount();
+                BlockType dropType = carriedItem.getType();
+                carriedItem.add(-dropCount);
+                Vector3f eye = player.getEyePosition();
+                Vector3f fwd = player.getCamera().getForward();
+                player.getWorld().spawnItemDrop(eye.x, eye.y - 0.2f, eye.z, fwd.x * 4.5f, fwd.y * 4.5f + 1.5f, fwd.z * 4.5f, dropType, dropCount);
+                no.minecraft.sound.SoundManager.getInstance().play("pop", 0.8f);
+            }
+            isLeftDragging = false;
+            isRightDragging = false;
+            draggedSlots.clear();
+            startDragSlot = null;
+            return;
+        }
+
+        if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+            isRightDragging = false;
+            draggedSlots.clear();
+        } else if (button == GLFW_MOUSE_BUTTON_LEFT) {
+            if (isLeftDragging) {
+                if (draggedSlots.size() <= 1) {
+                    if (startDragSlot != null) {
+                        handleSlotClick(startDragSlot, GLFW_MOUSE_BUTTON_LEFT);
+                    }
+                } else {
+                    int countBefore = carriedItem.getCount();
+                    distributeLeftDrag(carriedItem, draggedSlots);
+                    if (carriedItem.getCount() < countBefore) {
+                        no.minecraft.sound.SoundManager.getInstance().play("click");
+                    }
+                }
+                isLeftDragging = false;
+                draggedSlots.clear();
+                startDragSlot = null;
+            }
+        }
+    }
+
+    public int getCarriedDisplayCount() {
+        if (isLeftDragging && draggedSlots.size() > 1 && !carriedItem.isEmpty()) {
+            int perSlot = carriedItem.getCount() / draggedSlots.size();
+            return carriedItem.getCount() - (perSlot * draggedSlots.size());
+        }
+        return carriedItem.getCount();
+    }
+
+    public ItemStack getCarriedItem() {
+        return carriedItem;
+    }
+
+    public ItemStack[] getBenchSlots() {
+        return benchSlots;
+    }
+
+    public ItemStack[] getCraftSlots() {
+        return craftSlots;
+    }
+
+    public boolean isLeftDragging() {
+        return isLeftDragging;
+    }
+
+    public boolean isRightDragging() {
+        return isRightDragging;
+    }
+
+    public Set<ItemStack> getDraggedSlots() {
+        return draggedSlots;
+    }
+
+    private void renderSlotItem(List<Float> tex, List<Float> overlayGeom, ItemStack stack, float sx, float sy, float p) {
+        if (isLeftDragging && draggedSlots.contains(stack) && draggedSlots.size() > 1 && !carriedItem.isEmpty()) {
+            int perSlot = carriedItem.getCount() / draggedSlots.size();
+            BlockType type = carriedItem.getType();
+            int count = (stack.isEmpty() ? 0 : stack.getCount()) + perSlot;
+            if (count > 0) {
+                int tId = type.getItemTexture();
+                float[] uv = TextureAtlas.getUVs(tId);
+                addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 0.85f);
+                drawMinecraftNumber(overlayGeom, count, sx + 17.0f * p, sy + 17.0f * p, p * 0.95f);
+            }
+            addRect(overlayGeom, sx + p, sy + p, 16.0f * p, 16.0f * p, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 0.25f);
+            return;
+        }
+
+        if (!stack.isEmpty()) {
+            int tId = stack.getType().getItemTexture();
+            float[] uv = TextureAtlas.getUVs(tId);
+            addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 1.0f);
+            if (stack.getCount() > 0) {
+                drawMinecraftNumber(overlayGeom, stack.getCount(), sx + 17.0f * p, sy + 17.0f * p, p * 0.95f);
             }
         }
     }
@@ -867,7 +1162,7 @@ public class HUD {
                     float sx = gridX + c * 18.0f * scale;
                     float sy = gridY + r * 18.0f * scale;
                     if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
-                        handleSlotClick(benchSlots[slotIdx], button);
+                        onSlotClicked(benchSlots[slotIdx], button);
                         return true;
                     }
                 }
@@ -935,7 +1230,7 @@ public class HUD {
                     float sx = mainInvX + col * 18.0f * scale;
                     float sy = mainInvY + row * 18.0f * scale;
                     if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
-                        handleSlotClick(player.getInventory().getSlot(slotIndex), button);
+                        onSlotClicked(player.getInventory().getSlot(slotIndex), button);
                         return true;
                     }
                 }
@@ -946,7 +1241,7 @@ public class HUD {
             for (int col = 0; col < 9; col++) {
                 float sx = mainInvX + col * 18.0f * scale;
                 if (mx >= sx && mx <= sx + 18.0f * scale && my >= hotbarInvY && my <= hotbarInvY + 18.0f * scale) {
-                    handleSlotClick(player.getInventory().getSlot(col), button);
+                    onSlotClicked(player.getInventory().getSlot(col), button);
                     return true;
                 }
             }
@@ -973,7 +1268,7 @@ public class HUD {
                         no.minecraft.sound.SoundManager.getInstance().play("click");
                     }
                 } else {
-                    handleSlotClick(activeFurnace.getInput(), button);
+                    onSlotClicked(activeFurnace.getInput(), button);
                 }
                 return true;
             }
@@ -988,7 +1283,7 @@ public class HUD {
                         no.minecraft.sound.SoundManager.getInstance().play("click");
                     }
                 } else {
-                    handleSlotClick(activeFurnace.getFuel(), button);
+                    onSlotClicked(activeFurnace.getFuel(), button);
                 }
                 return true;
             }
@@ -1035,7 +1330,7 @@ public class HUD {
                         if (isShiftDown) {
                             handleFurnaceShiftClick(slot, player);
                         } else {
-                            handleSlotClick(slot, button);
+                            onSlotClicked(slot, button);
                         }
                         return true;
                     }
@@ -1051,7 +1346,7 @@ public class HUD {
                     if (isShiftDown) {
                         handleFurnaceShiftClick(slot, player);
                     } else {
-                        handleSlotClick(slot, button);
+                        onSlotClicked(slot, button);
                     }
                     return true;
                 }
@@ -1189,7 +1484,7 @@ public class HUD {
                 float sx = craftGridX + c * 18.0f * scale;
                 float sy = craftGridY + r * 18.0f * scale;
                 if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
-                    handleSlotClick(craftSlots[slotIdx], button);
+                    onSlotClicked(craftSlots[slotIdx], button);
                     return true;
                 }
             }
@@ -1247,7 +1542,7 @@ public class HUD {
                 float sx = mainInvX + col * 18.0f * scale;
                 float sy = mainInvY + row * 18.0f * scale;
                 if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
-                    handleSlotClick(player.getInventory().getSlot(slotIndex), button);
+                    onSlotClicked(player.getInventory().getSlot(slotIndex), button);
                     return true;
                 }
             }
@@ -1258,7 +1553,7 @@ public class HUD {
         for (int col = 0; col < 9; col++) {
             float sx = mainInvX + col * 18.0f * scale;
             if (mx >= sx && mx <= sx + 18.0f * scale && my >= hotbarInvY && my <= hotbarInvY + 18.0f * scale) {
-                handleSlotClick(player.getInventory().getSlot(col), button);
+                onSlotClicked(player.getInventory().getSlot(col), button);
                 return true;
             }
         }
@@ -1760,17 +2055,10 @@ public class HUD {
                 drawPixelSlot(geom, sx, sy, 18.0f * p, p);
 
                 ItemStack stack = craftSlots[slotIdx];
-                if (!stack.isEmpty()) {
-                    if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
-                        hoveredStack = stack;
-                    }
-                    int tId = stack.getType().getItemTexture();
-                    float[] uv = TextureAtlas.getUVs(tId);
-                    addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
-                    if (stack.getCount() > 0) {
-                        drawMinecraftNumber(overlayGeom, stack.getCount(), sx + 17.0f * p, sy + 17.0f * p, p * 0.95f);
-                    }
+                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
+                    if (!stack.isEmpty()) hoveredStack = stack;
                 }
+                renderSlotItem(tex, overlayGeom, stack, sx, sy, p);
             }
         }
 
@@ -1816,17 +2104,10 @@ public class HUD {
                 drawPixelSlot(geom, sx, sy, 18.0f * p, p);
 
                 ItemStack stack = player.getInventory().getSlot(slotIndex);
-                if (!stack.isEmpty()) {
-                    if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
-                        hoveredStack = stack;
-                    }
-                    int tId = stack.getType().getItemTexture();
-                    float[] uv = TextureAtlas.getUVs(tId);
-                    addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
-                    if (stack.getCount() > 0) {
-                        drawMinecraftNumber(overlayGeom, stack.getCount(), sx + 17.0f * p, sy + 17.0f * p, p * 0.95f);
-                    }
+                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
+                    if (!stack.isEmpty()) hoveredStack = stack;
                 }
+                renderSlotItem(tex, overlayGeom, stack, sx, sy, p);
             }
         }
 
@@ -1837,17 +2118,10 @@ public class HUD {
             drawPixelSlot(geom, sx, hotbarInvY, 18.0f * p, p);
 
             ItemStack stack = player.getInventory().getSlot(col);
-            if (!stack.isEmpty()) {
-                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= hotbarInvY && mouseY <= hotbarInvY + 18.0f * p) {
-                    hoveredStack = stack;
-                }
-                int tId = stack.getType().getItemTexture();
-                float[] uv = TextureAtlas.getUVs(tId);
-                addRect(tex, sx + 2.0f * p, hotbarInvY + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
-                if (stack.getCount() > 0) {
-                    drawMinecraftNumber(overlayGeom, stack.getCount(), sx + 17.0f * p, hotbarInvY + 17.0f * p, p * 0.95f);
-                }
+            if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= hotbarInvY && mouseY <= hotbarInvY + 18.0f * p) {
+                if (!stack.isEmpty()) hoveredStack = stack;
             }
+            renderSlotItem(tex, overlayGeom, stack, sx, hotbarInvY, p);
         }
 
         // 13. Pop-out Recipe Book panel if toggled
@@ -1867,8 +2141,9 @@ public class HUD {
             float cx = mouseX - 8.0f * p;
             float cy = mouseY - 8.0f * p;
             addRect(tex, cx, cy, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 1.0f);
-            if (carriedItem.getCount() > 0) {
-                drawMinecraftNumber(overlayGeom, carriedItem.getCount(), cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
+            int displayCount = getCarriedDisplayCount();
+            if (displayCount > 0) {
+                drawMinecraftNumber(overlayGeom, displayCount, cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
             }
         }
 
@@ -1907,17 +2182,10 @@ public class HUD {
                 drawPixelSlot(geom, sx, sy, 18.0f * p, p);
 
                 ItemStack stack = benchSlots[slotIdx];
-                if (!stack.isEmpty()) {
-                    if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
-                        hoveredStack = stack;
-                    }
-                    int tId = stack.getType().getItemTexture();
-                    float[] uv = TextureAtlas.getUVs(tId);
-                    addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
-                    if (stack.getCount() > 0) {
-                        drawMinecraftNumber(overlayGeom, stack.getCount(), sx + 17.0f * p, sy + 17.0f * p, p * 0.95f);
-                    }
+                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
+                    if (!stack.isEmpty()) hoveredStack = stack;
                 }
+                renderSlotItem(tex, overlayGeom, stack, sx, sy, p);
             }
         }
 
@@ -1963,17 +2231,10 @@ public class HUD {
                 drawPixelSlot(geom, sx, sy, 18.0f * p, p);
 
                 ItemStack stack = player.getInventory().getSlot(slotIndex);
-                if (!stack.isEmpty()) {
-                    if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
-                        hoveredStack = stack;
-                    }
-                    int tId = stack.getType().getItemTexture();
-                    float[] uv = TextureAtlas.getUVs(tId);
-                    addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
-                    if (stack.getCount() > 0) {
-                        drawMinecraftNumber(overlayGeom, stack.getCount(), sx + 17.0f * p, sy + 17.0f * p, p * 0.95f);
-                    }
+                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
+                    if (!stack.isEmpty()) hoveredStack = stack;
                 }
+                renderSlotItem(tex, overlayGeom, stack, sx, sy, p);
             }
         }
 
@@ -1984,17 +2245,10 @@ public class HUD {
             drawPixelSlot(geom, sx, hotbarInvY, 18.0f * p, p);
 
             ItemStack stack = player.getInventory().getSlot(col);
-            if (!stack.isEmpty()) {
-                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= hotbarInvY && mouseY <= hotbarInvY + 18.0f * p) {
-                    hoveredStack = stack;
-                }
-                int tId = stack.getType().getItemTexture();
-                float[] uv = TextureAtlas.getUVs(tId);
-                addRect(tex, sx + 2.0f * p, hotbarInvY + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
-                if (stack.getCount() > 0) {
-                    drawMinecraftNumber(overlayGeom, stack.getCount(), sx + 17.0f * p, hotbarInvY + 17.0f * p, p * 0.95f);
-                }
+            if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= hotbarInvY && mouseY <= hotbarInvY + 18.0f * p) {
+                if (!stack.isEmpty()) hoveredStack = stack;
             }
+            renderSlotItem(tex, overlayGeom, stack, sx, hotbarInvY, p);
         }
 
         // 10. Pop-out Recipe Book panel if toggled
@@ -2014,8 +2268,9 @@ public class HUD {
             float cx = mouseX - 8.0f * p;
             float cy = mouseY - 8.0f * p;
             addRect(tex, cx, cy, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 1.0f);
-            if (carriedItem.getCount() > 0) {
-                drawMinecraftNumber(overlayGeom, carriedItem.getCount(), cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
+            int displayCount = getCarriedDisplayCount();
+            if (displayCount > 0) {
+                drawMinecraftNumber(overlayGeom, displayCount, cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
             }
         }
 
@@ -2370,17 +2625,10 @@ public class HUD {
         float inY = iy + 17.0f * p;
         drawPixelSlot(geom, inX, inY, 18.0f * p, p);
         ItemStack inStack = activeFurnace.getInput();
-        if (!inStack.isEmpty()) {
-            if (mouseX >= inX && mouseX <= inX + 18.0f * p && mouseY >= inY && mouseY <= inY + 18.0f * p) {
-                hoveredStack = inStack;
-            }
-            int tId = inStack.getType().getItemTexture();
-            float[] uv = TextureAtlas.getUVs(tId);
-            addRect(tex, inX + 2.0f * p, inY + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
-            if (inStack.getCount() > 0) {
-                drawMinecraftNumber(overlayGeom, inStack.getCount(), inX + 17.0f * p, inY + 17.0f * p, p * 0.95f);
-            }
+        if (mouseX >= inX && mouseX <= inX + 18.0f * p && mouseY >= inY && mouseY <= inY + 18.0f * p) {
+            if (!inStack.isEmpty()) hoveredStack = inStack;
         }
+        renderSlotItem(tex, overlayGeom, inStack, inX, inY, p);
 
         // 5. Burning Flame Icon (Between Input and Fuel)
         float flameX = ix + 58.0f * p;
@@ -2392,17 +2640,10 @@ public class HUD {
         float fuelY = iy + 53.0f * p;
         drawPixelSlot(geom, fuelX, fuelY, 18.0f * p, p);
         ItemStack fuelStack = activeFurnace.getFuel();
-        if (!fuelStack.isEmpty()) {
-            if (mouseX >= fuelX && mouseX <= fuelX + 18.0f * p && mouseY >= fuelY && mouseY <= fuelY + 18.0f * p) {
-                hoveredStack = fuelStack;
-            }
-            int tId = fuelStack.getType().getItemTexture();
-            float[] uv = TextureAtlas.getUVs(tId);
-            addRect(tex, fuelX + 2.0f * p, fuelY + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
-            if (fuelStack.getCount() > 0) {
-                drawMinecraftNumber(overlayGeom, fuelStack.getCount(), fuelX + 17.0f * p, fuelY + 17.0f * p, p * 0.95f);
-            }
+        if (mouseX >= fuelX && mouseX <= fuelX + 18.0f * p && mouseY >= fuelY && mouseY <= fuelY + 18.0f * p) {
+            if (!fuelStack.isEmpty()) hoveredStack = fuelStack;
         }
+        renderSlotItem(tex, overlayGeom, fuelStack, fuelX, fuelY, p);
 
         // 7. Cooking Progress Arrow (pointing to output)
         float arrowX = ix + 79.0f * p;
@@ -2437,17 +2678,10 @@ public class HUD {
                 drawPixelSlot(geom, sx, sy, 18.0f * p, p);
 
                 ItemStack stack = player.getInventory().getSlot(slotIndex);
-                if (!stack.isEmpty()) {
-                    if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
-                        hoveredStack = stack;
-                    }
-                    int tId = stack.getType().getItemTexture();
-                    float[] uv = TextureAtlas.getUVs(tId);
-                    addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
-                    if (stack.getCount() > 0) {
-                        drawMinecraftNumber(overlayGeom, stack.getCount(), sx + 17.0f * p, sy + 17.0f * p, p * 0.95f);
-                    }
+                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= sy && mouseY <= sy + 18.0f * p) {
+                    if (!stack.isEmpty()) hoveredStack = stack;
                 }
+                renderSlotItem(tex, overlayGeom, stack, sx, sy, p);
             }
         }
 
@@ -2458,17 +2692,10 @@ public class HUD {
             drawPixelSlot(geom, sx, hotbarInvY, 18.0f * p, p);
 
             ItemStack stack = player.getInventory().getSlot(col);
-            if (!stack.isEmpty()) {
-                if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= hotbarInvY && mouseY <= hotbarInvY + 18.0f * p) {
-                    hoveredStack = stack;
-                }
-                int tId = stack.getType().getItemTexture();
-                float[] uv = TextureAtlas.getUVs(tId);
-                addRect(tex, sx + 2.0f * p, hotbarInvY + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
-                if (stack.getCount() > 0) {
-                    drawMinecraftNumber(overlayGeom, stack.getCount(), sx + 17.0f * p, hotbarInvY + 17.0f * p, p * 0.95f);
-                }
+            if (mouseX >= sx && mouseX <= sx + 18.0f * p && mouseY >= hotbarInvY && mouseY <= hotbarInvY + 18.0f * p) {
+                if (!stack.isEmpty()) hoveredStack = stack;
             }
+            renderSlotItem(tex, overlayGeom, stack, sx, hotbarInvY, p);
         }
 
         // 11. Carried item on cursor
@@ -2478,8 +2705,9 @@ public class HUD {
             float cx = mouseX - 8.0f * p;
             float cy = mouseY - 8.0f * p;
             addRect(tex, cx, cy, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 1.0f);
-            if (carriedItem.getCount() > 0) {
-                drawMinecraftNumber(overlayGeom, carriedItem.getCount(), cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
+            int displayCount = getCarriedDisplayCount();
+            if (displayCount > 0) {
+                drawMinecraftNumber(overlayGeom, displayCount, cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
             }
         }
 

@@ -195,6 +195,9 @@ public class Main {
                 lastMouseX = xpos;
                 lastMouseY = ypos;
                 firstMouse = true;
+                if (hud.isInventoryOpen()) {
+                    hud.handleMouseMove(xpos, ypos, player, width, height);
+                }
                 return;
             }
 
@@ -261,6 +264,8 @@ public class Main {
                 if (action == GLFW_PRESS) {
                     boolean isShiftDown = (mods & GLFW_MOD_SHIFT) != 0 || keyPressed[GLFW_KEY_LEFT_SHIFT] || keyPressed[GLFW_KEY_RIGHT_SHIFT];
                     hud.handleMouseClick(lastMouseX, lastMouseY, button, isShiftDown, player, width, height);
+                } else if (action == GLFW_RELEASE) {
+                    hud.handleMouseRelease(lastMouseX, lastMouseY, button, player, width, height);
                 }
                 return;
             }
