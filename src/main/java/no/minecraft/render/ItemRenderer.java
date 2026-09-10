@@ -61,8 +61,13 @@ public class ItemRenderer {
 
             BlockType type = item.getType();
 
-            // Transform and add all 6 faces of the cube with rotation around (cx, cy, cz)
-            addRotatedCube(vertices, cx, cy, cz, half, rotY, type);
+            if (type.isSolid()) {
+                // Transform and add all 6 faces of the cube with rotation around (cx, cy, cz)
+                addRotatedCube(vertices, cx, cy, cz, half, rotY, type);
+            } else {
+                // 2D flat item rotating around (cx, cy, cz)
+                addRotatedItem(vertices, cx, cy, cz, 0.32f, rotY, type);
+            }
         }
 
         if (vertices.isEmpty()) return;
@@ -81,6 +86,34 @@ public class ItemRenderer {
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
+    }
+
+    private void addRotatedItem(List<Float> v, float cx, float cy, float cz, float size, float rotY, BlockType item) {
+        float cos = (float) Math.cos(rotY);
+        float sin = (float) Math.sin(rotY);
+        float h = size * 0.5f;
+
+        // 4 local corners (centered flat quad on XY plane)
+        float[][] local = {
+                {-h, -h, 0}, { h, -h, 0}, { h,  h, 0}, {-h,  h, 0}
+        };
+
+        // Rotated world corners around (cx, cy, cz)
+        float[][] p = new float[4][3];
+        for (int i = 0; i < 4; i++) {
+            float lx = local[i][0];
+            float ly = local[i][1];
+            p[i][0] = cx + (lx * cos);
+            p[i][1] = cy + ly;
+            p[i][2] = cz + (lx * sin);
+        }
+
+        float[] uv = TextureAtlas.getUVs(item.getItemTexture());
+
+        // Front Face
+        addFaceWithUV(v, p[0], p[1], p[2], p[3], uv[0], uv[1], uv[2], uv[3], 0.95f);
+        // Back Face (reverse winding order so visible from behind)
+        addFaceWithUV(v, p[1], p[0], p[3], p[2], uv[0], uv[1], uv[2], uv[3], 0.85f);
     }
 
     private void addRotatedCube(List<Float> v, float cx, float cy, float cz, float h, float rotY, BlockType block) {
