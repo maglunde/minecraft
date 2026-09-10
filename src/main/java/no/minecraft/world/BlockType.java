@@ -119,7 +119,7 @@ public enum BlockType {
     }
 
     public float getHardness() {
-        return switch (this) {
+        return 3 *  switch (this) {
             case BEDROCK, END_PORTAL, NETHER_PORTAL, LAVA, WATER -> -1.0f; // Unbreakable
             case OBSIDIAN -> 50.0f;
             case END_PORTAL_FRAME, END_PORTAL_FRAME_FILLED -> -1.0f;
