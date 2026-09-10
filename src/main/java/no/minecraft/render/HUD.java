@@ -32,7 +32,9 @@ public class HUD {
     private boolean inventoryOpen = false;
     private boolean craftingTableOpen = false;
     private boolean furnaceOpen = false;
+    private boolean chestOpen = false;
     private no.minecraft.world.FurnaceData activeFurnace = null;
+    private no.minecraft.world.ChestData activeChest = null;
     boolean recipeBookOpen = false;
     int recipeScrollRow = 0;
     String recipeSearchText = "";
@@ -143,7 +145,7 @@ public class HUD {
     }
 
     public boolean isInventoryOpen() {
-        return inventoryOpen || craftingTableOpen || furnaceOpen;
+        return inventoryOpen || craftingTableOpen || furnaceOpen || chestOpen;
     }
 
     public boolean isCraftingTableOpen() {
@@ -154,9 +156,15 @@ public class HUD {
         return furnaceOpen;
     }
 
+    public boolean isChestOpen() {
+        return chestOpen;
+    }
+
     public void openCraftingTable() {
         this.inventoryOpen = false;
         this.furnaceOpen = false;
+        this.chestOpen = false;
+        this.activeChest = null;
         this.craftingTableOpen = true;
         this.isLeftDragging = false;
         this.isRightDragging = false;
@@ -171,6 +179,8 @@ public class HUD {
     public void openFurnace(no.minecraft.world.FurnaceData furnace) {
         this.inventoryOpen = false;
         this.craftingTableOpen = false;
+        this.chestOpen = false;
+        this.activeChest = null;
         this.furnaceOpen = true;
         this.activeFurnace = furnace;
         this.isLeftDragging = false;
@@ -181,6 +191,23 @@ public class HUD {
 
     public no.minecraft.world.FurnaceData getActiveFurnace() {
         return activeFurnace;
+    }
+
+    public void openChest(no.minecraft.world.ChestData chest) {
+        this.inventoryOpen = false;
+        this.craftingTableOpen = false;
+        this.furnaceOpen = false;
+        this.activeFurnace = null;
+        this.chestOpen = true;
+        this.activeChest = chest;
+        this.isLeftDragging = false;
+        this.isRightDragging = false;
+        this.draggedSlots.clear();
+        this.startDragSlot = null;
+    }
+
+    public no.minecraft.world.ChestData getActiveChest() {
+        return activeChest;
     }
 
     public boolean isRecipeSearchFocused() {
@@ -252,7 +279,7 @@ public class HUD {
     }
 
     public void setInventoryOpen(boolean open, Player player) {
-        if (!open && (inventoryOpen || craftingTableOpen || furnaceOpen)) {
+        if (!open && (inventoryOpen || craftingTableOpen || furnaceOpen || chestOpen)) {
             closeInventory(player);
         } else {
             this.inventoryOpen = open;
@@ -264,7 +291,7 @@ public class HUD {
     }
 
     public void toggleInventory(Player player) {
-        if (inventoryOpen || craftingTableOpen || furnaceOpen) {
+        if (inventoryOpen || craftingTableOpen || furnaceOpen || chestOpen) {
             closeInventory(player);
         } else {
             this.inventoryOpen = true;
@@ -294,11 +321,13 @@ public class HUD {
     }
 
     public void closeInventory(Player player) {
-        if (inventoryOpen || craftingTableOpen || furnaceOpen) {
+        if (inventoryOpen || craftingTableOpen || furnaceOpen || chestOpen) {
             inventoryOpen = false;
             craftingTableOpen = false;
             furnaceOpen = false;
             activeFurnace = null;
+            chestOpen = false;
+            activeChest = null;
             if (!carriedItem.isEmpty()) {
                 player.getInventory().addItem(carriedItem.getType(), carriedItem.getCount());
                 carriedItem.clear();
@@ -457,6 +486,18 @@ public class HUD {
             float fuelY = iy + 53.0f * scale;
             if (mx >= fuelX && mx <= fuelX + 18.0f * scale && my >= fuelY && my <= fuelY + 18.0f * scale) {
                 return activeFurnace.getFuel();
+            }
+        } else if (chestOpen && activeChest != null) {
+            float chestGridX = ix + 8.0f * scale;
+            float chestGridY = iy + 18.0f * scale;
+            for (int r = 0; r < 3; r++) {
+                for (int c = 0; c < 9; c++) {
+                    float sx = chestGridX + c * 18.0f * scale;
+                    float sy = chestGridY + r * 18.0f * scale;
+                    if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
+                        return activeChest.getSlot(r * 9 + c);
+                    }
+                }
             }
         } else if (inventoryOpen) {
             float craftGridX = ix + 98.0f * scale;
@@ -691,6 +732,66 @@ public class HUD {
         }
     }
 
+    private void handleChestSlotShiftClick(ItemStack slot, Player player) {
+        if (slot == null || slot.isEmpty()) return;
+        boolean moved = false;
+        // 1. Try to merge into player matching stacks first
+        for (int i = 0; i < no.minecraft.player.Inventory.TOTAL_SLOTS; i++) {
+            ItemStack pSlot = player.getInventory().getSlot(i);
+            if (!pSlot.isEmpty() && pSlot.getType() == slot.getType()) {
+                if (no.minecraft.player.Inventory.mergeStacks(slot, pSlot, slot.getCount())) {
+                    moved = true;
+                    if (slot.isEmpty()) break;
+                }
+            }
+        }
+        // 2. Try to move into empty player slots
+        if (!slot.isEmpty()) {
+            for (int i = 0; i < no.minecraft.player.Inventory.TOTAL_SLOTS; i++) {
+                ItemStack pSlot = player.getInventory().getSlot(i);
+                if (pSlot.isEmpty()) {
+                    if (no.minecraft.player.Inventory.mergeStacks(slot, pSlot, slot.getCount())) {
+                        moved = true;
+                        if (slot.isEmpty()) break;
+                    }
+                }
+            }
+        }
+        if (moved) {
+            no.minecraft.sound.SoundManager.getInstance().play("click");
+        }
+    }
+
+    private void handlePlayerToChestShiftClick(ItemStack slot, no.minecraft.world.ChestData chest) {
+        if (slot == null || slot.isEmpty() || chest == null) return;
+        boolean moved = false;
+        // 1. Try to merge into chest matching stacks first
+        for (int i = 0; i < no.minecraft.world.ChestData.CHEST_SIZE; i++) {
+            ItemStack cSlot = chest.getSlot(i);
+            if (cSlot != null && !cSlot.isEmpty() && cSlot.getType() == slot.getType()) {
+                if (no.minecraft.player.Inventory.mergeStacks(slot, cSlot, slot.getCount())) {
+                    moved = true;
+                    if (slot.isEmpty()) break;
+                }
+            }
+        }
+        // 2. Try to move into empty chest slots
+        if (!slot.isEmpty()) {
+            for (int i = 0; i < no.minecraft.world.ChestData.CHEST_SIZE; i++) {
+                ItemStack cSlot = chest.getSlot(i);
+                if (cSlot != null && cSlot.isEmpty()) {
+                    if (no.minecraft.player.Inventory.mergeStacks(slot, cSlot, slot.getCount())) {
+                        moved = true;
+                        if (slot.isEmpty()) break;
+                    }
+                }
+            }
+        }
+        if (moved) {
+            no.minecraft.sound.SoundManager.getInstance().play("click");
+        }
+    }
+
     public boolean handleMouseClick(double mx, double my, Player player, int windowWidth, int windowHeight) {
         return handleMouseClick(mx, my, GLFW_MOUSE_BUTTON_LEFT, player, windowWidth, windowHeight);
     }
@@ -700,7 +801,7 @@ public class HUD {
     }
 
     public boolean handleMouseClick(double mx, double my, int button, boolean isShiftDown, Player player, int windowWidth, int windowHeight) {
-        if (!inventoryOpen && !craftingTableOpen && !furnaceOpen) return false;
+        if (!inventoryOpen && !craftingTableOpen && !furnaceOpen && !chestOpen) return false;
 
         float scale = getGuiScale(windowWidth, windowHeight);
         float invW = 176.0f * scale;
@@ -1003,6 +1104,69 @@ public class HUD {
             return true;
         }
 
+        // --- Handle Chest GUI clicks ---
+        if (chestOpen && activeChest != null) {
+            float chestGridX = ix + 8.0f * scale;
+            float chestGridY = iy + 18.0f * scale;
+
+            // 1. Chest Slots Grid (3 rows x 9 columns = 27 slots)
+            for (int row = 0; row < 3; row++) {
+                for (int col = 0; col < 9; col++) {
+                    int slotIndex = row * 9 + col;
+                    float sx = chestGridX + col * 18.0f * scale;
+                    float sy = chestGridY + row * 18.0f * scale;
+                    if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
+                        ItemStack slot = activeChest.getSlot(slotIndex);
+                        if (slot != null) {
+                            if (isShiftDown) {
+                                handleChestSlotShiftClick(slot, player);
+                            } else {
+                                onSlotClicked(slot, button);
+                            }
+                        }
+                        return true;
+                    }
+                }
+            }
+
+            // 2. Main Inventory Grid (3 rows x 9 columns)
+            float mainInvX = ix + 8.0f * scale;
+            float mainInvY = iy + 84.0f * scale;
+            for (int row = 0; row < 3; row++) {
+                for (int col = 0; col < 9; col++) {
+                    int slotIndex = 9 + row * 9 + col;
+                    float sx = mainInvX + col * 18.0f * scale;
+                    float sy = mainInvY + row * 18.0f * scale;
+                    if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
+                        ItemStack slot = player.getInventory().getSlot(slotIndex);
+                        if (isShiftDown) {
+                            handlePlayerToChestShiftClick(slot, activeChest);
+                        } else {
+                            onSlotClicked(slot, button);
+                        }
+                        return true;
+                    }
+                }
+            }
+
+            // 3. Hotbar Grid (1 row x 9 columns)
+            float hotbarInvY = iy + 142.0f * scale;
+            for (int col = 0; col < 9; col++) {
+                float sx = mainInvX + col * 18.0f * scale;
+                if (mx >= sx && mx <= sx + 18.0f * scale && my >= hotbarInvY && my <= hotbarInvY + 18.0f * scale) {
+                    ItemStack slot = player.getInventory().getSlot(col);
+                    if (isShiftDown) {
+                        handlePlayerToChestShiftClick(slot, activeChest);
+                    } else {
+                        onSlotClicked(slot, button);
+                    }
+                    return true;
+                }
+            }
+
+            return true;
+        }
+
         // Recipe book toggle button (under crafting grid)
         float rbX = ix + 104.0f * scale;
         float rbY = iy + 61.0f * scale;
@@ -1243,7 +1407,7 @@ public class HUD {
     }
 
     public boolean handleInventoryKeyPress(int key, double mx, double my, Player player, int windowWidth, int windowHeight) {
-        if (!inventoryOpen && !craftingTableOpen && (!furnaceOpen || activeFurnace == null)) return false;
+        if (!inventoryOpen && !craftingTableOpen && (!furnaceOpen || activeFurnace == null) && (!chestOpen || activeChest == null)) return false;
         if (key < GLFW_KEY_1 || key > GLFW_KEY_9) return false;
         int hotbarIndex = key - GLFW_KEY_1;
         if (!player.getInventory().getSlot(hotbarIndex).isEmpty()) {
@@ -1295,6 +1459,27 @@ public class HUD {
                     return true;
                 }
             }
+        } else if (chestOpen && activeChest != null) {
+            float chestGridX = ix + 8.0f * scale;
+            float chestGridY = iy + 18.0f * scale;
+            for (int r = 0; r < 3; r++) {
+                for (int c = 0; c < 9; c++) {
+                    int slotIdx = r * 9 + c;
+                    float sx = chestGridX + c * 18.0f * scale;
+                    float sy = chestGridY + r * 18.0f * scale;
+                    if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
+                        ItemStack cSlot = activeChest.getSlot(slotIdx);
+                        if (cSlot != null && !cSlot.isEmpty()) {
+                            ItemStack hSlot = player.getInventory().getSlot(hotbarIndex);
+                            hSlot.setType(cSlot.getType());
+                            hSlot.setCount(cSlot.getCount());
+                            cSlot.clear();
+                            no.minecraft.sound.SoundManager.getInstance().play("click");
+                            return true;
+                        }
+                    }
+                }
+            }
         } else if (craftingTableOpen) {
             float resX = ix + 124.0f * scale;
             float resY = iy + 31.0f * scale;
@@ -1337,7 +1522,7 @@ public class HUD {
     }
 
     public boolean handleDropKeyPress(double mx, double my, boolean dropAll, Player player, int windowWidth, int windowHeight) {
-        if (!inventoryOpen && !craftingTableOpen && (!furnaceOpen || activeFurnace == null)) return false;
+        if (!inventoryOpen && !craftingTableOpen && (!furnaceOpen || activeFurnace == null) && (!chestOpen || activeChest == null)) return false;
 
         float scale = getGuiScale(windowWidth, windowHeight);
         float invW = 176.0f * scale;
@@ -1373,6 +1558,19 @@ public class HUD {
             float fuelY = iy + 53.0f * scale;
             if (mx >= fuelX && mx <= fuelX + 18.0f * scale && my >= fuelY && my <= fuelY + 18.0f * scale) {
                 return dropFromSlot(activeFurnace.getFuel(), dropAll, player);
+            }
+        } else if (chestOpen && activeChest != null) {
+            float chestGridX = ix + 8.0f * scale;
+            float chestGridY = iy + 18.0f * scale;
+            for (int r = 0; r < 3; r++) {
+                for (int c = 0; c < 9; c++) {
+                    int slotIdx = r * 9 + c;
+                    float sx = chestGridX + c * 18.0f * scale;
+                    float sy = chestGridY + r * 18.0f * scale;
+                    if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
+                        return dropFromSlot(activeChest.getSlot(slotIdx), dropAll, player);
+                    }
+                }
             }
         } else if (craftingTableOpen) {
             // 1. 3x3 Bench Slots

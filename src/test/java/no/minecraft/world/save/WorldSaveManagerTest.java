@@ -157,4 +157,89 @@ public class WorldSaveManagerTest {
             no.minecraft.settings.GameSettings.getInstance().setRenderDistance(originalRd);
         }
     }
+
+    @Test
+    public void testBonusChestCreationAndContents() {
+        World world = new World();
+        Player player = new Player(world, 0, 10, 0);
+
+        String testWorldName = "BonusChestWorld_" + System.currentTimeMillis();
+        createdWorldInfo = WorldSaveManager.createNewWorld(testWorldName, "4242", GameMode.SURVIVAL, world, player, true);
+
+        // Find the generated chest in the world
+        var chests = world.getChests();
+        assertFalse(chests.isEmpty(), "Bonus chest should have been generated");
+
+        no.minecraft.world.ChestData bonusChest = chests.values().iterator().next();
+        assertNotNull(bonusChest);
+        assertFalse(bonusChest.isEmpty(), "Bonus chest should not be empty");
+
+        // Verify starter items exist (e.g. axe, pickaxe, food, wood)
+        boolean hasTool = false;
+        boolean hasFood = false;
+        boolean hasWood = false;
+
+        for (int i = 0; i < bonusChest.getSize(); i++) {
+            ItemStack slot = bonusChest.getSlot(i);
+            if (!slot.isEmpty()) {
+                BlockType type = slot.getType();
+                if (type == BlockType.WOODEN_AXE || type == BlockType.STONE_AXE ||
+                    type == BlockType.WOODEN_PICKAXE || type == BlockType.STONE_PICKAXE ||
+                    type == BlockType.WOODEN_SHOVEL) {
+                    hasTool = true;
+                }
+                if (type == BlockType.APPLE || type == BlockType.BREAD) {
+                    hasFood = true;
+                }
+                if (type == BlockType.WOOD || type == BlockType.PLANKS || type == BlockType.STICK) {
+                    hasWood = true;
+                }
+            }
+        }
+
+        assertTrue(hasTool, "Bonus chest should contain starter tools");
+        assertTrue(hasFood, "Bonus chest should contain food");
+        assertTrue(hasWood, "Bonus chest should contain wood/planks");
+
+        // Verify block in world is CHEST
+        assertEquals(BlockType.CHEST, world.getBlock(bonusChest.getX(), bonusChest.getY(), bonusChest.getZ()));
+
+        // Verify save and load preserves bonus chest items
+        assertTrue(WorldSaveManager.saveWorld(world, player, createdWorldInfo));
+
+        World loadedWorld = new World();
+        Player loadedPlayer = new Player(loadedWorld, 0, 0, 0);
+        assertTrue(WorldSaveManager.loadWorld(loadedWorld, loadedPlayer, createdWorldInfo));
+
+        var loadedChests = loadedWorld.getChests();
+        assertEquals(1, loadedChests.size());
+        no.minecraft.world.ChestData loadedChest = loadedWorld.getChest(bonusChest.getX(), bonusChest.getY(), bonusChest.getZ());
+        assertNotNull(loadedChest);
+        assertFalse(loadedChest.isEmpty());
+
+        for (int i = 0; i < bonusChest.getSize(); i++) {
+            ItemStack orig = bonusChest.getSlot(i);
+            ItemStack loaded = loadedChest.getSlot(i);
+            assertEquals(orig.getType(), loaded.getType());
+            assertEquals(orig.getCount(), loaded.getCount());
+        }
+    }
+
+    @Test
+    public void testChestBlockBreakDropsItems() {
+        World world = new World();
+        world.setBlock(5, 10, 5, BlockType.CHEST);
+        no.minecraft.world.ChestData chest = world.getOrCreateChest(5, 10, 5);
+        chest.addItem(BlockType.DIAMOND, 3);
+        chest.addItem(BlockType.BREAD, 5);
+
+        assertEquals(0, world.getDroppedItems().size());
+
+        // Break chest block
+        world.setBlock(5, 10, 5, BlockType.AIR);
+
+        assertNull(world.getChest(5, 10, 5));
+        assertTrue(world.getChests().isEmpty());
+        assertEquals(2, world.getDroppedItems().size(), "Breaking chest should drop all contained items");
+    }
 }

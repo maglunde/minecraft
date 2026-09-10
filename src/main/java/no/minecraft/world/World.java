@@ -215,6 +215,9 @@ public class World {
         if (old == BlockType.FURNACE && type != BlockType.FURNACE) {
             removeFurnace(x, y, z);
         }
+        if (old == BlockType.CHEST && type != BlockType.CHEST) {
+            removeChest(x, y, z);
+        }
         setBlockInternal(x, y, z, type);
         triggerGravityUpdate(x, y, z);
     }
@@ -578,6 +581,7 @@ public class World {
     }
 
     private final Map<Long, FurnaceData> furnaces = new HashMap<>();
+    private final Map<Long, ChestData> chests = new HashMap<>();
 
     public static long blockPosKey(int x, int y, int z) {
         return (((long) x & 0x3FFFFFFL) << 38) | (((long) (y & 0xFFF)) << 26) | ((long) z & 0x3FFFFFFL);
@@ -618,6 +622,39 @@ public class World {
         if (list != null) {
             for (FurnaceData fd : list) {
                 furnaces.put(blockPosKey(fd.getX(), fd.getY(), fd.getZ()), fd);
+            }
+        }
+    }
+
+    public ChestData getOrCreateChest(int x, int y, int z) {
+        return chests.computeIfAbsent(blockPosKey(x, y, z), k -> new ChestData(x, y, z));
+    }
+
+    public ChestData getChest(int x, int y, int z) {
+        return chests.get(blockPosKey(x, y, z));
+    }
+
+    public void removeChest(int x, int y, int z) {
+        ChestData cd = chests.remove(blockPosKey(x, y, z));
+        if (cd != null) {
+            for (no.minecraft.player.ItemStack is : cd.getItems()) {
+                if (!is.isEmpty()) {
+                    spawnItemDrop(x + 0.5f, y + 0.5f, z + 0.5f, is.getType(), is.getCount());
+                    is.clear();
+                }
+            }
+        }
+    }
+
+    public Map<Long, ChestData> getChests() {
+        return Collections.unmodifiableMap(chests);
+    }
+
+    public void setChests(List<ChestData> list) {
+        chests.clear();
+        if (list != null) {
+            for (ChestData cd : list) {
+                chests.put(blockPosKey(cd.getX(), cd.getY(), cd.getZ()), cd);
             }
         }
     }
@@ -1666,6 +1703,7 @@ public class World {
         fallingBlocks.clear();
         pendingFallingBlocks.clear();
         furnaces.clear();
+        chests.clear();
         boats.clear();
         for (Map<Long, Chunk> map : dimensionChunks.values()) {
             for (Chunk chunk : map.values()) {

@@ -7,6 +7,7 @@ import no.minecraft.player.Inventory;
 import no.minecraft.player.ItemStack;
 import no.minecraft.player.Player;
 import no.minecraft.world.BlockType;
+import no.minecraft.world.ChestData;
 import no.minecraft.world.Chunk;
 import no.minecraft.world.Dimension;
 import no.minecraft.world.FurnaceData;
@@ -26,7 +27,7 @@ public class WorldSaveManager {
 
     private static final int WORLD_MAGIC = 0x4D435744; // "MCWD"
     private static final int CHUNKS_MAGIC = 0x4D43434B; // "MCCK"
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
 
     public static long parseSeed(String seedInput) {
         if (seedInput == null || seedInput.trim().isEmpty()) {
@@ -106,6 +107,10 @@ public class WorldSaveManager {
     }
 
     public static WorldInfo createNewWorld(String name, String seedInput, GameMode mode, World world, Player player) {
+        return createNewWorld(name, seedInput, mode, world, player, false);
+    }
+
+    public static WorldInfo createNewWorld(String name, String seedInput, GameMode mode, World world, Player player, boolean bonusChest) {
         String safeName = (name == null || name.trim().isEmpty()) ? "Ny verden" : name.trim();
         long seed = parseSeed(seedInput);
         String folderName = generateUniqueFolderName(safeName);
@@ -124,9 +129,85 @@ public class WorldSaveManager {
         player.setGameMode(mode);
         AdvancementManager.getInstance().reset();
 
+        if (bonusChest) {
+            generateBonusChest(world, spawn, seed);
+        }
+
         // Initial save
         saveWorld(world, player, info);
         return info;
+    }
+
+    public static void generateBonusChest(World world, Vector3f spawn, long seed) {
+        int sx = (int) Math.floor(spawn.x);
+        int sz = (int) Math.floor(spawn.z);
+
+        // Search for a suitable ground spot near spawn (1..3 blocks away)
+        int chestX = sx + 1;
+        int chestZ = sz + 1;
+        int chestY = -1;
+
+        int[][] offsets = {
+            {1, 1}, {2, 1}, {1, 2}, {-1, 1}, {1, -1}, {-1, -1}, {2, 0}, {0, 2}, {-2, 0}, {0, -2}
+        };
+
+        for (int[] off : offsets) {
+            int tx = sx + off[0];
+            int tz = sz + off[1];
+            int y = world.getSpawnHeight(tx, tz);
+            if (y > 0 && y < Chunk.SIZE_Y - 2) {
+                chestX = tx;
+                chestZ = tz;
+                chestY = y;
+                break;
+            }
+        }
+
+        if (chestY <= 0) {
+            chestY = Math.max(1, (int) Math.floor(spawn.y));
+        }
+
+        // Place chest
+        world.setBlock(chestX, chestY, chestZ, BlockType.CHEST);
+        ChestData chest = world.getOrCreateChest(chestX, chestY, chestZ);
+        chest.clear();
+
+        // Bonus chest starter loot (Minecraft 1.16 Java Edition)
+        Random rng = new Random(seed ^ 0x5DEECE66DL);
+        List<ItemStack> loot = new ArrayList<>();
+        // Tools
+        loot.add(new ItemStack(rng.nextBoolean() ? BlockType.WOODEN_AXE : BlockType.STONE_AXE, 1));
+        loot.add(new ItemStack(rng.nextBoolean() ? BlockType.WOODEN_PICKAXE : BlockType.STONE_PICKAXE, 1));
+        loot.add(new ItemStack(BlockType.WOODEN_SHOVEL, 1));
+        // Food
+        loot.add(new ItemStack(BlockType.APPLE, 2 + rng.nextInt(2)));
+        loot.add(new ItemStack(BlockType.BREAD, 2 + rng.nextInt(2)));
+        // Wood & Building materials
+        loot.add(new ItemStack(BlockType.WOOD, 2 + rng.nextInt(3)));
+        loot.add(new ItemStack(BlockType.PLANKS, 4 + rng.nextInt(9)));
+        loot.add(new ItemStack(BlockType.STICK, 4 + rng.nextInt(5)));
+
+        // Distribute loot into random distinct slots of the 27-slot chest
+        List<Integer> slots = new ArrayList<>();
+        for (int i = 0; i < ChestData.CHEST_SIZE; i++) slots.add(i);
+        Collections.shuffle(slots, rng);
+
+        for (int i = 0; i < loot.size() && i < slots.size(); i++) {
+            ItemStack stack = loot.get(i);
+            int slotIdx = slots.get(i);
+            chest.setSlot(slotIdx, stack);
+        }
+
+        // Place 3-4 torches surrounding the chest on solid ground
+        int[][] torchOffsets = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (int[] toff : torchOffsets) {
+            int tx = chestX + toff[0];
+            int tz = chestZ + toff[1];
+            int ty = world.getSpawnHeight(tx, tz);
+            if (ty == chestY && world.getBlock(tx, ty, tz) == BlockType.AIR) {
+                world.setBlock(tx, ty, tz, BlockType.TORCH);
+            }
+        }
     }
 
     public static boolean saveWorld(World world, Player player, WorldInfo info) {
@@ -206,6 +287,21 @@ public class WorldSaveManager {
                     out.writeFloat(fd.getBurnTime());
                     out.writeFloat(fd.getMaxBurnTime());
                 }
+
+                // Chests
+                Map<Long, ChestData> chests = world.getChests();
+                out.writeInt(chests.size());
+                for (ChestData cd : chests.values()) {
+                    out.writeInt(cd.getX());
+                    out.writeInt(cd.getY());
+                    out.writeInt(cd.getZ());
+                    out.writeInt(ChestData.CHEST_SIZE);
+                    for (int s = 0; s < ChestData.CHEST_SIZE; s++) {
+                        ItemStack slot = cd.getSlot(s);
+                        out.writeByte(slot.getType().getId());
+                        out.writeInt(slot.getCount());
+                    }
+                }
             }
             moveAtomically(datTmp, datFile);
 
@@ -269,6 +365,7 @@ public class WorldSaveManager {
             GameMode mode;
             List<String> advNames = new ArrayList<>();
             List<FurnaceData> furnaceList = new ArrayList<>();
+            List<ChestData> chestList = new ArrayList<>();
             ItemStack[] loadedSlots = new ItemStack[Inventory.TOTAL_SLOTS];
 
             try (DataInputStream in = new DataInputStream(new BufferedInputStream(new GZIPInputStream(Files.newInputStream(datFile))))) {
@@ -356,6 +453,26 @@ public class WorldSaveManager {
                     fd.setMaxBurnTime(in.readFloat());
                     furnaceList.add(fd);
                 }
+
+                if (version >= 2) {
+                    int chestCount = in.readInt();
+                    for (int i = 0; i < chestCount; i++) {
+                        int cx = in.readInt();
+                        int cy = in.readInt();
+                        int cz = in.readInt();
+                        ChestData cd = new ChestData(cx, cy, cz);
+                        int slotCount = in.readInt();
+                        for (int s = 0; s < slotCount; s++) {
+                            byte typeId = in.readByte();
+                            int count = in.readInt();
+                            if (s < ChestData.CHEST_SIZE) {
+                                cd.getSlot(s).setType(BlockType.getById(typeId));
+                                cd.getSlot(s).setCount(count);
+                            }
+                        }
+                        chestList.add(cd);
+                    }
+                }
             } catch (Exception e) {
                 // world.dat is unreadable: quarantine it so it can be inspected/recovered manually
                 quarantineCorrupt(datFile);
@@ -370,6 +487,7 @@ public class WorldSaveManager {
             world.setGameWon(gameWon);
             world.setCurrentDimension(dim);
             world.setFurnaces(furnaceList);
+            world.setChests(chestList);
             AdvancementManager.getInstance().setUnlocked(advNames);
 
             // 2. Read chunks.dat

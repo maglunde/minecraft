@@ -47,6 +47,7 @@ public class Main {
     private InventoryScreen inventoryScreen;
     private CraftingTableScreen craftingTableScreen;
     private FurnaceScreen furnaceScreen;
+    private ChestScreen chestScreen;
     private MainMenuScreen mainMenuScreen;
     private PauseMenuScreen pauseMenuScreen;
 
@@ -221,6 +222,7 @@ public class Main {
         inventoryScreen = new InventoryScreen(hud, () -> player, () -> width, () -> height);
         craftingTableScreen = new CraftingTableScreen(hud, () -> player, () -> width, () -> height);
         furnaceScreen = new FurnaceScreen(hud, () -> player, () -> width, () -> height);
+        chestScreen = new ChestScreen(hud, () -> player, () -> width, () -> height);
 
         // Wire input callbacks only after all game state exists (callbacks dereference it immediately)
         setupInput();
@@ -288,6 +290,8 @@ public class Main {
             if (mainMenu.getActiveWorldInfo() != null) {
                 no.minecraft.world.save.WorldSaveManager.saveWorld(world, player, mainMenu.getActiveWorldInfo());
             }
+            mainMenu.setGameStarted(false);
+            mainMenu.setActiveWorldInfo(null);
             if (!mainMenuScreen.isOpen()) {
                 screenStack.push(mainMenuScreen); // onOpen() -> setInMenu(true) (title screen + world refresh)
             }
@@ -322,6 +326,8 @@ public class Main {
             desired = craftingTableScreen;
         } else if (hud.isFurnaceOpen()) {
             desired = furnaceScreen;
+        } else if (hud.isChestOpen()) {
+            desired = chestScreen;
         } else if (hud.isInventoryOpen()) {
             desired = inventoryScreen;
         } else {
@@ -331,7 +337,7 @@ public class Main {
         if (top == desired) {
             return;
         }
-        if (top == inventoryScreen || top == craftingTableScreen || top == furnaceScreen) {
+        if (top == inventoryScreen || top == craftingTableScreen || top == furnaceScreen || top == chestScreen) {
             screenStack.pop();
         }
         if (desired != null) {
@@ -340,7 +346,7 @@ public class Main {
     }
 
     /**
-     * Draws the open container screen (inventory / crafting table / furnace)
+     * Draws the open container screen (inventory / crafting table / furnace / chest)
      * above the game HUD. The screens only emit vertex lists; the GL passes
      * run through the HUD shader so the container backdrop covers the hotbar
      * etc., exactly like the legacy single-pass HUD rendering.
@@ -353,6 +359,8 @@ public class Main {
             craftingTableScreen.renderGui(geom, tex, overlayGeom, windowWidth, windowHeight, player, atlas);
         } else if (hud.isFurnaceOpen() && hud.getActiveFurnace() != null) {
             furnaceScreen.renderGui(geom, tex, overlayGeom, windowWidth, windowHeight, player, atlas);
+        } else if (hud.isChestOpen() && hud.getActiveChest() != null) {
+            chestScreen.renderGui(geom, tex, overlayGeom, windowWidth, windowHeight, player, atlas);
         } else if (hud.isInventoryOpen()) {
             inventoryScreen.renderGui(geom, tex, overlayGeom, windowWidth, windowHeight, player, atlas);
         } else {
@@ -590,13 +598,6 @@ public class Main {
                     return;
                 }
                 if (mainMenuScreen.isOpen()) {
-                    if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE && mainMenu.isGameStarted()
-                            && mainMenu.getCurrentScreen() == MainMenu.Screen.TITLE) {
-                        // Resume game if already in progress
-                        no.minecraft.sound.SoundManager.getInstance().play("click");
-                        screenStack.pop(); // onClose() -> setInMenu(false)
-                        setCursorLocked(true);
-                    }
                     return;
                 }
                 if (hud.isRecipeSearchFocused()) {
@@ -894,6 +895,14 @@ public class Main {
                 }
                 if (clickedBlock == BlockType.FURNACE) {
                     hud.openFurnace(world.getOrCreateFurnace(hit.hitX, hit.hitY, hit.hitZ));
+                    setCursorLocked(false);
+                    isLeftMouseDown = false;
+                    isRightMouseDown = false;
+                    syncContainerScreens();
+                    return true;
+                }
+                if (clickedBlock == BlockType.CHEST) {
+                    hud.openChest(world.getOrCreateChest(hit.hitX, hit.hitY, hit.hitZ));
                     setCursorLocked(false);
                     isLeftMouseDown = false;
                     isRightMouseDown = false;
