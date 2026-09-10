@@ -87,9 +87,9 @@ public class ItemRenderer {
         float cos = (float) Math.cos(rotY);
         float sin = (float) Math.sin(rotY);
 
-        float hx = (block == BlockType.CACTUS) ? (h * (14.0f / 16.0f)) : h;
-        float hy = h;
-        float hz = (block == BlockType.CACTUS) ? (h * (14.0f / 16.0f)) : h;
+        float hx = (block == BlockType.CACTUS || block == BlockType.CHEST) ? (h * (14.0f / 16.0f)) : h;
+        float hy = (block == BlockType.CHEST) ? (h * (14.0f / 16.0f)) : h;
+        float hz = (block == BlockType.CACTUS || block == BlockType.CHEST) ? (h * (14.0f / 16.0f)) : h;
 
         // 8 local corners
         float[][] local = {

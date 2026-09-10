@@ -302,9 +302,9 @@ public class HandRenderer {
     }
 
     private void buildBlockGeometry(BlockType block, float size) {
-        float hx = (block == BlockType.CACTUS) ? (size * 0.5f * (14.0f / 16.0f)) : (size * 0.5f);
-        float hy = size * 0.5f;
-        float hz = (block == BlockType.CACTUS) ? (size * 0.5f * (14.0f / 16.0f)) : (size * 0.5f);
+        float hx = (block == BlockType.CACTUS || block == BlockType.CHEST) ? (size * 0.5f * (14.0f / 16.0f)) : (size * 0.5f);
+        float hy = (block == BlockType.CHEST) ? (size * 0.5f * (14.0f / 16.0f)) : (size * 0.5f);
+        float hz = (block == BlockType.CACTUS || block == BlockType.CHEST) ? (size * 0.5f * (14.0f / 16.0f)) : (size * 0.5f);
 
         float uTop0, vTop0, uTop1, vTop1;
         float uBot0, vBot0, uBot1, vBot1;

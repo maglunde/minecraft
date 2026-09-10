@@ -25,16 +25,16 @@ public enum BlockType {
     WOODEN_SWORD((byte) 17, false, true, 19, 19, 19),
     WOODEN_HOE((byte) 18, false, true, 20, 20, 20),
     BOAT((byte) 19, false, true, 21, 21, 21),
-    CHEST((byte) 20, true, false, 22, 22, 22),
+    CHEST((byte) 20, true, true, 112, 113, 111),
     WOODEN_DOOR((byte) 21, false, true, 23, 23, 23),
     TRAPDOOR((byte) 22, true, true, 24, 24, 24),
     LADDER((byte) 23, false, true, 25, 25, 25),
-    FENCE((byte) 24, true, true, 26, 26, 26),
-    FENCE_GATE((byte) 25, true, true, 27, 27, 27),
-    WOODEN_SLAB((byte) 26, true, false, 28, 28, 28),
-    WOODEN_STAIRS((byte) 27, true, false, 29, 29, 29),
-    WOODEN_PRESSURE_PLATE((byte) 28, false, true, 30, 30, 30),
-    WOODEN_BUTTON((byte) 29, false, true, 31, 31, 31),
+    FENCE((byte) 24, true, true, 8, 8, 8),
+    FENCE_GATE((byte) 25, true, true, 8, 8, 8),
+    WOODEN_SLAB((byte) 26, true, false, 8, 8, 8),
+    WOODEN_STAIRS((byte) 27, true, false, 8, 8, 8),
+    WOODEN_PRESSURE_PLATE((byte) 28, false, true, 8, 8, 8),
+    WOODEN_BUTTON((byte) 29, false, true, 8, 8, 8),
     BOWL((byte) 30, false, true, 32, 32, 32),
     FURNACE((byte) 31, true, false, 4, 4, 33),
     STONE_PICKAXE((byte) 32, false, true, 34, 34, 34),
@@ -266,6 +266,20 @@ public enum BlockType {
     }
 
     public int getTexture(Face face) {
+        if (this == CHEST) {
+            return switch (face) {
+                case TOP -> topTexture; // 112
+                case BOTTOM -> bottomTexture; // 113
+                case NORTH -> 22; // 22: chest_front (with latch)
+                case SOUTH, EAST, WEST -> sideTexture; // 111 (chest_side)
+            };
+        }
+        if (this == FURNACE) {
+            return switch (face) {
+                case TOP, BOTTOM, SOUTH, EAST, WEST -> 4;
+                case NORTH -> 33;
+            };
+        }
         return switch (face) {
             case TOP -> topTexture;
             case BOTTOM -> bottomTexture;
@@ -276,6 +290,7 @@ public enum BlockType {
     public int getItemTexture() {
         return switch (this) {
             case FURNACE -> sideTexture;
+            case CHEST -> 22; // Front face with latch for inventory/HUD icon
             default -> topTexture;
         };
     }

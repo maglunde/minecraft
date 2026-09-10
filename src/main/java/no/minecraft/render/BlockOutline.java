@@ -94,6 +94,8 @@ public class BlockOutline {
         Matrix4f model = new Matrix4f().translate(bx, by, bz);
         if (type == no.minecraft.world.BlockType.CACTUS) {
             model.translate(0.0625f, 0.0f, 0.0625f).scale(0.875f, 1.0f, 0.875f);
+        } else if (type == no.minecraft.world.BlockType.CHEST) {
+            model.translate(0.0625f, 0.0f, 0.0625f).scale(0.875f, 0.875f, 0.875f);
         }
         shader.setUniform("uModel", model);
 

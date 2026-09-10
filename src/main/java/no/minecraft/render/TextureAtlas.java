@@ -209,12 +209,18 @@ public class TextureAtlas {
         // 21: Boat
         loadOrPaint(pixelData, 21, "boat.png", (x, y, rand) -> rgba(0,0,0,0));
 
-        // 22: Chest (Procedural fallback or icon)
-        drawTile(pixelData, 22, (x, y, rand) -> {
-            if (x < 1 || x > 14 || y < 1 || y > 14) return rgba(0, 0, 0, 0);
-            if (x == 1 || x == 14 || y == 1 || y == 14) return rgba(60, 40, 20, 255);
-            if (x >= 7 && x <= 8 && y >= 6 && y <= 8) return rgba(220, 220, 220, 255); // Latch
-            int base = 140 + rand.nextInt(20);
+        // 22: Chest Front (Oak wood frame, horizontal lid seam, and silver latch)
+        loadOrPaint(pixelData, 22, "chest_front.png", (x, y, rand) -> {
+            boolean border = (x == 0 || x == 15 || y == 0 || y == 15);
+            if (border) return rgba(55, 35, 18, 255);
+            boolean seam = (y == 5);
+            if (seam) return rgba(45, 28, 14, 255);
+            boolean latch = (x >= 7 && x <= 8 && y >= 4 && y <= 7);
+            if (latch) {
+                if (y == 7) return rgba(70, 70, 75, 255); // Latch shadow
+                return rgba(225, 225, 230, 255); // Silver clasp
+            }
+            int base = 145 + rand.nextInt(18);
             return rgba((int)(base * 1.15f), (int)(base * 0.75f), (int)(base * 0.35f), 255);
         });
 
@@ -227,48 +233,40 @@ public class TextureAtlas {
         // 25: Ladder
         loadOrPaint(pixelData, 25, "ladder.png", (x, y, rand) -> rgba(0,0,0,0));
 
-        // 26: Fence
-        drawTile(pixelData, 26, (x, y, rand) -> {
-            if (x >= 3 && x <= 6) return rgba(140, 95, 50, 255);
-            if (x >= 10 && x <= 13) return rgba(140, 95, 50, 255);
-            if (y >= 4 && y <= 6 || y >= 9 && y <= 11) return rgba(160, 110, 60, 255);
-            return rgba(0, 0, 0, 0);
+        // 26: Fence (Solid oak wood planks)
+        loadOrPaint(pixelData, 26, "planks.png", (x, y, rand) -> {
+            int base = (y % 4 == 0) ? 110 : (160 + rand.nextInt(20));
+            return rgba((int) (base * 1.15f), (int) (base * 0.85f), (int) (base * 0.55f), 255);
         });
 
-        // 27: Fence Gate
-        drawTile(pixelData, 27, (x, y, rand) -> {
-            if (x == 1 || x == 2 || x == 13 || x == 14) return rgba(140, 95, 50, 255);
-            if (y >= 5 && y <= 11 && x >= 4 && x <= 11) {
-                return (x == 7 || x == 8) ? rgba(120, 80, 40, 255) : rgba(165, 115, 65, 255);
-            }
-            return rgba(0, 0, 0, 0);
+        // 27: Fence Gate (Solid oak wood planks)
+        loadOrPaint(pixelData, 27, "planks.png", (x, y, rand) -> {
+            int base = (y % 4 == 0) ? 110 : (160 + rand.nextInt(20));
+            return rgba((int) (base * 1.15f), (int) (base * 0.85f), (int) (base * 0.55f), 255);
         });
 
-        // 28: Wooden Slab
-        drawTile(pixelData, 28, (x, y, rand) -> {
-            if (y < 8) return rgba(0, 0, 0, 0);
-            boolean line = (y == 8 || y == 12);
-            int base = line ? 110 : (160 + rand.nextInt(20));
-            return rgba((int)(base * 1.15f), (int)(base * 0.85f), (int)(base * 0.55f), 255);
+        // 28: Wooden Slab (Solid oak wood planks)
+        loadOrPaint(pixelData, 28, "planks.png", (x, y, rand) -> {
+            int base = (y % 4 == 0) ? 110 : (160 + rand.nextInt(20));
+            return rgba((int) (base * 1.15f), (int) (base * 0.85f), (int) (base * 0.55f), 255);
         });
 
-        // 29: Wooden Stairs
-        drawTile(pixelData, 29, (x, y, rand) -> {
-            if (x < 8 && y < 8) return rgba(0, 0, 0, 0);
-            int base = 150 + rand.nextInt(20);
-            return rgba((int)(base * 1.15f), (int)(base * 0.85f), (int)(base * 0.55f), 255);
+        // 29: Wooden Stairs (Solid oak wood planks)
+        loadOrPaint(pixelData, 29, "planks.png", (x, y, rand) -> {
+            int base = (y % 4 == 0) ? 110 : (160 + rand.nextInt(20));
+            return rgba((int) (base * 1.15f), (int) (base * 0.85f), (int) (base * 0.55f), 255);
         });
 
-        // 30: Pressure Plate
-        drawTile(pixelData, 30, (x, y, rand) -> {
-            if (y >= 13 && x >= 2 && x <= 13) return rgba(160, 115, 65, 255);
-            return rgba(0, 0, 0, 0);
+        // 30: Pressure Plate (Solid oak wood planks)
+        loadOrPaint(pixelData, 30, "planks.png", (x, y, rand) -> {
+            int base = (y % 4 == 0) ? 110 : (160 + rand.nextInt(20));
+            return rgba((int) (base * 1.15f), (int) (base * 0.85f), (int) (base * 0.55f), 255);
         });
 
-        // 31: Button
-        drawTile(pixelData, 31, (x, y, rand) -> {
-            if (x >= 5 && x <= 10 && y >= 6 && y <= 9) return rgba(165, 120, 70, 255);
-            return rgba(0, 0, 0, 0);
+        // 31: Button (Solid oak wood planks)
+        loadOrPaint(pixelData, 31, "planks.png", (x, y, rand) -> {
+            int base = (y % 4 == 0) ? 110 : (160 + rand.nextInt(20));
+            return rgba((int) (base * 1.15f), (int) (base * 0.85f), (int) (base * 0.55f), 255);
         });
 
         // 32: Bowl
@@ -394,9 +392,6 @@ public class TextureAtlas {
 
         // 61: Dragon Egg (Obsidian black with purple speckles)
         loadOrPaint(pixelData, 61, "dragon_egg.png", (x, y, rand) -> {
-            float dx = x - 7.5f;
-            float dy = y - 7.5f;
-            if (dx * dx + dy * dy > 45) return rgba(0, 0, 0, 0);
             boolean speckle = rand.nextInt(6) == 0;
             if (speckle) return rgba(160, 40, 220, 255);
             int v = 15 + rand.nextInt(20);
@@ -886,6 +881,32 @@ public class TextureAtlas {
             return rgba(0, 0, 0, 0);
         });
 
+        // 111: Chest Side / Back (Oak wood panels with dark perimeter frame and lid seam)
+        loadOrPaint(pixelData, 111, "chest_side.png", (x, y, rand) -> {
+            boolean border = (x == 0 || x == 15 || y == 0 || y == 15);
+            if (border) return rgba(55, 35, 18, 255);
+            boolean seam = (y == 5);
+            if (seam) return rgba(45, 28, 14, 255);
+            int base = 145 + rand.nextInt(18);
+            return rgba((int)(base * 1.15f), (int)(base * 0.75f), (int)(base * 0.35f), 255);
+        });
+
+        // 112: Chest Top (Oak wood lid with dark perimeter frame)
+        loadOrPaint(pixelData, 112, "chest_top.png", (x, y, rand) -> {
+            boolean border = (x == 0 || x == 15 || y == 0 || y == 15);
+            if (border) return rgba(55, 35, 18, 255);
+            int base = 145 + rand.nextInt(18);
+            return rgba((int)(base * 1.15f), (int)(base * 0.75f), (int)(base * 0.35f), 255);
+        });
+
+        // 113: Chest Bottom (Oak wood bottom with dark perimeter frame)
+        loadOrPaint(pixelData, 113, "chest_bottom.png", (x, y, rand) -> {
+            boolean border = (x == 0 || x == 15 || y == 0 || y == 15);
+            if (border) return rgba(55, 35, 18, 255);
+            int base = 130 + rand.nextInt(18);
+            return rgba((int)(base * 1.15f), (int)(base * 0.75f), (int)(base * 0.35f), 255);
+        });
+
         for (int y = 0; y < ATLAS_SIZE; y++) {
             buffer.put(pixelData[y]);
         }
@@ -912,6 +933,11 @@ public class TextureAtlas {
                             int r = (argb >> 16) & 0xFF;
                             int g = (argb >> 8) & 0xFF;
                             int b = argb & 0xFF;
+
+                            // Fill transparent pixels on end portal frame side with top frame color
+                            if (tileIndex == 58 && a == 0) {
+                                r = 90; g = 150; b = 95; a = 255;
+                            }
 
                             int targetY = tileY + py;
                             int targetX = (tileX + px) * 4;
