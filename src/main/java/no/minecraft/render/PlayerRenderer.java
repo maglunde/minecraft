@@ -331,54 +331,94 @@ public class PlayerRenderer {
     }
 
     private void addBlockGeometry(List<Float> v, Matrix4f mat, BlockType block, float size) {
-        float h = size * 0.5f;
+        float hx = (block == BlockType.CACTUS) ? (size * 0.5f * (14.0f / 16.0f)) : (size * 0.5f);
+        float hy = size * 0.5f;
+        float hz = (block == BlockType.CACTUS) ? (size * 0.5f * (14.0f / 16.0f)) : (size * 0.5f);
+
+        float uTop0, vTop0, uTop1, vTop1;
+        float uBot0, vBot0, uBot1, vBot1;
+        float uSide0, vSide0, uSide1, vSide1;
+        float[] uvSide;
+
+        if (block == BlockType.CACTUS) {
+            int topTexId = block.getTexture(BlockType.Face.TOP);
+            float[] uvT = TextureAtlas.getUVs(topTexId);
+            float px = (uvT[2] - uvT[0]) / 16.0f;
+            float py = (uvT[3] - uvT[1]) / 16.0f;
+            uTop0 = uvT[0] + 1.0f * px;
+            uTop1 = uvT[0] + 15.0f * px;
+            vTop0 = uvT[1] + 1.0f * py;
+            vTop1 = uvT[1] + 15.0f * py;
+
+            int botTexId = block.getTexture(BlockType.Face.BOTTOM);
+            float[] uvB = TextureAtlas.getUVs(botTexId);
+            float bx = (uvB[2] - uvB[0]) / 16.0f;
+            float by = (uvB[3] - uvB[1]) / 16.0f;
+            uBot0 = uvB[0] + 1.0f * bx;
+            uBot1 = uvB[0] + 15.0f * bx;
+            vBot0 = uvB[1] + 1.0f * by;
+            vBot1 = uvB[1] + 15.0f * by;
+
+            int sideTexId = block.getTexture(BlockType.Face.NORTH);
+            float[] uvS = TextureAtlas.getUVs(sideTexId);
+            float sx = (uvS[2] - uvS[0]) / 16.0f;
+            uSide0 = uvS[0] + 1.0f * sx;
+            uSide1 = uvS[0] + 15.0f * sx;
+            vSide0 = uvS[1];
+            vSide1 = uvS[3];
+            uvSide = new float[]{uSide0, vSide0, uSide1, vSide1};
+        } else {
+            float[] uvT = TextureAtlas.getUVs(block.getTexture(BlockType.Face.TOP));
+            uTop0 = uvT[0]; vTop0 = uvT[1]; uTop1 = uvT[2]; vTop1 = uvT[3];
+            float[] uvB = TextureAtlas.getUVs(block.getTexture(BlockType.Face.BOTTOM));
+            uBot0 = uvB[0]; vBot0 = uvB[1]; uBot1 = uvB[2]; vBot1 = uvB[3];
+            uvSide = null;
+        }
 
         // Top Face (+Y)
-        float[] uvTop = TextureAtlas.getUVs(block.getTexture(BlockType.Face.TOP));
-        addQuad(v, mat, -h, h, -h, uvTop[0], uvTop[1],
-                         h, h, -h, uvTop[2], uvTop[1],
-                         h, h,  h, uvTop[2], uvTop[3],
-                        -h, h,  h, uvTop[0], uvTop[3],
+        addQuad(v, mat, -hx, hy, -hz, uTop0, vTop0,
+                         hx, hy, -hz, uTop1, vTop0,
+                         hx, hy,  hz, uTop1, vTop1,
+                        -hx, hy,  hz, uTop0, vTop1,
                         1.0f, 1.0f, 1.0f, 1.0f);
 
         // Bottom Face (-Y)
-        float[] uvBot = TextureAtlas.getUVs(block.getTexture(BlockType.Face.BOTTOM));
-        addQuad(v, mat, -h, -h,  h, uvBot[0], uvBot[3],
-                         h, -h,  h, uvBot[2], uvBot[3],
-                         h, -h, -h, uvBot[2], uvBot[1],
-                        -h, -h, -h, uvBot[0], uvBot[1],
+        addQuad(v, mat, -hx, -hy,  hz, uBot0, vBot1,
+                         hx, -hy,  hz, uBot1, vBot1,
+                         hx, -hy, -hz, uBot1, vBot0,
+                        -hx, -hy, -hz, uBot0, vBot0,
                         0.55f, 0.55f, 0.55f, 1.0f);
 
         // North Face (-Z)
-        float[] uvN = TextureAtlas.getUVs(block.getTexture(BlockType.Face.NORTH));
-        addQuad(v, mat,  h, -h, -h, uvN[2], uvN[3],
-                        -h, -h, -h, uvN[0], uvN[3],
-                        -h,  h, -h, uvN[0], uvN[1],
-                         h,  h, -h, uvN[2], uvN[1],
+        float[] uvN = (uvSide != null) ? uvSide : TextureAtlas.getUVs(block.getTexture(BlockType.Face.NORTH));
+        addQuad(v, mat,  hx, -hy, -hz, uvN[2], uvN[3],
+                        -hx, -hy, -hz, uvN[0], uvN[3],
+                        -hx,  hy, -hz, uvN[0], uvN[1],
+                         hx,  hy, -hz, uvN[2], uvN[1],
                         0.75f, 0.75f, 0.75f, 1.0f);
 
         // South Face (+Z)
-        float[] uvS = TextureAtlas.getUVs(block.getTexture(BlockType.Face.SOUTH));
-        addQuad(v, mat, -h, -h, h, uvS[0], uvS[3],
-                         h, -h, h, uvS[2], uvS[3],
-                         h,  h, h, uvS[2], uvS[1],
-                        -h,  h, h, uvS[0], uvS[1],
+        float[] uvS = (uvSide != null) ? uvSide : TextureAtlas.getUVs(block.getTexture(BlockType.Face.SOUTH));
+        addQuad(v, mat, -hx, -hy, hz, uvS[0], uvS[3],
+                         hx, -hy, hz, uvS[2], uvS[3],
+                         hx,  hy, hz, uvS[2], uvS[1],
+                        -hx,  hy, hz, uvS[0], uvS[1],
                         0.75f, 0.75f, 0.75f, 1.0f);
 
         // West Face (-X)
-        float[] uvW = TextureAtlas.getUVs(block.getTexture(BlockType.Face.WEST));
-        addQuad(v, mat, -h, -h, -h, uvW[0], uvW[3],
-                        -h, -h,  h, uvW[2], uvW[3],
-                        -h,  h,  h, uvW[2], uvW[1],
-                        -h,  h, -h, uvW[0], uvW[1],
+        float[] uvW = (uvSide != null) ? uvSide : TextureAtlas.getUVs(block.getTexture(BlockType.Face.WEST));
+        addQuad(v, mat, -hx, -hy, -hz, uvW[0], uvW[3],
+                        -hx, -hy,  hz, uvW[2], uvW[3],
+                        -hx,  hy,  hz, uvW[2], uvW[1],
+                        -hx,  hy, -hz, uvW[0], uvW[1],
                         0.85f, 0.85f, 0.85f, 1.0f);
 
         // East Face (+X)
-        float[] uvE = TextureAtlas.getUVs(block.getTexture(BlockType.Face.EAST));
-        addQuad(v, mat, h, -h,  h, uvE[2], uvE[3],
-                        h, -h, -h, uvE[0], uvE[3],
-                        h,  h, -h, uvE[0], uvE[1],
-                        h,  h,  h, uvE[2], uvE[1],
+        float[] uvE = (uvSide != null) ? uvSide : TextureAtlas.getUVs(block.getTexture(BlockType.Face.EAST));
+        addQuad(v, mat, hx, -hy,  hz, uvE[2], uvE[3],
+                        hx, -hy, -hz, uvE[0], uvE[3],
+                        hx,  hy, -hz, uvE[0], uvE[1],
+                        hx,  hy,  hz, uvE[2], uvE[1],
                         0.85f, 0.85f, 0.85f, 1.0f);
     }
 

@@ -87,10 +87,14 @@ public class ItemRenderer {
         float cos = (float) Math.cos(rotY);
         float sin = (float) Math.sin(rotY);
 
+        float hx = (block == BlockType.CACTUS) ? (h * (14.0f / 16.0f)) : h;
+        float hy = h;
+        float hz = (block == BlockType.CACTUS) ? (h * (14.0f / 16.0f)) : h;
+
         // 8 local corners
         float[][] local = {
-                {-h, -h, -h}, { h, -h, -h}, { h,  h, -h}, {-h,  h, -h},
-                {-h, -h,  h}, { h, -h,  h}, { h,  h,  h}, {-h,  h,  h}
+                {-hx, -hy, -hz}, { hx, -hy, -hz}, { hx,  hy, -hz}, {-hx,  hy, -hz},
+                {-hx, -hy,  hz}, { hx, -hy,  hz}, { hx,  hy,  hz}, {-hx,  hy,  hz}
         };
 
         // Rotated world corners
@@ -105,24 +109,59 @@ public class ItemRenderer {
             p[i][2] = cz + (lx * sin + lz * cos);
         }
 
-        // Top Face
-        addFace(v, p[3], p[2], p[6], p[7], block.getTexture(BlockType.Face.TOP), 1.0f);
-        // Bottom Face
-        addFace(v, p[4], p[5], p[1], p[0], block.getTexture(BlockType.Face.BOTTOM), 0.5f);
-        // North Face
-        addFace(v, p[0], p[1], p[2], p[3], block.getTexture(BlockType.Face.NORTH), 0.75f);
-        // South Face
-        addFace(v, p[5], p[4], p[7], p[6], block.getTexture(BlockType.Face.SOUTH), 0.75f);
-        // West Face
-        addFace(v, p[4], p[0], p[3], p[7], block.getTexture(BlockType.Face.WEST), 0.85f);
-        // East Face
-        addFace(v, p[1], p[5], p[6], p[2], block.getTexture(BlockType.Face.EAST), 0.85f);
+        if (block == BlockType.CACTUS) {
+            int topTexId = block.getTexture(BlockType.Face.TOP);
+            float[] uvTop = TextureAtlas.getUVs(topTexId);
+            float px = (uvTop[2] - uvTop[0]) / 16.0f;
+            float py = (uvTop[3] - uvTop[1]) / 16.0f;
+            float uTop0 = uvTop[0] + 1.0f * px;
+            float uTop1 = uvTop[0] + 15.0f * px;
+            float vTop0 = uvTop[1] + 1.0f * py;
+            float vTop1 = uvTop[1] + 15.0f * py;
+
+            int sideTexId = block.getTexture(BlockType.Face.NORTH);
+            float[] uvSide = TextureAtlas.getUVs(sideTexId);
+            float sx = (uvSide[2] - uvSide[0]) / 16.0f;
+            float uSide0 = uvSide[0] + 1.0f * sx;
+            float uSide1 = uvSide[0] + 15.0f * sx;
+            float vSide0 = uvSide[1];
+            float vSide1 = uvSide[3];
+
+            // Top Face
+            addFaceWithUV(v, p[3], p[2], p[6], p[7], uTop0, vTop0, uTop1, vTop1, 1.0f);
+            // Bottom Face
+            addFaceWithUV(v, p[4], p[5], p[1], p[0], uTop0, vTop0, uTop1, vTop1, 0.5f);
+            // North Face
+            addFaceWithUV(v, p[0], p[1], p[2], p[3], uSide0, vSide0, uSide1, vSide1, 0.75f);
+            // South Face
+            addFaceWithUV(v, p[5], p[4], p[7], p[6], uSide0, vSide0, uSide1, vSide1, 0.75f);
+            // West Face
+            addFaceWithUV(v, p[4], p[0], p[3], p[7], uSide0, vSide0, uSide1, vSide1, 0.85f);
+            // East Face
+            addFaceWithUV(v, p[1], p[5], p[6], p[2], uSide0, vSide0, uSide1, vSide1, 0.85f);
+        } else {
+            // Top Face
+            addFace(v, p[3], p[2], p[6], p[7], block.getTexture(BlockType.Face.TOP), 1.0f);
+            // Bottom Face
+            addFace(v, p[4], p[5], p[1], p[0], block.getTexture(BlockType.Face.BOTTOM), 0.5f);
+            // North Face
+            addFace(v, p[0], p[1], p[2], p[3], block.getTexture(BlockType.Face.NORTH), 0.75f);
+            // South Face
+            addFace(v, p[5], p[4], p[7], p[6], block.getTexture(BlockType.Face.SOUTH), 0.75f);
+            // West Face
+            addFace(v, p[4], p[0], p[3], p[7], block.getTexture(BlockType.Face.WEST), 0.85f);
+            // East Face
+            addFace(v, p[1], p[5], p[6], p[2], block.getTexture(BlockType.Face.EAST), 0.85f);
+        }
     }
 
     private void addFace(List<Float> v, float[] p0, float[] p1, float[] p2, float[] p3, int tileId, float light) {
         float[] uv = TextureAtlas.getUVs(tileId);
-        float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
+        addFaceWithUV(v, p0, p1, p2, p3, uv[0], uv[1], uv[2], uv[3], light);
+    }
 
+    private void addFaceWithUV(List<Float> v, float[] p0, float[] p1, float[] p2, float[] p3,
+                               float u0, float v0, float u1, float v1, float light) {
         // Triangle 1: p0, p1, p2
         addVertex(v, p0[0], p0[1], p0[2], u0, v1, light);
         addVertex(v, p1[0], p1[1], p1[2], u1, v1, light);
