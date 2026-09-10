@@ -30,6 +30,7 @@ public class Player {
 
     private GameMode gameMode = GameMode.SURVIVAL;
     private final Inventory inventory = new Inventory();
+    private final ItemStack offhandItem = new ItemStack(BlockType.AIR, 0);
     private int health = MAX_HEALTH;
     private float lastAirVerticalSpeed = 0.0f;
 
@@ -476,6 +477,42 @@ public class Player {
         if (slot >= 0 && slot < Inventory.HOTBAR_SIZE) {
             this.selectedSlot = slot;
         }
+    }
+
+    public ItemStack getOffhandItem() {
+        return offhandItem;
+    }
+
+    public void swapHands() {
+        if (gameMode == GameMode.CREATIVE) {
+            BlockType creativeSelected = CREATIVE_HOTBAR_BLOCKS[selectedSlot];
+            if (offhandItem.isEmpty()) {
+                if (creativeSelected != BlockType.AIR) {
+                    offhandItem.setType(creativeSelected);
+                    offhandItem.setCount(1);
+                }
+            } else {
+                BlockType tempType = offhandItem.getType();
+                int tempCount = offhandItem.getCount();
+                offhandItem.setType(creativeSelected);
+                offhandItem.setCount(1);
+                CREATIVE_HOTBAR_BLOCKS[selectedSlot] = tempType;
+            }
+        } else {
+            ItemStack mainHand = inventory.getSlot(selectedSlot);
+            BlockType tempType = mainHand.getType();
+            int tempCount = mainHand.getCount();
+            int tempDamage = mainHand.getDamage();
+
+            mainHand.setType(offhandItem.getType());
+            mainHand.setCount(offhandItem.getCount());
+            mainHand.setDamage(offhandItem.getDamage());
+
+            offhandItem.setType(tempType);
+            offhandItem.setCount(tempCount);
+            offhandItem.setDamage(tempDamage);
+        }
+        no.minecraft.sound.SoundManager.getInstance().play("click", 0.8f);
     }
 
     public void scrollSlot(int direction) {

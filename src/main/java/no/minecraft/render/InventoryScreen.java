@@ -64,7 +64,16 @@ public class InventoryScreen extends AbstractContainerScreen {
         float shieldX = ix + 77.0f * p;
         float shieldY = iy + 62.0f * p;
         drawPixelSlot(geom, shieldX, shieldY, 18.0f * p, p);
-        drawShieldSilhouette(geom, shieldX + 3.0f * p, shieldY + 3.0f * p, p);
+        ItemStack offhand = player.getOffhandItem();
+        if (offhand == null || offhand.isEmpty()) {
+            drawShieldSilhouette(geom, shieldX + 3.0f * p, shieldY + 3.0f * p, p);
+        } else {
+            if (hud.mouseX >= shieldX && hud.mouseX <= shieldX + 18.0f * p
+                    && hud.mouseY >= shieldY && hud.mouseY <= shieldY + 18.0f * p) {
+                hoveredStack = offhand;
+            }
+            renderSlotItem(tex, overlayGeom, offhand, shieldX, shieldY, p);
+        }
 
         // 6. Crafting Title
         drawPixelCraftingTitle(geom, ix + 97.0f * p, iy + 6.0f * p, p);

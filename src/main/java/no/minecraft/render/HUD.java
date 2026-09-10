@@ -428,8 +428,34 @@ public class HUD {
         return false;
     }
 
-    private void onSlotClicked(ItemStack slot, int button) {
-        if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+    private double lastSlotClickTime = 0.0;
+    private ItemStack lastClickedSlotRef = null;
+
+    private void onSlotClicked(ItemStack slot, int button, Player player) {
+        if (button == GLFW_MOUSE_BUTTON_LEFT) {
+            double now = org.lwjgl.glfw.GLFW.glfwGetTime();
+            if (!carriedItem.isEmpty() && (now - lastSlotClickTime < 0.35)
+                    && (slot == lastClickedSlotRef || (slot != null && slot.getType() == carriedItem.getType()))) {
+                if (collectMatchingItemsToCarried(player)) {
+                    lastSlotClickTime = 0.0;
+                    isLeftDragging = false;
+                    draggedSlots.clear();
+                    return;
+                }
+            }
+            lastSlotClickTime = now;
+            lastClickedSlotRef = slot;
+
+            if (!carriedItem.isEmpty() && (slot.isEmpty() || (slot.getType() == carriedItem.getType() && slot.getCount() < no.minecraft.player.Inventory.MAX_STACK_SIZE))) {
+                isLeftDragging = true;
+                draggedSlots.clear();
+                draggedSlots.add(slot);
+                startDragSlot = slot;
+                return;
+            }
+            handleSlotClick(slot, button);
+        } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+            lastSlotClickTime = 0.0;
             if (!carriedItem.isEmpty() && (slot.isEmpty() || (slot.getType() == carriedItem.getType() && slot.getCount() < no.minecraft.player.Inventory.MAX_STACK_SIZE))) {
                 if (distributeRightDragSlot(carriedItem, slot)) {
                     draggedSlots.clear();
@@ -440,22 +466,121 @@ public class HUD {
                 }
             }
             handleSlotClick(slot, button);
-        } else if (button == GLFW_MOUSE_BUTTON_LEFT) {
-            if (!carriedItem.isEmpty() && (slot.isEmpty() || (slot.getType() == carriedItem.getType() && slot.getCount() < no.minecraft.player.Inventory.MAX_STACK_SIZE))) {
-                isLeftDragging = true;
-                draggedSlots.clear();
-                draggedSlots.add(slot);
-                startDragSlot = slot;
-                return;
-            }
-            handleSlotClick(slot, button);
         } else {
+            lastSlotClickTime = 0.0;
             handleSlotClick(slot, button);
         }
     }
 
+    private boolean collectMatchingItemsToCarried(Player player) {
+        if (carriedItem.isEmpty() || carriedItem.getCount() >= no.minecraft.player.Inventory.MAX_STACK_SIZE) {
+            return false;
+        }
+        BlockType targetType = carriedItem.getType();
+        boolean collectedAny = false;
+
+        // 1. Collect from player inventory slots (0..35)
+        if (player != null) {
+            for (int i = 0; i < no.minecraft.player.Inventory.TOTAL_SLOTS; i++) {
+                ItemStack slot = player.getInventory().getSlot(i);
+                if (!slot.isEmpty() && slot.getType() == targetType) {
+                    int space = no.minecraft.player.Inventory.MAX_STACK_SIZE - carriedItem.getCount();
+                    if (space <= 0) break;
+                    int take = Math.min(space, slot.getCount());
+                    carriedItem.add(take);
+                    slot.add(-take);
+                    collectedAny = true;
+                }
+            }
+
+            // Offhand slot
+            ItemStack offhand = player.getOffhandItem();
+            if (offhand != null && !offhand.isEmpty() && offhand.getType() == targetType) {
+                int space = no.minecraft.player.Inventory.MAX_STACK_SIZE - carriedItem.getCount();
+                if (space > 0) {
+                    int take = Math.min(space, offhand.getCount());
+                    carriedItem.add(take);
+                    offhand.add(-take);
+                    collectedAny = true;
+                }
+            }
+        }
+
+        // 2. Collect from open container slots
+        if (inventoryOpen) {
+            for (ItemStack s : craftSlots) {
+                if (!s.isEmpty() && s.getType() == targetType) {
+                    int space = no.minecraft.player.Inventory.MAX_STACK_SIZE - carriedItem.getCount();
+                    if (space <= 0) break;
+                    int take = Math.min(space, s.getCount());
+                    carriedItem.add(take);
+                    s.add(-take);
+                    collectedAny = true;
+                }
+            }
+        } else if (craftingTableOpen) {
+            for (ItemStack s : benchSlots) {
+                if (!s.isEmpty() && s.getType() == targetType) {
+                    int space = no.minecraft.player.Inventory.MAX_STACK_SIZE - carriedItem.getCount();
+                    if (space <= 0) break;
+                    int take = Math.min(space, s.getCount());
+                    carriedItem.add(take);
+                    s.add(-take);
+                    collectedAny = true;
+                }
+            }
+        } else if (chestOpen && activeChest != null) {
+            for (int i = 0; i < activeChest.getSize(); i++) {
+                ItemStack s = activeChest.getSlot(i);
+                if (s != null && !s.isEmpty() && s.getType() == targetType) {
+                    int space = no.minecraft.player.Inventory.MAX_STACK_SIZE - carriedItem.getCount();
+                    if (space <= 0) break;
+                    int take = Math.min(space, s.getCount());
+                    carriedItem.add(take);
+                    s.add(-take);
+                    collectedAny = true;
+                }
+            }
+        } else if (furnaceOpen && activeFurnace != null) {
+            ItemStack in = activeFurnace.getInput();
+            if (!in.isEmpty() && in.getType() == targetType) {
+                int space = no.minecraft.player.Inventory.MAX_STACK_SIZE - carriedItem.getCount();
+                if (space > 0) {
+                    int take = Math.min(space, in.getCount());
+                    carriedItem.add(take);
+                    in.add(-take);
+                    collectedAny = true;
+                }
+            }
+            ItemStack fuel = activeFurnace.getFuel();
+            if (!fuel.isEmpty() && fuel.getType() == targetType) {
+                int space = no.minecraft.player.Inventory.MAX_STACK_SIZE - carriedItem.getCount();
+                if (space > 0) {
+                    int take = Math.min(space, fuel.getCount());
+                    carriedItem.add(take);
+                    fuel.add(-take);
+                    collectedAny = true;
+                }
+            }
+        }
+
+        if (collectedAny) {
+            no.minecraft.sound.SoundManager.getInstance().play("click");
+            return true;
+        }
+        return false;
+    }
+
     public float getGuiScale(int windowWidth, int windowHeight) {
         return no.minecraft.settings.GameSettings.getInstance().calculateGuiScale(windowWidth, windowHeight);
+    }
+
+    public float getMouseX() {
+        return mouseX;
+    }
+
+    public float getMouseY() {
+        return mouseY;
     }
 
     public ItemStack getSlotAt(double mx, double my, Player player, int windowWidth, int windowHeight) {
@@ -502,6 +627,13 @@ public class HUD {
                 }
             }
         } else if (inventoryOpen) {
+            // Shield / Offhand slot
+            float shieldX = ix + 77.0f * scale;
+            float shieldY = iy + 62.0f * scale;
+            if (mx >= shieldX && mx <= shieldX + 18.0f * scale && my >= shieldY && my <= shieldY + 18.0f * scale) {
+                return player != null ? player.getOffhandItem() : null;
+            }
+
             float craftGridX = ix + 98.0f * scale;
             float craftGridY = iy + 18.0f * scale;
             for (int r = 0; r < 2; r++) {
@@ -524,7 +656,7 @@ public class HUD {
                 float sx = mainInvX + col * 18.0f * scale;
                 float sy = mainInvY + row * 18.0f * scale;
                 if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
-                    return player.getInventory().getSlot(slotIndex);
+                    return player != null ? player.getInventory().getSlot(slotIndex) : null;
                 }
             }
         }
@@ -534,7 +666,7 @@ public class HUD {
         for (int col = 0; col < 9; col++) {
             float sx = mainInvX + col * 18.0f * scale;
             if (mx >= sx && mx <= sx + 18.0f * scale && my >= hotbarY && my <= hotbarY + 18.0f * scale) {
-                return player.getInventory().getSlot(col);
+                return player != null ? player.getInventory().getSlot(col) : null;
             }
         }
 
@@ -914,7 +1046,7 @@ public class HUD {
                     float sx = gridX + c * 18.0f * scale;
                     float sy = gridY + r * 18.0f * scale;
                     if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
-                        onSlotClicked(benchSlots[slotIdx], button);
+                        onSlotClicked(benchSlots[slotIdx], button, player);
                         return true;
                     }
                 }
@@ -982,7 +1114,7 @@ public class HUD {
                     float sx = mainInvX + col * 18.0f * scale;
                     float sy = mainInvY + row * 18.0f * scale;
                     if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
-                        onSlotClicked(player.getInventory().getSlot(slotIndex), button);
+                        onSlotClicked(player.getInventory().getSlot(slotIndex), button, player);
                         return true;
                     }
                 }
@@ -993,7 +1125,7 @@ public class HUD {
             for (int col = 0; col < 9; col++) {
                 float sx = mainInvX + col * 18.0f * scale;
                 if (mx >= sx && mx <= sx + 18.0f * scale && my >= hotbarInvY && my <= hotbarInvY + 18.0f * scale) {
-                    onSlotClicked(player.getInventory().getSlot(col), button);
+                    onSlotClicked(player.getInventory().getSlot(col), button, player);
                     return true;
                 }
             }
@@ -1020,7 +1152,7 @@ public class HUD {
                         no.minecraft.sound.SoundManager.getInstance().play("click");
                     }
                 } else {
-                    onSlotClicked(activeFurnace.getInput(), button);
+                    onSlotClicked(activeFurnace.getInput(), button, player);
                 }
                 return true;
             }
@@ -1035,7 +1167,7 @@ public class HUD {
                         no.minecraft.sound.SoundManager.getInstance().play("click");
                     }
                 } else {
-                    onSlotClicked(activeFurnace.getFuel(), button);
+                    onSlotClicked(activeFurnace.getFuel(), button, player);
                 }
                 return true;
             }
@@ -1082,7 +1214,7 @@ public class HUD {
                         if (isShiftDown) {
                             handleFurnaceShiftClick(slot, player);
                         } else {
-                            onSlotClicked(slot, button);
+                            onSlotClicked(slot, button, player);
                         }
                         return true;
                     }
@@ -1098,7 +1230,7 @@ public class HUD {
                     if (isShiftDown) {
                         handleFurnaceShiftClick(slot, player);
                     } else {
-                        onSlotClicked(slot, button);
+                        onSlotClicked(slot, button, player);
                     }
                     return true;
                 }
@@ -1123,7 +1255,7 @@ public class HUD {
                             if (isShiftDown) {
                                 handleChestSlotShiftClick(slot, player);
                             } else {
-                                onSlotClicked(slot, button);
+                                onSlotClicked(slot, button, player);
                             }
                         }
                         return true;
@@ -1144,7 +1276,7 @@ public class HUD {
                         if (isShiftDown) {
                             handlePlayerToChestShiftClick(slot, activeChest);
                         } else {
-                            onSlotClicked(slot, button);
+                            onSlotClicked(slot, button, player);
                         }
                         return true;
                     }
@@ -1160,7 +1292,7 @@ public class HUD {
                     if (isShiftDown) {
                         handlePlayerToChestShiftClick(slot, activeChest);
                     } else {
-                        onSlotClicked(slot, button);
+                        onSlotClicked(slot, button, player);
                     }
                     return true;
                 }
@@ -1322,6 +1454,14 @@ public class HUD {
             }
         }
 
+        // Shield / Offhand slot
+        float shieldX = ix + 77.0f * scale;
+        float shieldY = iy + 62.0f * scale;
+        if (mx >= shieldX && mx <= shieldX + 18.0f * scale && my >= shieldY && my <= shieldY + 18.0f * scale) {
+            onSlotClicked(player.getOffhandItem(), button, player);
+            return true;
+        }
+
         // 2x2 Crafting Grid Slots
         float craftGridX = ix + 98.0f * scale;
         float craftGridY = iy + 18.0f * scale;
@@ -1331,7 +1471,7 @@ public class HUD {
                 float sx = craftGridX + c * 18.0f * scale;
                 float sy = craftGridY + r * 18.0f * scale;
                 if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
-                    onSlotClicked(craftSlots[slotIdx], button);
+                    onSlotClicked(craftSlots[slotIdx], button, player);
                     return true;
                 }
             }
@@ -1389,7 +1529,7 @@ public class HUD {
                 float sx = mainInvX + col * 18.0f * scale;
                 float sy = mainInvY + row * 18.0f * scale;
                 if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
-                    onSlotClicked(player.getInventory().getSlot(slotIndex), button);
+                    onSlotClicked(player.getInventory().getSlot(slotIndex), button, player);
                     return true;
                 }
             }
@@ -1400,7 +1540,7 @@ public class HUD {
         for (int col = 0; col < 9; col++) {
             float sx = mainInvX + col * 18.0f * scale;
             if (mx >= sx && mx <= sx + 18.0f * scale && my >= hotbarInvY && my <= hotbarInvY + 18.0f * scale) {
-                onSlotClicked(player.getInventory().getSlot(col), button);
+                onSlotClicked(player.getInventory().getSlot(col), button, player);
                 return true;
             }
         }
@@ -1409,12 +1549,10 @@ public class HUD {
     }
 
     public boolean handleInventoryKeyPress(int key, double mx, double my, Player player, int windowWidth, int windowHeight) {
-        if (!inventoryOpen && !craftingTableOpen && (!furnaceOpen || activeFurnace == null) && (!chestOpen || activeChest == null)) return false;
+        if (!isInventoryOpen() || player == null) return false;
         if (key < GLFW_KEY_1 || key > GLFW_KEY_9) return false;
         int hotbarIndex = key - GLFW_KEY_1;
-        if (!player.getInventory().getSlot(hotbarIndex).isEmpty()) {
-            return false; // Bare dersom den er ledig da
-        }
+        ItemStack hotbarSlot = player.getInventory().getSlot(hotbarIndex);
 
         float scale = getGuiScale(windowWidth, windowHeight);
         float invW = 176.0f * scale;
@@ -1422,6 +1560,7 @@ public class HUD {
         float ix = (windowWidth - invW) / 2.0f;
         float iy = (windowHeight - invH) / 2.0f;
 
+        // 1. Check crafting results and furnace outputs
         if (furnaceOpen && activeFurnace != null) {
             float outX = ix + 116.0f * scale;
             float outY = iy + 31.0f * scale;
@@ -1429,58 +1568,22 @@ public class HUD {
             if (mx >= outX && mx <= outX + outSize && my >= outY && my <= outY + outSize) {
                 ItemStack res = activeFurnace.getOutput();
                 if (!res.isEmpty()) {
-                    player.getInventory().getSlot(hotbarIndex).setType(res.getType());
-                    player.getInventory().getSlot(hotbarIndex).setCount(res.getCount());
-                    res.clear();
-                    no.minecraft.sound.SoundManager.getInstance().play("click");
-                    no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.HOT_TOPIC);
-                    return true;
-                }
-            }
-            float inX = ix + 56.0f * scale;
-            float inY = iy + 17.0f * scale;
-            if (mx >= inX && mx <= inX + 18.0f * scale && my >= inY && my <= inY + 18.0f * scale) {
-                ItemStack in = activeFurnace.getInput();
-                if (!in.isEmpty()) {
-                    player.getInventory().getSlot(hotbarIndex).setType(in.getType());
-                    player.getInventory().getSlot(hotbarIndex).setCount(in.getCount());
-                    in.clear();
-                    no.minecraft.sound.SoundManager.getInstance().play("click");
-                    return true;
-                }
-            }
-            float fuelX = ix + 56.0f * scale;
-            float fuelY = iy + 53.0f * scale;
-            if (mx >= fuelX && mx <= fuelX + 18.0f * scale && my >= fuelY && my <= fuelY + 18.0f * scale) {
-                ItemStack fuel = activeFurnace.getFuel();
-                if (!fuel.isEmpty()) {
-                    player.getInventory().getSlot(hotbarIndex).setType(fuel.getType());
-                    player.getInventory().getSlot(hotbarIndex).setCount(fuel.getCount());
-                    fuel.clear();
-                    no.minecraft.sound.SoundManager.getInstance().play("click");
-                    return true;
-                }
-            }
-        } else if (chestOpen && activeChest != null) {
-            float chestGridX = ix + 8.0f * scale;
-            float chestGridY = iy + 18.0f * scale;
-            for (int r = 0; r < 3; r++) {
-                for (int c = 0; c < 9; c++) {
-                    int slotIdx = r * 9 + c;
-                    float sx = chestGridX + c * 18.0f * scale;
-                    float sy = chestGridY + r * 18.0f * scale;
-                    if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
-                        ItemStack cSlot = activeChest.getSlot(slotIdx);
-                        if (cSlot != null && !cSlot.isEmpty()) {
-                            ItemStack hSlot = player.getInventory().getSlot(hotbarIndex);
-                            hSlot.setType(cSlot.getType());
-                            hSlot.setCount(cSlot.getCount());
-                            cSlot.clear();
-                            no.minecraft.sound.SoundManager.getInstance().play("click");
-                            return true;
-                        }
+                    if (hotbarSlot.isEmpty()) {
+                        hotbarSlot.setType(res.getType());
+                        hotbarSlot.setCount(res.getCount());
+                        res.clear();
+                        no.minecraft.sound.SoundManager.getInstance().play("click");
+                        no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.HOT_TOPIC);
+                        return true;
+                    } else if (hotbarSlot.getType() == res.getType() && hotbarSlot.getCount() + res.getCount() <= no.minecraft.player.Inventory.MAX_STACK_SIZE) {
+                        hotbarSlot.add(res.getCount());
+                        res.clear();
+                        no.minecraft.sound.SoundManager.getInstance().play("click");
+                        no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.HOT_TOPIC);
+                        return true;
                     }
                 }
+                return false;
             }
         } else if (craftingTableOpen) {
             float resX = ix + 124.0f * scale;
@@ -1489,38 +1592,103 @@ public class HUD {
             if (mx >= resX && mx <= resX + resSize && my >= resY && my <= resY + resSize) {
                 ItemStack res = get3x3CraftingResult();
                 if (res != null && !res.isEmpty()) {
-                    player.getInventory().getSlot(hotbarIndex).setType(res.getType());
-                    player.getInventory().getSlot(hotbarIndex).setCount(res.getCount());
-                    for (ItemStack s : benchSlots) {
-                        if (!s.isEmpty()) s.add(-1);
+                    if (hotbarSlot.isEmpty()) {
+                        hotbarSlot.setType(res.getType());
+                        hotbarSlot.setCount(res.getCount());
+                        for (ItemStack s : benchSlots) {
+                            if (!s.isEmpty()) s.add(-1);
+                        }
+                        no.minecraft.sound.SoundManager.getInstance().play("click");
+                        if (res.getType() == BlockType.WOODEN_SWORD || res.getType() == BlockType.STONE_SWORD) {
+                            no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.TIME_TO_STRIKE);
+                        } else if (res.getType() == BlockType.FURNACE) {
+                            no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.HOT_TOPIC);
+                        }
+                        return true;
+                    } else if (hotbarSlot.getType() == res.getType() && hotbarSlot.getCount() + res.getCount() <= no.minecraft.player.Inventory.MAX_STACK_SIZE) {
+                        hotbarSlot.add(res.getCount());
+                        for (ItemStack s : benchSlots) {
+                            if (!s.isEmpty()) s.add(-1);
+                        }
+                        no.minecraft.sound.SoundManager.getInstance().play("click");
+                        return true;
                     }
-                    no.minecraft.sound.SoundManager.getInstance().play("click");
-                    if (res.getType() == BlockType.WOODEN_SWORD || res.getType() == BlockType.STONE_SWORD) {
-                        no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.TIME_TO_STRIKE);
-                    } else if (res.getType() == BlockType.FURNACE) {
-                        no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.HOT_TOPIC);
-                    }
-                    return true;
                 }
+                return false;
             }
-        } else {
+        } else if (inventoryOpen) {
             float resultSlotX = ix + 152.0f * scale;
             float resultSlotY = iy + 26.0f * scale;
             float resSize = 20.0f * scale;
             if (mx >= resultSlotX && mx <= resultSlotX + resSize && my >= resultSlotY && my <= resultSlotY + resSize) {
                 ItemStack res = getCraftingResult();
                 if (res != null && !res.isEmpty()) {
-                    player.getInventory().getSlot(hotbarIndex).setType(res.getType());
-                    player.getInventory().getSlot(hotbarIndex).setCount(res.getCount());
-                    for (ItemStack s : craftSlots) {
-                        if (!s.isEmpty()) s.add(-1);
+                    if (hotbarSlot.isEmpty()) {
+                        hotbarSlot.setType(res.getType());
+                        hotbarSlot.setCount(res.getCount());
+                        for (ItemStack s : craftSlots) {
+                            if (!s.isEmpty()) s.add(-1);
+                        }
+                        no.minecraft.sound.SoundManager.getInstance().play("click");
+                        return true;
+                    } else if (hotbarSlot.getType() == res.getType() && hotbarSlot.getCount() + res.getCount() <= no.minecraft.player.Inventory.MAX_STACK_SIZE) {
+                        hotbarSlot.add(res.getCount());
+                        for (ItemStack s : craftSlots) {
+                            if (!s.isEmpty()) s.add(-1);
+                        }
+                        no.minecraft.sound.SoundManager.getInstance().play("click");
+                        return true;
                     }
-                    no.minecraft.sound.SoundManager.getInstance().play("click");
-                    return true;
                 }
+                return false;
             }
         }
+
+        // 2. Standard slot swap
+        ItemStack hoveredSlot = getSlotAt(mx, my, player, windowWidth, windowHeight);
+        if (hoveredSlot != null && hoveredSlot != hotbarSlot) {
+            BlockType tempType = hoveredSlot.getType();
+            int tempCount = hoveredSlot.getCount();
+            int tempDamage = hoveredSlot.getDamage();
+
+            hoveredSlot.setType(hotbarSlot.getType());
+            hoveredSlot.setCount(hotbarSlot.getCount());
+            hoveredSlot.setDamage(hotbarSlot.getDamage());
+
+            hotbarSlot.setType(tempType);
+            hotbarSlot.setCount(tempCount);
+            hotbarSlot.setDamage(tempDamage);
+
+            no.minecraft.sound.SoundManager.getInstance().play("click");
+            return true;
+        }
+
         return false;
+    }
+
+    public boolean handleSwapKeyPress(double mx, double my, Player player, int windowWidth, int windowHeight) {
+        if (!isInventoryOpen() || player == null) return false;
+        ItemStack hoveredSlot = getSlotAt(mx, my, player, windowWidth, windowHeight);
+        ItemStack offhand = player.getOffhandItem();
+        if (hoveredSlot != null && hoveredSlot != offhand) {
+            BlockType tempType = hoveredSlot.getType();
+            int tempCount = hoveredSlot.getCount();
+            int tempDamage = hoveredSlot.getDamage();
+
+            hoveredSlot.setType(offhand.getType());
+            hoveredSlot.setCount(offhand.getCount());
+            hoveredSlot.setDamage(offhand.getDamage());
+
+            offhand.setType(tempType);
+            offhand.setCount(tempCount);
+            offhand.setDamage(tempDamage);
+
+            no.minecraft.sound.SoundManager.getInstance().play("click", 0.8f);
+            return true;
+        } else {
+            player.swapHands();
+            return true;
+        }
     }
 
     public boolean handleDropKeyPress(double mx, double my, boolean dropAll, Player player, int windowWidth, int windowHeight) {
@@ -1906,6 +2074,42 @@ public class HUD {
                 drawPixelActiveSelection(overlayGeom, selX, selY, selW, selH, pScale);
             }
         }
+
+        // --- Offhand Slot (to the left of hotbar) ---
+        ItemStack offhand = player.getOffhandItem();
+        if (offhand != null && !offhand.isEmpty()) {
+            float offhandX = hx - 29.0f * pScale;
+            float offhandY = hy;
+            drawPixelOffhandSlot(geom, offhandX, offhandY, pScale);
+
+            BlockType offBlock = offhand.getType();
+            int offCount = offhand.getCount();
+            if (offBlock != null && offBlock != BlockType.AIR && offCount > 0) {
+                float offItemX = offhandX + 6.0f * pScale;
+                float offItemY = offhandY + 3.0f * pScale;
+                int tileId = offBlock.getItemTexture();
+                float[] uv = TextureAtlas.getUVs(tileId);
+                addRect(tex, offItemX, offItemY, slotInnerSize, slotInnerSize, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
+
+                if (offCount > 0 && !offBlock.isDamageable()) {
+                    float numRight = offhandX + 22.0f * pScale;
+                    float numBottom = hy + 18.5f * pScale;
+                    drawMinecraftNumber(overlayGeom, offCount, numRight, numBottom, pScale * 0.95f);
+                }
+
+                if (offBlock.isDamageable() && offhand.getDamage() > 0) {
+                    float barW = 12.0f * pScale;
+                    float barH = 1.2f * pScale;
+                    float bx = offItemX + 2.0f * pScale;
+                    float by = offItemY + 13.0f * pScale;
+                    float ratio = offhand.getDurabilityRatio();
+                    addRect(overlayGeom, bx, by, barW, barH, 0, 0, 0, 0, 0, 0, 0, 1.0f);
+                    float r = ratio < 0.5f ? 1.0f : (1.0f - ratio) * 2.0f;
+                    float g = ratio > 0.5f ? 1.0f : ratio * 2.0f;
+                    addRect(overlayGeom, bx, by, barW * ratio, barH, 0, 0, 0, 0, r, g, 0.0f, 1.0f);
+                }
+            }
+        }
     }
 
 
@@ -1944,6 +2148,23 @@ public class HUD {
         addRect(g, x + 2 * p, y + 2 * p, p, h - 4 * p, 0, 0, 0, 0, 0.4f, 0.4f, 0.4f, 1.0f);
         addRect(g, x + w - 3 * p, y + 2 * p, p, h - 4 * p, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 1.0f);
         addRect(g, x + 2 * p, y + h - 3 * p, w - 4 * p, p, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 1.0f);
+    }
+
+    private void drawPixelOffhandSlot(List<Float> g, float x, float y, float p) {
+        float w = 29.0f * p;
+        float h = 24.0f * p;
+        // Outer dark border
+        addRect(g, x, y, w, h, 0, 0, 0, 0, 0.12f, 0.12f, 0.12f, 1.0f);
+        // Inner base fill
+        addRect(g, x + p, y + p, w - 2 * p, h - 2 * p, 0, 0, 0, 0, 0.54f, 0.54f, 0.54f, 1.0f);
+        // Slot background
+        float sx = x + 4.0f * p;
+        addRect(g, sx + p, y + 2.0f * p + p, 18.0f * p, 18.0f * p, 0, 0, 0, 0, 0.55f, 0.55f, 0.55f, 1.0f);
+        // Inset bevel
+        addRect(g, sx + p, y + 3.0f * p, 18.0f * p, p, 0, 0, 0, 0, 0.22f, 0.22f, 0.22f, 1.0f);
+        addRect(g, sx + p, y + 3.0f * p, p, 18.0f * p, 0, 0, 0, 0, 0.22f, 0.22f, 0.22f, 1.0f);
+        addRect(g, sx + p, y + 20.0f * p, 18.0f * p, p, 0, 0, 0, 0, 0.85f, 0.85f, 0.85f, 1.0f);
+        addRect(g, sx + 18.0f * p, y + 3.0f * p, p, 18.0f * p, 0, 0, 0, 0, 0.85f, 0.85f, 0.85f, 1.0f);
     }
 
 

@@ -677,6 +677,10 @@ public class Main {
                         if (hud.handleInventoryKeyPress(key, lastMouseX, lastMouseY, player, width, height)) {
                             return;
                         }
+                    } else if (key == GLFW_KEY_F) {
+                        if (hud.handleSwapKeyPress(lastMouseX, lastMouseY, player, width, height)) {
+                            return;
+                        }
                     }
                 }
 
@@ -709,7 +713,7 @@ public class Main {
                     // Toggle GameMode (Survival / Creative)
                     player.toggleGameMode();
                 } else if (!isPaused() && key == GLFW_KEY_F) {
-                    player.toggleFlying();
+                    player.swapHands();
                 } else if (key == GLFW_KEY_P) {
                     // Reset position to ground at spawn
                     int gy = world.getSpawnHeight((int) Math.floor(player.getSpawnPosition().x), (int) Math.floor(player.getSpawnPosition().z));

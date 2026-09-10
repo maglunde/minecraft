@@ -54,6 +54,18 @@ abstract class AbstractContainerScreen implements GuiScreen {
     }
 
     @Override
+    public boolean handleKey(int key, int action) {
+        if (action == org.lwjgl.glfw.GLFW.GLFW_PRESS) {
+            if (key >= org.lwjgl.glfw.GLFW.GLFW_KEY_1 && key <= org.lwjgl.glfw.GLFW.GLFW_KEY_9) {
+                return hud.handleInventoryKeyPress(key, hud.getMouseX(), hud.getMouseY(), player.get(), width.getAsInt(), height.getAsInt());
+            } else if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_F) {
+                return hud.handleSwapKeyPress(hud.getMouseX(), hud.getMouseY(), player.get(), width.getAsInt(), height.getAsInt());
+            }
+        }
+        return false;
+    }
+
+    @Override
     public void render(List<Float> geom, List<Float> texGeom, int width, int height) {
         // Geometry is emitted via renderGui into the HUD's three-pass pipeline.
     }

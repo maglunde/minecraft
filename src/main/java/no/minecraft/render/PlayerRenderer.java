@@ -237,6 +237,26 @@ public class PlayerRenderer {
             }
         }
 
+        // --- HELD ITEM IN LEFT HAND (OFFHAND) ---
+        no.minecraft.player.ItemStack offhand = player.getOffhandItem();
+        boolean hasOffhand = offhand != null && !offhand.isEmpty() && offhand.getType() != BlockType.AIR;
+        if (hasOffhand) {
+            BlockType offBlock = offhand.getType();
+            Matrix4f offMat = new Matrix4f(leftArmMat).translate(0.0f, -0.58f, -0.10f);
+            if (offBlock.isSolid()) {
+                // Mini 3D Block in left hand
+                offMat.rotateY((float) Math.toRadians(-45.0f));
+                offMat.rotateX((float) Math.toRadians(-20.0f));
+                addBlockGeometry(itemVerts, offMat, offBlock, 0.24f);
+            } else {
+                // 2D Tool or Item in left hand
+                offMat.translate(0.0f, 0.05f, 0.05f);
+                offMat.rotateY((float) Math.toRadians(-90.0f));
+                offMat.rotateZ((float) Math.toRadians(40.0f));
+                addItemGeometry(itemVerts, offMat, offBlock, 0.45f);
+            }
+        }
+
         // --- OPENGL DRAW CALLS ---
         shader.bind();
         shader.setUniform("uProjection", projection);
