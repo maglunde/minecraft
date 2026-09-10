@@ -335,6 +335,19 @@ public enum BlockType {
         };
     }
 
+    public float getSaturationValue() {
+        return switch (this) {
+            case COOKED_PORKCHOP, COOKED_BEEF -> 12.8f;
+            case COOKED_CHICKEN -> 7.2f;
+            case BREAD -> 6.0f;
+            case APPLE -> 2.4f;
+            case PORKCHOP, BEEF -> 1.8f;
+            case CHICKEN_MEAT -> 1.2f;
+            case ROTTEN_FLESH -> 0.8f;
+            default -> 0.0f;
+        };
+    }
+
     public boolean isFood() {
         return getFoodValue() > 0;
     }

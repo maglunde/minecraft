@@ -477,6 +477,7 @@ public class Main {
                         int dmg = Player.calculateAttackDamage(baseDmg, isCrit);
 
                         hitMob.takeDamage(dmg, fwd.x, fwd.z, world);
+                        player.addExhaustion(0.1f);
                         if (isCrit) {
                             no.minecraft.sound.SoundManager.getInstance().play("crit", 1.0f);
                         } else {
@@ -780,10 +781,17 @@ public class Main {
 
         // 0. Eating food
         if (held != null && held.isFood()) {
-            if (player.eatFood(held)) {
-                if (player.getGameMode() != GameMode.CREATIVE) {
-                    player.useSelectedBlock();
+            Raycast.HitResult hit = Raycast.raycast(world, player.getEyePosition(), player.getCamera().getForward(), 5.5f);
+            boolean isSneaking = player.isSneaking() || keyPressed[GLFW_KEY_LEFT_SHIFT] || keyPressed[GLFW_KEY_RIGHT_SHIFT];
+            if (hit != null && !isSneaking) {
+                BlockType clickedBlock = world.getBlock(hit.hitX, hit.hitY, hit.hitZ);
+                if (clickedBlock == BlockType.CRAFTING_TABLE || clickedBlock == BlockType.FURNACE || clickedBlock == BlockType.CHEST) {
+                    return tryPlaceBlock();
                 }
+            }
+
+            if (player.canEat(held)) {
+                player.startEating();
                 return true;
             }
         }
@@ -1260,6 +1268,7 @@ public class Main {
                     if (miningDamage >= 1.0f) {
                         // Block broken!
                         world.setBlock(hx, hy, hz, BlockType.AIR);
+                        player.addExhaustion(0.005f);
                         no.minecraft.sound.SoundManager.getInstance().play(targetBlock.getBreakSound(), 1.0f);
                         // Drop item if harvested correctly
                         if (targetBlock.canHarvest(tool)) {
@@ -1287,18 +1296,34 @@ public class Main {
             miningBlockX = Integer.MIN_VALUE;
         }
 
-        // Continuous Block Placement Logic (Right Click hold down)
+        // Continuous Eating / Block Placement Logic (Right Click hold down)
         if (isRightMouseDown && !inGui()) {
-            rightClickTimer -= dt;
-            if (rightClickTimer <= 0.0f) {
-                if (tryPlaceBlock()) {
-                    rightClickTimer = 0.22f; // Minecraft default block placement cooldown (~4 ticks)
-                } else {
-                    // Rapid polling so jumping upwards places block at the exact moment room clears
-                    rightClickTimer = 0.02f;
+            BlockType held = player.getSelectedBlock();
+            if (held != null && held.isFood() && player.canEat(held)) {
+                boolean finished = player.updateEating(dt, held);
+                if (finished) {
+                    if (player.getGameMode() != GameMode.CREATIVE) {
+                        player.useSelectedBlock();
+                    }
+                }
+            } else {
+                if (player.isEating()) {
+                    player.stopEating();
+                }
+                rightClickTimer -= dt;
+                if (rightClickTimer <= 0.0f) {
+                    if (tryPlaceBlock()) {
+                        rightClickTimer = 0.22f; // Minecraft default block placement cooldown (~4 ticks)
+                    } else {
+                        // Rapid polling so jumping upwards places block at the exact moment room clears
+                        rightClickTimer = 0.02f;
+                    }
                 }
             }
         } else if (!isRightMouseDown) {
+            if (player.isEating()) {
+                player.stopEating();
+            }
             rightClickTimer = 0.0f;
         }
     }

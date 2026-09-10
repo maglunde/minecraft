@@ -224,6 +224,16 @@ public class HandRenderer {
             armMat.translate(0.0f, -use * 0.02f, use * 0.04f);
         }
 
+        if (player.isEating()) {
+            float eatProg = player.getEatProgress();
+            float eatWobble = (float) Math.sin(eatProg * 32.0f * Math.PI) * 0.015f;
+            float eatDip = (float) Math.abs(Math.sin(eatProg * 16.0f * Math.PI)) * 0.04f;
+            armMat.translate(-0.06f + eatWobble, 0.08f - eatDip, 0.08f);
+            armMat.rotateX((float) Math.toRadians(25.0f));
+            armMat.rotateY((float) Math.toRadians(-20.0f));
+            armMat.rotateZ((float) Math.toRadians(15.0f));
+        }
+
         if (hasItem && held.isSolid()) {
             armMat.rotateY((float) Math.toRadians(-22.0f));
             armMat.rotateX((float) Math.toRadians(18.0f));

@@ -64,7 +64,14 @@ public class Player {
     private float saturation = 5.0f;
     private float exhaustion = 0.0f;
     private float regenTimer = 0.0f;
+    private float fastRegenTimer = 0.0f;
     private float starveTimer = 0.0f;
+
+    // Eating System (32 ticks = 1.61s in Minecraft)
+    public static final float EAT_DURATION = 1.61f;
+    private boolean isEating = false;
+    private float eatTimer = 0.0f;
+    private float eatSoundTimer = 0.0f;
 
     private boolean movingForward = false;
     private boolean movingBackward = false;
@@ -89,7 +96,7 @@ public class Player {
         this.movingLeft = left;
         this.movingRight = right;
         this.isSneaking = sneak && !flying;
-        this.isSprinting = sprint && forward && !isSneaking;
+        this.isSprinting = sprint && forward && !isSneaking && (gameMode == GameMode.CREATIVE || hunger > 6);
 
         if (ridingBoat != null) {
             if (ridingBoat.isDead()) {
@@ -101,6 +108,9 @@ public class Player {
         }
 
         float baseSpeed = isSneaking ? SNEAK_SPEED : (isSprinting ? SPRINT_SPEED : WALK_SPEED);
+        if (isEating) {
+            baseSpeed *= 0.30f;
+        }
         // Soul Sand speed reduction
         int currX = (int) Math.floor(position.x);
         int currY = (int) Math.floor(position.y);
@@ -201,6 +211,9 @@ public class Player {
                     onGround = false;
                     coyoteTimer = 0.0f;
                     jumpBufferTimer = 0.0f;
+                    if (gameMode == GameMode.SURVIVAL) {
+                        exhaustion += isSprinting ? 0.2f : 0.05f;
+                    }
                 }
             }
 
@@ -234,19 +247,19 @@ public class Player {
             lavaBurnTimer += dt;
             if (lavaBurnTimer >= 0.5f) {
                 lavaBurnTimer = 0.0f;
-                damage(4); // 2 hearts of lava fire damage every half second
+                damage(2); // Lava burn damage (1 full heart per 0.5s)
             }
-        } else if (lavaBurnTimer > 0) {
-            lavaBurnTimer = Math.max(0.0f, lavaBurnTimer - dt);
+        } else {
+            lavaBurnTimer = 0.0f;
         }
 
-        // Check if player fell below world minimum Y (The Void)
+        if (position.y < -30.0f) {
+            damage(MAX_HEALTH); // Void kill
+        }
+
+        // Damage red flash timer
         if (deathFlashTimer > 0) {
-            deathFlashTimer -= dt;
-        }
-
-        if (position.y < 0.0f) {
-            die();
+            deathFlashTimer = Math.max(0.0f, deathFlashTimer - dt);
         }
 
         // Walk animation timer
@@ -265,28 +278,35 @@ public class Player {
 
         // Hunger & Exhaustion processing
         if (isSprinting) {
-            exhaustion += 0.08f * dt;
-        }
-
-        if (exhaustion >= 4.0f) {
-            exhaustion -= 4.0f;
-            if (saturation > 0.0f) {
-                saturation = Math.max(0.0f, saturation - 1.0f);
-            } else if (gameMode == GameMode.SURVIVAL) {
-                hunger = Math.max(0, hunger - 1);
-            }
+            exhaustion += 0.10f * dt;
         }
 
         if (gameMode == GameMode.SURVIVAL) {
-            // Natural regeneration when hunger >= 18
-            if (health < MAX_HEALTH && hunger >= 18) {
-                regenTimer += dt;
-                if (regenTimer >= 4.0f) {
+            if (health < MAX_HEALTH) {
+                if (hunger == 20 && saturation > 0.0f) {
+                    // Fast Saturation Regen: 1 HP every 0.5s, costs 6.0 exhaustion
+                    fastRegenTimer += dt;
+                    if (fastRegenTimer >= 0.5f) {
+                        fastRegenTimer = 0.0f;
+                        health = Math.min(MAX_HEALTH, health + 1);
+                        exhaustion += 6.0f;
+                    }
                     regenTimer = 0.0f;
-                    health = Math.min(MAX_HEALTH, health + 1);
-                    exhaustion += 2.0f;
+                } else if (hunger >= 18) {
+                    // Normal Hunger Regen: 1 HP every 4.0s, costs 6.0 exhaustion
+                    fastRegenTimer = 0.0f;
+                    regenTimer += dt;
+                    if (regenTimer >= 4.0f) {
+                        regenTimer = 0.0f;
+                        health = Math.min(MAX_HEALTH, health + 1);
+                        exhaustion += 6.0f;
+                    }
+                } else {
+                    fastRegenTimer = 0.0f;
+                    regenTimer = 0.0f;
                 }
             } else {
+                fastRegenTimer = 0.0f;
                 regenTimer = 0.0f;
             }
 
@@ -302,6 +322,15 @@ public class Player {
             }
         }
 
+        while (exhaustion >= 4.0f) {
+            exhaustion -= 4.0f;
+            if (saturation > 0.0f) {
+                saturation = Math.max(0.0f, saturation - 1.0f);
+            } else if (gameMode == GameMode.SURVIVAL) {
+                hunger = Math.max(0, hunger - 1);
+            }
+        }
+
         // Update camera position
         camera.updatePosition(world, position.x, position.y + getEyeHeight(), position.z);
     }
@@ -310,6 +339,7 @@ public class Player {
         if (gameMode == GameMode.CREATIVE) return;
         health = Math.max(0, health - amount);
         deathFlashTimer = 0.6f;
+        exhaustion += 0.1f;
         no.minecraft.sound.SoundManager.getInstance().play("hurt", 1.0f);
         if (health <= 0) {
             die();
@@ -612,14 +642,88 @@ public class Player {
         this.exhaustion = Math.max(0.0f, e);
     }
 
+    public boolean isEating() { return isEating; }
+    public float getEatProgress() { return Math.min(1.0f, eatTimer / EAT_DURATION); }
+
+    public void startEating() {
+        if (!isEating) {
+            isEating = true;
+            eatTimer = 0.0f;
+            eatSoundTimer = 0.0f;
+        }
+    }
+
+    public void stopEating() {
+        isEating = false;
+        eatTimer = 0.0f;
+        eatSoundTimer = 0.0f;
+    }
+
+    public boolean canEat(BlockType food) {
+        if (food == null || !food.isFood()) return false;
+        return gameMode == GameMode.CREATIVE || hunger < 20;
+    }
+
+    public boolean updateEating(float dt, BlockType food) {
+        if (!canEat(food)) {
+            stopEating();
+            return false;
+        }
+
+        isEating = true;
+        eatTimer += dt;
+        eatSoundTimer += dt;
+
+        if (eatSoundTimer >= 0.2f) {
+            eatSoundTimer = 0.0f;
+            no.minecraft.sound.SoundManager.getInstance().play("eat", 0.9f);
+            Vector3f eye = getEyePosition();
+            Vector3f fwd = camera.getForward();
+            no.minecraft.render.ParticleManager.getInstance().spawnEatingParticles(
+                    eye.x + fwd.x * 0.4f,
+                    eye.y + fwd.y * 0.4f - 0.15f,
+                    eye.z + fwd.z * 0.4f,
+                    food, 4);
+        }
+
+        if (eatTimer >= EAT_DURATION) {
+            eatFood(food);
+            stopEating();
+            return true;
+        }
+
+        return false;
+    }
+
     public boolean eatFood(BlockType food) {
         if (food == null || !food.isFood()) return false;
         if (gameMode == GameMode.SURVIVAL && hunger >= 20) return false;
         int fv = food.getFoodValue();
+        float sv = food.getSaturationValue();
         hunger = Math.min(20, hunger + fv);
-        saturation = Math.min(20.0f, saturation + fv * 0.8f);
-        no.minecraft.sound.SoundManager.getInstance().play("pop", 1.0f);
+        // In Minecraft 1.16, saturation cannot exceed current hunger level
+        saturation = Math.min((float) hunger, saturation + sv);
+        no.minecraft.sound.SoundManager.getInstance().play("burp", 1.0f);
+        Vector3f eye = getEyePosition();
+        Vector3f fwd = camera.getForward();
+        no.minecraft.render.ParticleManager.getInstance().spawnEatingParticles(
+                eye.x + fwd.x * 0.4f,
+                eye.y + fwd.y * 0.4f - 0.15f,
+                eye.z + fwd.z * 0.4f,
+                food, 16);
+
+        if (food == BlockType.ROTTEN_FLESH && Math.random() < 0.80) {
+            exhaustion += 12.0f;
+        } else if (food == BlockType.CHICKEN_MEAT && Math.random() < 0.30) {
+            exhaustion += 8.0f;
+        }
         return true;
+    }
+
+    public void addExhaustion(float e) {
+        if (gameMode == GameMode.SURVIVAL) {
+            this.exhaustion += e;
+        }
     }
 
     public World getWorld() {
@@ -630,6 +734,7 @@ public class Player {
     public boolean isMovingBackward() { return movingBackward; }
     public boolean isMovingLeft() { return movingLeft; }
     public boolean isMovingRight() { return movingRight; }
+    public boolean isSprinting() { return isSprinting; }
     public no.minecraft.entity.Boat getRidingBoat() { return ridingBoat; }
     public void setRidingBoat(no.minecraft.entity.Boat boat) { this.ridingBoat = boat; }
     public boolean isInWater() { return inWater; }

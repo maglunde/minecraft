@@ -70,6 +70,39 @@ public class ParticleManager {
         }
     }
 
+    public void spawnEatingParticles(float x, float y, float z, no.minecraft.world.BlockType food, int count) {
+        float baseR = 0.8f, baseG = 0.5f, baseB = 0.2f;
+        if (food != null) {
+            switch (food) {
+                case APPLE -> { baseR = 0.9f; baseG = 0.15f; baseB = 0.15f; }
+                case BREAD -> { baseR = 0.85f; baseG = 0.60f; baseB = 0.25f; }
+                case PORKCHOP -> { baseR = 0.95f; baseG = 0.65f; baseB = 0.65f; }
+                case COOKED_PORKCHOP, COOKED_BEEF -> { baseR = 0.55f; baseG = 0.30f; baseB = 0.15f; }
+                case BEEF -> { baseR = 0.75f; baseG = 0.20f; baseB = 0.20f; }
+                case CHICKEN_MEAT -> { baseR = 0.90f; baseG = 0.75f; baseB = 0.70f; }
+                case COOKED_CHICKEN -> { baseR = 0.75f; baseG = 0.55f; baseB = 0.25f; }
+                case ROTTEN_FLESH -> { baseR = 0.40f; baseG = 0.45f; baseB = 0.20f; }
+                default -> {}
+            }
+        }
+        for (int i = 0; i < count; i++) {
+            float vx = (RANDOM.nextFloat() - 0.5f) * 1.0f;
+            float vy = RANDOM.nextFloat() * 0.8f + 0.2f;
+            float vz = (RANDOM.nextFloat() - 0.5f) * 1.0f;
+
+            float r = Math.clamp(baseR + (RANDOM.nextFloat() - 0.5f) * 0.15f, 0.0f, 1.0f);
+            float g = Math.clamp(baseG + (RANDOM.nextFloat() - 0.5f) * 0.15f, 0.0f, 1.0f);
+            float b = Math.clamp(baseB + (RANDOM.nextFloat() - 0.5f) * 0.15f, 0.0f, 1.0f);
+
+            float size = 0.04f + RANDOM.nextFloat() * 0.03f;
+            float lifetime = 0.25f + RANDOM.nextFloat() * 0.20f;
+            particles.add(new Particle(x + (RANDOM.nextFloat() - 0.5f) * 0.2f,
+                                       y + (RANDOM.nextFloat() - 0.5f) * 0.1f,
+                                       z + (RANDOM.nextFloat() - 0.5f) * 0.2f,
+                                       vx, vy, vz, r, g, b, size, lifetime));
+        }
+    }
+
     public void update(float dt) {
         Iterator<Particle> it = particles.iterator();
         while (it.hasNext()) {

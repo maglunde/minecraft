@@ -206,9 +206,17 @@ public class PlayerRenderer {
         // Forearm & Hand (skin tone: 0.47m)
         addOrientedBox(bodyVerts, leftArmMat, -0.08f, -0.65f, -0.08f, 0.16f, 0.47f, 0.16f, skinR, skinG, skinB);
 
-        // Right Arm (Carries tool / item, swings when mining/attacking)
+        // Right Arm (Carries tool / item, swings when mining/attacking, raises when eating)
         Matrix4f rightArmMat = new Matrix4f(torsoMat).translate(0.31f, 0.60f, 0.0f);
-        rightArmMat.rotateX(armAngle - swingAngle);
+        if (player.isEating()) {
+            float eatProg = player.getEatProgress();
+            float eatWobble = (float) Math.sin(eatProg * 32.0f * Math.PI) * 0.05f;
+            rightArmMat.rotateX((float) Math.toRadians(-80.0f + eatWobble * 5.0f));
+            rightArmMat.rotateY((float) Math.toRadians(-35.0f));
+            rightArmMat.rotateZ((float) Math.toRadians(15.0f));
+        } else {
+            rightArmMat.rotateX(armAngle - swingAngle);
+        }
         // Sleeve (top 0.18m)
         addOrientedBox(bodyVerts, rightArmMat, -0.09f, -0.18f, -0.09f, 0.18f, 0.18f, 0.18f, shirtR, shirtG, shirtB);
         // Forearm & Hand

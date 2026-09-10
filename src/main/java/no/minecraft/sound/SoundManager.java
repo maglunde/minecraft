@@ -38,6 +38,8 @@ public class SoundManager {
         preload("zombie_say");
         preload("skeleton_say");
         preload("spider_say");
+        preload("eat");
+        preload("burp");
     }
 
     public void preload(String name) {
