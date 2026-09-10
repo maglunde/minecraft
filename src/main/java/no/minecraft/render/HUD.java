@@ -1984,28 +1984,16 @@ public class HUD {
 
             for (int i = 0; i < 10; i++) {
                 float heartX = hx + i * (8.0f * pScale);
-                int heartVal = (i + 1) * 2;
-                int state = 0; // 0=empty, 1=half, 2=full
-                if (hp >= heartVal) {
-                    state = 2;
-                } else if (hp == heartVal - 1) {
-                    state = 1;
-                }
+                int state = getHeartState(hp, i);
                 drawPixelHeart(geom, heartX, heartY, pScale, state);
             }
 
-            // --- B. Hunger Bar (10 Drumsticks on right) ---
+            // --- B. Hunger Bar (10 Drumsticks on right, empties from left to right) ---
             float hungerY = hy - 18.0f * pScale;
             int hungerVal = player.getHunger();
             for (int i = 0; i < 10; i++) {
                 float drumX = hx + hotbarW - (10 - i) * (8.0f * pScale) - 1.0f * pScale;
-                int state = 0;
-                int threshold = (i + 1) * 2;
-                if (hungerVal >= threshold) {
-                    state = 2; // Full
-                } else if (hungerVal == threshold - 1) {
-                    state = 1; // Half
-                }
+                int state = getDrumstickState(hungerVal, i);
                 // Low hunger shake
                 float shakeY = (hungerVal <= 6 && ((int)(System.currentTimeMillis() / 90) + i) % 3 == 0)
                         ? (1.5f * pScale) : 0.0f;
@@ -2188,6 +2176,29 @@ public class HUD {
         addRect(g, x + p, y + p, w - 2 * p, h - 2 * p, 0, 0, 0, 0, r, gr, b, 1.0f);
         addRect(g, x + p, y + p, w - 2 * p, p, 0, 0, 0, 0, r + 0.2f, gr + 0.2f, b + 0.2f, 1.0f);
         addRect(g, x + p, y + h - 2 * p, w - 2 * p, p, 0, 0, 0, 0, r - 0.15f, gr - 0.15f, b - 0.15f, 1.0f);
+    }
+
+    public static int getHeartState(int hp, int index) {
+        int heartVal = (index + 1) * 2;
+        if (hp >= heartVal) {
+            return 2; // Full
+        } else if (hp == heartVal - 1) {
+            return 1; // Half
+        } else {
+            return 0; // Empty
+        }
+    }
+
+    public static int getDrumstickState(int hungerVal, int index) {
+        // Hunger empties from left to right (index 0 is leftmost, empties first at threshold 20)
+        int threshold = (10 - index) * 2;
+        if (hungerVal >= threshold) {
+            return 2; // Full
+        } else if (hungerVal == threshold - 1) {
+            return 1; // Half
+        } else {
+            return 0; // Empty
+        }
     }
 
     private void drawPixelHeart(List<Float> g, float x, float y, float p, int state) {

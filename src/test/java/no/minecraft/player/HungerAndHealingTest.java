@@ -171,4 +171,66 @@ public class HungerAndHealingTest {
         assertFalse(player.isEating());
         assertEquals(14, player.getHunger()); // 10 + 4
     }
+
+    @Test
+    public void testHeartBarEmptiesFromRight() {
+        // Full health (20 HP) -> all 10 hearts are full (state 2)
+        for (int i = 0; i < 10; i++) {
+            assertEquals(2, no.minecraft.render.HUD.getHeartState(20, i));
+        }
+
+        // 19 HP -> rightmost heart (index 9) is half (state 1), other 9 are full (state 2)
+        assertEquals(1, no.minecraft.render.HUD.getHeartState(19, 9));
+        for (int i = 0; i < 9; i++) {
+            assertEquals(2, no.minecraft.render.HUD.getHeartState(19, i));
+        }
+
+        // 18 HP -> rightmost heart (index 9) is empty (state 0), other 9 are full (state 2)
+        assertEquals(0, no.minecraft.render.HUD.getHeartState(18, 9));
+        for (int i = 0; i < 9; i++) {
+            assertEquals(2, no.minecraft.render.HUD.getHeartState(18, i));
+        }
+
+        // 1 HP -> leftmost heart (index 0) is half (state 1), other 9 are empty (state 0)
+        assertEquals(1, no.minecraft.render.HUD.getHeartState(1, 0));
+        for (int i = 1; i < 10; i++) {
+            assertEquals(0, no.minecraft.render.HUD.getHeartState(1, i));
+        }
+
+        // 0 HP -> all 10 hearts are empty (state 0)
+        for (int i = 0; i < 10; i++) {
+            assertEquals(0, no.minecraft.render.HUD.getHeartState(0, i));
+        }
+    }
+
+    @Test
+    public void testHungerBarEmptiesFromLeft() {
+        // Full hunger (20) -> all 10 drumsticks are full (state 2)
+        for (int i = 0; i < 10; i++) {
+            assertEquals(2, no.minecraft.render.HUD.getDrumstickState(20, i));
+        }
+
+        // 19 hunger -> leftmost drumstick (index 0) is half (state 1), other 9 are full (state 2)
+        assertEquals(1, no.minecraft.render.HUD.getDrumstickState(19, 0));
+        for (int i = 1; i < 10; i++) {
+            assertEquals(2, no.minecraft.render.HUD.getDrumstickState(19, i));
+        }
+
+        // 18 hunger -> leftmost drumstick (index 0) is empty (state 0), other 9 are full (state 2)
+        assertEquals(0, no.minecraft.render.HUD.getDrumstickState(18, 0));
+        for (int i = 1; i < 10; i++) {
+            assertEquals(2, no.minecraft.render.HUD.getDrumstickState(18, i));
+        }
+
+        // 1 hunger -> rightmost drumstick (index 9) is half (state 1), other 9 on the left are empty (state 0)
+        assertEquals(1, no.minecraft.render.HUD.getDrumstickState(1, 9));
+        for (int i = 0; i < 9; i++) {
+            assertEquals(0, no.minecraft.render.HUD.getDrumstickState(1, i));
+        }
+
+        // 0 hunger -> all 10 drumsticks are empty (state 0)
+        for (int i = 0; i < 10; i++) {
+            assertEquals(0, no.minecraft.render.HUD.getDrumstickState(0, i));
+        }
+    }
 }
