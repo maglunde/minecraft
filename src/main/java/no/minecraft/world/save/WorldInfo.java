@@ -1,11 +1,13 @@
 package no.minecraft.world.save;
 
+import no.minecraft.i18n.I18n;
 import no.minecraft.player.GameMode;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 public class WorldInfo {
     private String name;
@@ -70,19 +72,7 @@ public class WorldInfo {
         return ldt.format(DATE_FORMATTER);
     }
 
-    public String getModeDisplayName(boolean norwegian) {
-        if (norwegian) {
-            return switch (gameMode) {
-                case CREATIVE -> "Kreativ modus";
-                case HARDCORE -> "Hardcore-modus";
-                default -> "Overlevelsesmodus";
-            };
-        } else {
-            return switch (gameMode) {
-                case CREATIVE -> "Creative Mode";
-                case HARDCORE -> "Hardcore Mode";
-                default -> "Survival Mode";
-            };
-        }
+    public String getModeDisplayName() {
+        return I18n.get("world_info.mode." + gameMode.name().toLowerCase(Locale.ROOT));
     }
 }

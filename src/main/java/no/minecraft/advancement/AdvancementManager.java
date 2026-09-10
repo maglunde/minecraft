@@ -1,5 +1,6 @@
 package no.minecraft.advancement;
 
+import no.minecraft.i18n.I18n;
 import no.minecraft.sound.SoundManager;
 import no.minecraft.world.BlockType;
 
@@ -13,35 +14,34 @@ public class AdvancementManager {
     }
 
     public enum Advancement {
-        ROOT("Minecraft", "Gruppas forste steg", "The heart and story of the game", BlockType.GRASS),
-        STONE_AGE("Stone Age", "Steinlalder", "Mine stone with your new pickaxe", BlockType.COBBLESTONE),
-        TIME_TO_STRIKE("Time to Strike!", "Tid for strid!", "Craft a sword to defend yourself", BlockType.WOODEN_SWORD),
-        HOT_TOPIC("Hot Topic", "Et hett tema", "Construct a furnace out of cobblestone", BlockType.FURNACE),
-        MONSTER_HUNTER("Monster Hunter", "Monsterjeger", "Attack and destroy a dangerous monster", BlockType.BONE),
-        WE_NEED_TO_GO_DEEPER("We Need to Go Deeper", "Vi ma dypere", "Build and enter a Nether Portal", BlockType.NETHERRACK),
-        INTO_FIRE("Into Fire", "Inn i ilden", "Relieve a Blaze of its rod", BlockType.BLAZE_ROD),
-        EYE_SPY("Eye Spy", "Oye for en portal", "Follow an Eye of Ender to a Stronghold", BlockType.EYE_OF_ENDER),
-        THE_END("The End?", "Slutten?", "Enter the End Portal", BlockType.END_PORTAL_FRAME_FILLED),
-        FREE_THE_END("Free the End", "Frigjor Enden", "Defeat the Ender Dragon", BlockType.DRAGON_EGG);
+        ROOT(BlockType.GRASS),
+        STONE_AGE(BlockType.COBBLESTONE),
+        TIME_TO_STRIKE(BlockType.WOODEN_SWORD),
+        HOT_TOPIC(BlockType.FURNACE),
+        MONSTER_HUNTER(BlockType.BONE),
+        WE_NEED_TO_GO_DEEPER(BlockType.NETHERRACK),
+        INTO_FIRE(BlockType.BLAZE_ROD),
+        EYE_SPY(BlockType.EYE_OF_ENDER),
+        THE_END(BlockType.END_PORTAL_FRAME_FILLED),
+        FREE_THE_END(BlockType.DRAGON_EGG);
 
-        private final String englishTitle;
-        private final String norwegianTitle;
-        private final String description;
         private final BlockType icon;
 
-        Advancement(String englishTitle, String norwegianTitle, String description, BlockType icon) {
-            this.englishTitle = englishTitle;
-            this.norwegianTitle = norwegianTitle;
-            this.description = description;
+        Advancement(BlockType icon) {
             this.icon = icon;
         }
 
-        public String getTitle(boolean norwegian) {
-            return norwegian ? norwegianTitle : englishTitle;
+        /** Translation key stem, e.g. "advancement.stone_age" (.title / .description appended). */
+        public String key() {
+            return "advancement." + name().toLowerCase(Locale.ROOT);
+        }
+
+        public String getTitle() {
+            return I18n.get(key() + ".title");
         }
 
         public String getDescription() {
-            return description;
+            return I18n.get(key() + ".description");
         }
 
         public BlockType getIcon() {

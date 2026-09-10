@@ -1,5 +1,6 @@
 package no.minecraft.chat;
 
+import no.minecraft.i18n.I18n;
 import no.minecraft.player.GameMode;
 import no.minecraft.player.Player;
 import no.minecraft.world.BlockType;
@@ -58,14 +59,14 @@ public class ChatManager {
 
     private static class Command {
         final String[] names;
-        final String help;
+        final String usageKey;
         final CommandAction action;
         final BiFunction<String[], Boolean, List<String>> completer; // (parts, trailingSpace) -> completions, may be null
 
-        Command(String[] names, String help, CommandAction action,
+        Command(String[] names, String usageKey, CommandAction action,
                 BiFunction<String[], Boolean, List<String>> completer) {
             this.names = names;
-            this.help = help;
+            this.usageKey = usageKey;
             this.action = action;
             this.completer = completer;
         }
@@ -78,18 +79,18 @@ public class ChatManager {
     }
 
     private void registerCommands() {
-        register(new Command(new String[]{"help"}, "/help - Vis kommandoer",
+        register(new Command(new String[]{"help"}, "chat.help.usage",
                 (chat, args, world, player) -> {
-                    chat.addSystemMessage("--- Tilgjengelige kommandoer ---");
+                    chat.addSystemMessage(I18n.get("chat.help.header"));
                     for (Command c : commands.values()) {
-                        chat.addSystemMessage(c.help);
+                        chat.addSystemMessage(I18n.get(c.usageKey));
                     }
                 }, null));
 
-        register(new Command(new String[]{"give"}, "/give <item> [antall] - Gi deg selv blokker/ting",
+        register(new Command(new String[]{"give"}, "chat.give.usage",
                 (chat, args, world, player) -> {
                     if (args.length < 2) {
-                        chat.addErrorMessage("Bruk: /give <item> [antall]");
+                        chat.addErrorMessage(I18n.get("chat.give.usage_error"));
                         return;
                     }
                     String itemName = args[1].toUpperCase();
@@ -105,16 +106,17 @@ public class ChatManager {
 
                     BlockType matched = null;
                     for (BlockType bt : BlockType.values()) {
-                        if (bt.name().equalsIgnoreCase(itemName) || bt.getName().equalsIgnoreCase(itemName)) {
+                        if (bt.name().equalsIgnoreCase(itemName) || bt.getName().equalsIgnoreCase(itemName)
+                                || I18n.anyLanguageMatches(bt.getTranslationKey(), itemName)) {
                             matched = bt;
                             break;
                         }
                     }
                     if (matched != null && matched != BlockType.AIR) {
                         player.getInventory().addItem(matched, amount);
-                        chat.addSuccessMessage("Ga " + amount + "x " + matched.getName() + " til spiller.");
+                        chat.addSuccessMessage(I18n.format("chat.give.success", amount, matched.getName()));
                     } else {
-                        chat.addErrorMessage("Ukjent item: " + args[1]);
+                        chat.addErrorMessage(I18n.format("chat.give.unknown_item", args[1]));
                     }
                 },
                 (parts, trailingSpace) -> {
@@ -136,10 +138,10 @@ public class ChatManager {
                     return out;
                 }));
 
-        register(new Command(new String[]{"tp", "teleport"}, "/tp <x> <y> <z> - Teleporter til koordinater",
+        register(new Command(new String[]{"tp", "teleport"}, "chat.tp.usage",
                 (chat, args, world, player) -> {
                     if (args.length < 4) {
-                        chat.addErrorMessage("Bruk: /tp <x> <y> <z>");
+                        chat.addErrorMessage(I18n.get("chat.tp.usage_error"));
                         return;
                     }
                     try {
@@ -147,30 +149,30 @@ public class ChatManager {
                         float y = Float.parseFloat(args[2]);
                         float z = Float.parseFloat(args[3]);
                         player.teleportTo(x, y, z);
-                        chat.addSuccessMessage(String.format("Teleporterte til %.1f, %.1f, %.1f", x, y, z));
+                        chat.addSuccessMessage(I18n.format("chat.tp.success", x, y, z));
                     } catch (NumberFormatException e) {
-                        chat.addErrorMessage("Ugyldige koordinater: /tp " + String.join(" ", args).substring(3));
+                        chat.addErrorMessage(I18n.format("chat.tp.invalid_coords", String.join(" ", args).substring(3)));
                     }
                 }, null));
 
-        register(new Command(new String[]{"locate"}, "/locate <stronghold|fortress|portal> - Finn struktur",
+        register(new Command(new String[]{"locate"}, "chat.locate.usage",
                 (chat, args, world, player) -> {
                     if (args.length < 2) {
-                        chat.addErrorMessage("Bruk: /locate <stronghold|fortress|portal|end>");
+                        chat.addErrorMessage(I18n.get("chat.locate.usage_error"));
                         return;
                     }
                     String struct = args[1].toLowerCase();
                     if (struct.startsWith("strong")) {
-                        chat.addSuccessMessage("Stronghold funnet ved [" + World.STRONGHOLD_X + ", " + World.STRONGHOLD_Y + ", " + World.STRONGHOLD_Z + "]");
+                        chat.addSuccessMessage(I18n.format("chat.locate.stronghold", World.STRONGHOLD_X, World.STRONGHOLD_Y, World.STRONGHOLD_Z));
                     } else if (struct.startsWith("fort")) {
                         int rX = Math.floorDiv((int) Math.floor(player.getPosition().x / Chunk.SIZE_X), NetherFortressGenerator.FORTRESS_GRID);
                         int rZ = Math.floorDiv((int) Math.floor(player.getPosition().z / Chunk.SIZE_Z), NetherFortressGenerator.FORTRESS_GRID);
                         NetherFortressGenerator.Fortress f = NetherFortressGenerator.getFortressForRegion(rX, rZ, world.getSeed());
-                        chat.addSuccessMessage("Nether Fortress funnet ved [" + f.originX + ", 25, " + f.originZ + "] i Nether (2 Blaze spawners)");
+                        chat.addSuccessMessage(I18n.format("chat.locate.fortress", f.originX, f.originZ));
                     } else if (struct.startsWith("end") || struct.startsWith("portal")) {
-                        chat.addSuccessMessage("End Portal funnet ved [54, 12, 54] i Stronghold");
+                        chat.addSuccessMessage(I18n.get("chat.locate.end_portal"));
                     } else {
-                        chat.addErrorMessage("Ukjent struktur. Tilgjengelig: stronghold, fortress, end");
+                        chat.addErrorMessage(I18n.get("chat.locate.unknown_structure"));
                     }
                 },
                 (parts, trailingSpace) -> {
@@ -185,21 +187,21 @@ public class ChatManager {
                     return out;
                 }));
 
-        register(new Command(new String[]{"gamemode"}, "/gamemode <survival|creative> - Bytt spillmodus",
+        register(new Command(new String[]{"gamemode"}, "chat.gamemode.usage",
                 (chat, args, world, player) -> {
                     if (args.length < 2) {
-                        chat.addErrorMessage("Bruk: /gamemode <survival|creative>");
+                        chat.addErrorMessage(I18n.get("chat.gamemode.usage_error"));
                         return;
                     }
                     String m = args[1].toLowerCase();
                     if (m.startsWith("c") || m.equals("1")) {
                         player.setGameMode(GameMode.CREATIVE);
-                        chat.addSuccessMessage("Spillmodus satt til Kreativ.");
+                        chat.addSuccessMessage(I18n.get("chat.gamemode.creative"));
                     } else if (m.startsWith("s") || m.equals("0")) {
                         player.setGameMode(GameMode.SURVIVAL);
-                        chat.addSuccessMessage("Spillmodus satt til Overlevelse.");
+                        chat.addSuccessMessage(I18n.get("chat.gamemode.survival"));
                     } else {
-                        chat.addErrorMessage("Ukjent spillmodus: " + args[1]);
+                        chat.addErrorMessage(I18n.format("chat.gamemode.unknown", args[1]));
                     }
                 },
                 (parts, trailingSpace) -> {
@@ -214,24 +216,24 @@ public class ChatManager {
                     return out;
                 }));
 
-        register(new Command(new String[]{"dimension", "dim"}, "/dimension <overworld|nether|end> - Bytt dimensjon",
+        register(new Command(new String[]{"dimension", "dim"}, "chat.dimension.usage",
                 (chat, args, world, player) -> {
                     if (args.length < 2) {
-                        chat.addErrorMessage("Bruk: /dimension <overworld|nether|end>");
+                        chat.addErrorMessage(I18n.get("chat.dimension.usage_error"));
                         return;
                     }
                     String d = args[1].toLowerCase();
                     if (d.startsWith("n")) {
                         world.teleportToDimension(Dimension.NETHER, player);
-                        chat.addSuccessMessage("Reiste til Nether.");
+                        chat.addSuccessMessage(I18n.get("chat.dimension.nether"));
                     } else if (d.startsWith("e")) {
                         world.teleportToDimension(Dimension.THE_END, player);
-                        chat.addSuccessMessage("Reiste til The End.");
+                        chat.addSuccessMessage(I18n.get("chat.dimension.the_end"));
                     } else if (d.startsWith("o")) {
                         world.teleportToDimension(Dimension.OVERWORLD, player);
-                        chat.addSuccessMessage("Reiste til Oververden.");
+                        chat.addSuccessMessage(I18n.get("chat.dimension.overworld"));
                     } else {
-                        chat.addErrorMessage("Ukjent dimensjon: " + args[1]);
+                        chat.addErrorMessage(I18n.format("chat.dimension.unknown", args[1]));
                     }
                 },
                 (parts, trailingSpace) -> {
@@ -246,40 +248,40 @@ public class ChatManager {
                     return out;
                 }));
 
-        register(new Command(new String[]{"heal"}, "/heal - Fyll helse",
+        register(new Command(new String[]{"heal"}, "chat.heal.usage",
                 (chat, args, world, player) -> {
                     player.setHealth(Player.MAX_HEALTH);
-                    chat.addSuccessMessage("Helse fylt til maksimum!");
+                    chat.addSuccessMessage(I18n.get("chat.heal.success"));
                 }, null));
 
-        register(new Command(new String[]{"clear"}, "/clear - Tom inventory",
+        register(new Command(new String[]{"clear"}, "chat.clear.usage",
                 (chat, args, world, player) -> {
                     player.getInventory().clear();
-                    chat.addSuccessMessage("Tømte inventaret.");
+                    chat.addSuccessMessage(I18n.get("chat.clear.success"));
                 }, null));
 
-        register(new Command(new String[]{"kill"}, "/kill - Drep spiller eller monstre (/kill @e)",
+        register(new Command(new String[]{"kill"}, "chat.kill.usage",
                 (chat, args, world, player) -> {
                     if (args.length >= 2 && args[1].equalsIgnoreCase("@e")) {
                         world.getMobs().clear();
-                        chat.addSuccessMessage("Fjernet alle monstre.");
+                        chat.addSuccessMessage(I18n.get("chat.kill.removed_mobs"));
                     } else {
                         player.damage(100);
-                        chat.addSuccessMessage("Drepte spiller.");
+                        chat.addSuccessMessage(I18n.get("chat.kill.killed_player"));
                     }
                 },
                 (parts, trailingSpace) -> List.of("/kill @e")));
 
-        register(new Command(new String[]{"time", "tid"}, "/time set <day|night|noon|midnight|sunrise|sunset> - Sett tid på døgnet",
+        register(new Command(new String[]{"time", "tid"}, "chat.time.usage",
                 (chat, args, world, player) -> {
                     if (args.length < 2) {
-                        chat.addErrorMessage("Bruk: /time set <day|noon|night|midnight|sunrise|sunset|tall>");
+                        chat.addErrorMessage(I18n.get("chat.time.usage_error"));
                         return;
                     }
                     String arg = args[1].toLowerCase();
                     if (arg.equals("set") || arg.equals("sett")) {
                         if (args.length < 3) {
-                            chat.addErrorMessage("Bruk: /time set <day|noon|night|midnight|sunrise|sunset|tall>");
+                            chat.addErrorMessage(I18n.get("chat.time.usage_error"));
                             return;
                         }
                         arg = args[2].toLowerCase();
@@ -288,27 +290,27 @@ public class ChatManager {
                     switch (arg) {
                         case "day", "dag" -> {
                             world.setTimeOfDay(0.10f);
-                            chat.addSuccessMessage("Satte tiden til dag");
+                            chat.addSuccessMessage(I18n.get("chat.time.set_day"));
                         }
                         case "noon", "midday", "middag" -> {
                             world.setTimeOfDay(0.25f);
-                            chat.addSuccessMessage("Satte tiden til middag (kl. 12:00)");
+                            chat.addSuccessMessage(I18n.get("chat.time.set_noon"));
                         }
                         case "sunset", "dusk", "solnedgang", "kveld" -> {
                             world.setTimeOfDay(0.50f);
-                            chat.addSuccessMessage("Satte tiden til solnedgang");
+                            chat.addSuccessMessage(I18n.get("chat.time.set_sunset"));
                         }
                         case "night", "natt" -> {
                             world.setTimeOfDay(0.65f);
-                            chat.addSuccessMessage("Satte tiden til natt");
+                            chat.addSuccessMessage(I18n.get("chat.time.set_night"));
                         }
                         case "midnight", "midnatt" -> {
                             world.setTimeOfDay(0.75f);
-                            chat.addSuccessMessage("Satte tiden til midnatt (kl. 00:00)");
+                            chat.addSuccessMessage(I18n.get("chat.time.set_midnight"));
                         }
                         case "sunrise", "dawn", "soloppgang", "morgen" -> {
                             world.setTimeOfDay(0.0f);
-                            chat.addSuccessMessage("Satte tiden til soloppgang");
+                            chat.addSuccessMessage(I18n.get("chat.time.set_sunrise"));
                         }
                         default -> {
                             try {
@@ -316,14 +318,14 @@ public class ChatManager {
                                 if (val >= 240.0f) {
                                     float frac = (val % 24000.0f) / 24000.0f;
                                     world.setTimeOfDay(frac);
-                                    chat.addSuccessMessage(String.format(java.util.Locale.ROOT, "Satte tiden til %.0f ticks (%.1f%% av døgnet)", val, frac * 100.0f));
+                                    chat.addSuccessMessage(I18n.format("chat.time.set_ticks", val, frac * 100.0f));
                                 } else {
                                     float frac = (val % World.DAY_LENGTH_SECONDS) / World.DAY_LENGTH_SECONDS;
                                     world.setTimeOfDay(frac);
-                                    chat.addSuccessMessage(String.format(java.util.Locale.ROOT, "Satte tiden til %.1f sekunder (%.1f%% av døgnet)", val, frac * 100.0f));
+                                    chat.addSuccessMessage(I18n.format("chat.time.set_seconds", val, frac * 100.0f));
                                 }
                             } catch (NumberFormatException e) {
-                                chat.addErrorMessage("Ukjent tidsverdi: " + arg + ". Bruk day, noon, night, midnight, sunrise, sunset eller tall.");
+                                chat.addErrorMessage(I18n.format("chat.time.unknown", arg));
                             }
                         }
                     }
@@ -532,7 +534,7 @@ public class ChatManager {
         if (raw.startsWith("/")) {
             executeCommand(raw.substring(1).trim(), world, player);
         } else {
-            addMessage("<Spiller> " + raw, 1.0f, 1.0f, 1.0f);
+            addMessage(I18n.get("chat.player_prefix") + " " + raw, 1.0f, 1.0f, 1.0f);
         }
     }
 
@@ -544,7 +546,7 @@ public class ChatManager {
 
         Command command = commands.get(cmd);
         if (command == null) {
-            addErrorMessage("Ukjent kommando: /" + cmd + ". Skriv /help for liste over kommandoer.");
+            addErrorMessage(I18n.format("chat.unknown_command", cmd));
             return;
         }
         command.action.run(this, parts, world, player);

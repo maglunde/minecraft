@@ -1,8 +1,10 @@
 package no.minecraft.render;
 
+import no.minecraft.i18n.I18n;
 import no.minecraft.player.CraftingRecipe;
 import no.minecraft.player.Inventory;
 import no.minecraft.player.ItemStack;
+import no.minecraft.settings.GameSettings;
 import no.minecraft.world.BlockType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -109,7 +111,7 @@ public class CraftingTorchTest {
                 .orElse(null);
 
         assertNotNull(torchRecipe);
-        assertEquals("Fakkel", torchRecipe.getName());
+        assertEquals("Fakkel", I18n.getFor(GameSettings.Language.NORWEGIAN, torchRecipe.getNameKey()));
         assertEquals(4, torchRecipe.getOutput().getCount());
 
         Inventory inv = new Inventory();

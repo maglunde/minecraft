@@ -1,5 +1,6 @@
 package no.minecraft;
 
+import no.minecraft.i18n.I18n;
 import no.minecraft.player.GameMode;
 import no.minecraft.player.Player;
 import no.minecraft.player.Raycast;
@@ -159,7 +160,7 @@ public class Main {
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 
-        window = glfwCreateWindow(width, height, "Minecraft Java Clone", NULL, NULL);
+        window = glfwCreateWindow(width, height, I18n.get("window.title"), NULL, NULL);
         if (window == NULL) {
             throw new RuntimeException("Failed to create GLFW window");
         }

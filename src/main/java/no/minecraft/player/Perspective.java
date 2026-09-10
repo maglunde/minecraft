@@ -1,20 +1,16 @@
 package no.minecraft.player;
 
+import no.minecraft.i18n.I18n;
+
+import java.util.Locale;
+
 public enum Perspective {
-    FIRST_PERSON("Førsteperson", "First Person"),
-    THIRD_PERSON_BACK("Tredjeperson (Bak)", "Third Person (Back)"),
-    THIRD_PERSON_FRONT("Tredjeperson (Foran)", "Third Person (Front)");
+    FIRST_PERSON,
+    THIRD_PERSON_BACK,
+    THIRD_PERSON_FRONT;
 
-    private final String norwegianName;
-    private final String englishName;
-
-    Perspective(String norwegianName, String englishName) {
-        this.norwegianName = norwegianName;
-        this.englishName = englishName;
-    }
-
-    public String getDisplayName(boolean norwegian) {
-        return norwegian ? norwegianName : englishName;
+    public String getDisplayName() {
+        return I18n.get("perspective." + name().toLowerCase(Locale.ROOT));
     }
 
     public Perspective next() {

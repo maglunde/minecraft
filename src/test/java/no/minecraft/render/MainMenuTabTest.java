@@ -1,10 +1,18 @@
 package no.minecraft.render;
 
+import no.minecraft.settings.GameSettings;
+import no.minecraft.testutil.LanguageTestSupport;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class MainMenuTabTest {
+
+    @AfterEach
+    public void restoreLanguage() {
+        LanguageTestSupport.restore();
+    }
 
     @Test
     public void testDifficultyCycling() {
@@ -21,10 +29,13 @@ public class MainMenuTabTest {
 
     @Test
     public void testDifficultyDisplayName() {
-        assertEquals("Fredelig", MainMenu.Difficulty.PEACEFUL.getDisplayName(true));
-        assertEquals("Peaceful", MainMenu.Difficulty.PEACEFUL.getDisplayName(false));
-        assertEquals("Vanskelig", MainMenu.Difficulty.HARD.getDisplayName(true));
-        assertEquals("Hard", MainMenu.Difficulty.HARD.getDisplayName(false));
+        LanguageTestSupport.pin(GameSettings.Language.NORWEGIAN);
+        assertEquals("Fredelig", MainMenu.Difficulty.PEACEFUL.getDisplayName());
+        assertEquals("Vanskelig", MainMenu.Difficulty.HARD.getDisplayName());
+
+        LanguageTestSupport.pin(GameSettings.Language.ENGLISH);
+        assertEquals("Peaceful", MainMenu.Difficulty.PEACEFUL.getDisplayName());
+        assertEquals("Hard", MainMenu.Difficulty.HARD.getDisplayName());
     }
 
     @Test

@@ -1,5 +1,6 @@
 package no.minecraft.render;
 
+import no.minecraft.i18n.I18n;
 import no.minecraft.player.CraftingRecipe;
 import no.minecraft.player.ItemStack;
 import no.minecraft.player.Player;
@@ -96,14 +97,14 @@ abstract class AbstractContainerScreen implements GuiScreen {
         if (bt.isFood()) {
             float hearts = bt.getFoodValue() / 2.0f;
             String heartStr = (hearts == (int) hearts) ? String.valueOf((int) hearts) : String.format(java.util.Locale.ROOT, "%.1f", hearts);
-            lines.add("+" + heartStr + " MAT");
+            lines.add("+" + I18n.format("tooltip.food", heartStr));
             colors.add(new float[]{0.70f, 0.70f, 0.70f});
         }
 
         // Attack damage
         int attackDmg = bt.getAttackDamage();
         if (attackDmg > 1) {
-            lines.add("+" + attackDmg + " ANGREPSSKADE");
+            lines.add("+" + I18n.format("tooltip.attack_damage", attackDmg));
             colors.add(new float[]{0.35f, 0.85f, 0.35f});
         }
 
@@ -111,7 +112,7 @@ abstract class AbstractContainerScreen implements GuiScreen {
         if (bt.isDamageable()) {
             int maxDur = bt.getMaxDurability();
             int currentDur = maxDur - item.getDamage();
-            lines.add("HOLDBARHET: " + currentDur + " / " + maxDur);
+            lines.add(I18n.format("tooltip.durability", currentDur, maxDur));
             colors.add(new float[]{0.75f, 0.75f, 0.75f});
         }
 
@@ -185,7 +186,7 @@ abstract class AbstractContainerScreen implements GuiScreen {
         // Search text / placeholder
         if (hud.recipeSearchText.isEmpty()) {
             if (!hud.recipeSearchFocused) {
-                hud.drawHudText(overlayGeom, "SOK...", searchX + 3.0f * p, searchY + 2.5f * p, p * 0.42f, 0.45f, 0.45f, 0.45f);
+                hud.drawHudText(overlayGeom, I18n.get("container.search_hint"), searchX + 3.0f * p, searchY + 2.5f * p, p * 0.42f, 0.45f, 0.45f, 0.45f);
             } else {
                 boolean blink = (System.currentTimeMillis() % 1000) < 500;
                 if (blink) {
@@ -215,7 +216,7 @@ abstract class AbstractContainerScreen implements GuiScreen {
         hud.recipeScrollRow = Math.max(0, Math.min(maxScroll, hud.recipeScrollRow));
 
         if (activeRecipes.isEmpty()) {
-            hud.drawHudText(overlayGeom, "INGEN TREFF", popX + 22.0f * p, popY + 55.0f * p, p * 0.48f, 0.50f, 0.50f, 0.50f);
+            hud.drawHudText(overlayGeom, I18n.get("container.no_results"), popX + 22.0f * p, popY + 55.0f * p, p * 0.48f, 0.50f, 0.50f, 0.50f);
         }
 
         int startIdx = hud.recipeScrollRow * 4;

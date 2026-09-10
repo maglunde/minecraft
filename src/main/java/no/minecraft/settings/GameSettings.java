@@ -19,17 +19,27 @@ public class GameSettings {
     }
 
     public enum Language {
-        ENGLISH("English (US)"),
-        NORWEGIAN("Norsk (Bokmal)");
+        ENGLISH("en_us"),
+        NORWEGIAN("nb_no");
 
-        private final String displayName;
+        private final String code;
 
-        Language(String displayName) {
-            this.displayName = displayName;
+        Language(String code) {
+            this.code = code;
         }
 
+        /** Bundle file name fragment, e.g. "en_us". Persisted value stays name(). */
+        public String getCode() {
+            return code;
+        }
+
+        /** Native name of the language itself, e.g. "Norsk (Bokmål)" in every bundle. */
         public String getDisplayName() {
-            return displayName;
+            return no.minecraft.i18n.I18n.get("language." + code);
+        }
+
+        public Language next() {
+            return values()[(ordinal() + 1) % values().length];
         }
     }
 
@@ -179,8 +189,8 @@ public class GameSettings {
         this.language = language;
     }
 
-    public void toggleLanguage() {
-        language = (language == Language.NORWEGIAN) ? Language.ENGLISH : Language.NORWEGIAN;
+    public void nextLanguage() {
+        language = language.next();
     }
 
     public float getMouseSensitivity() {

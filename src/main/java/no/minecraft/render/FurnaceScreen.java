@@ -1,5 +1,6 @@
 package no.minecraft.render;
 
+import no.minecraft.i18n.I18n;
 import no.minecraft.player.CraftingRecipe;
 import no.minecraft.player.ItemStack;
 import no.minecraft.player.Player;
@@ -42,9 +43,9 @@ public class FurnaceScreen extends AbstractContainerScreen {
         // 2. Main Window Panel
         drawMinecraftWindowFrame(geom, ix, iy, invW, invH, p);
 
-        // 3. Titles: "OVN" and "INVENTAR"
-        hud.drawHudText(overlayGeom, "OVN", ix + 64.0f * p, iy + 6.0f * p, p * 0.48f, 0.25f, 0.25f, 0.25f);
-        hud.drawHudText(overlayGeom, "INVENTAR", ix + 8.0f * p, iy + 73.0f * p, p * 0.48f, 0.25f, 0.25f, 0.25f);
+        // 3. Titles (container.furnace / container.inventory)
+        hud.drawHudText(overlayGeom, I18n.get("container.furnace"), ix + 64.0f * p, iy + 6.0f * p, p * 0.48f, 0.25f, 0.25f, 0.25f);
+        hud.drawHudText(overlayGeom, I18n.get("container.inventory"), ix + 8.0f * p, iy + 73.0f * p, p * 0.48f, 0.25f, 0.25f, 0.25f);
 
         // 4. Input Slot (Top)
         float inX = ix + 56.0f * p;

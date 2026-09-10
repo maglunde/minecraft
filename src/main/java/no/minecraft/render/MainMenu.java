@@ -1,5 +1,6 @@
 package no.minecraft.render;
 
+import no.minecraft.i18n.I18n;
 import no.minecraft.player.GameMode;
 import no.minecraft.player.Player;
 import no.minecraft.world.BlockType;
@@ -10,6 +11,7 @@ import org.joml.Matrix4f;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
@@ -47,22 +49,8 @@ public class MainMenu {
             return values()[(ordinal() + 1) % values().length];
         }
 
-        public String getDisplayName(boolean norwegian) {
-            if (norwegian) {
-                return switch (this) {
-                    case PEACEFUL -> "Fredelig";
-                    case EASY -> "Lett";
-                    case NORMAL -> "Normal";
-                    case HARD -> "Vanskelig";
-                };
-            } else {
-                return switch (this) {
-                    case PEACEFUL -> "Peaceful";
-                    case EASY -> "Easy";
-                    case NORMAL -> "Normal";
-                    case HARD -> "Hard";
-                };
-            }
+        public String getDisplayName() {
+            return I18n.get("difficulty." + name().toLowerCase(Locale.ROOT));
         }
     }
 
@@ -101,7 +89,7 @@ public class MainMenu {
     private WorldInfo pendingDeleteWorld = null;
 
     // Create World inputs & options
-    private String createWorldName = "Ny verden";
+    private String createWorldName = I18n.get("menu.default_world_name");
     private String createSeedInput = "";
     private GameMode createGameMode = GameMode.SURVIVAL;
     private Difficulty createDifficulty = Difficulty.NORMAL;
@@ -446,7 +434,6 @@ public class MainMenu {
         if (!inMenu || button != GLFW_MOUSE_BUTTON_LEFT) return false;
 
         float p = no.minecraft.settings.GameSettings.getInstance().calculateGuiScale(width, height);
-        boolean norwegian = no.minecraft.settings.GameSettings.getInstance().getLanguage() == no.minecraft.settings.GameSettings.Language.NORWEGIAN;
 
         if (currentScreen == Screen.TITLE) {
             float btnW = 180.0f * p;
@@ -822,7 +809,6 @@ public class MainMenu {
         List<Float> overlayGeom = new ArrayList<>();
 
         float p = no.minecraft.settings.GameSettings.getInstance().calculateGuiScale(width, height);
-        boolean norwegian = no.minecraft.settings.GameSettings.getInstance().getLanguage() == no.minecraft.settings.GameSettings.Language.NORWEGIAN;
 
         // 1. Panoramic dirt tile background
         int dirtTile = BlockType.DIRT.getTexture(BlockType.Face.TOP);
@@ -839,8 +825,8 @@ public class MainMenu {
         addRect(geom, 0, 0, width, height, 0, 0, 0, 0, 0, 0, 0, 0.45f);
 
         if (currentScreen == Screen.TITLE) {
-            drawMinecraftTitle(overlayGeom, "MINECRAFT", width / 2.0f, height * 0.16f, p * 1.6f);
-            drawModeSelectSubtitle(overlayGeom, "JAVA 1.16.1 CLONE", width / 2.0f, height * 0.28f, p * 0.85f);
+            drawMinecraftTitle(overlayGeom, I18n.get("menu.title"), width / 2.0f, height * 0.16f, p * 1.6f);
+            drawModeSelectSubtitle(overlayGeom, I18n.get("menu.subtitle"), width / 2.0f, height * 0.28f, p * 0.85f);
 
             float btnW = 180.0f * p;
             float btnH = 24.0f * p;
@@ -849,14 +835,14 @@ public class MainMenu {
             float gap = 34.0f * p;
 
             String[] titles = {
-                    norwegian ? "ENKELTSPILLER" : "SINGLEPLAYER",
-                    norwegian ? "INNSTILLINGER..." : "OPTIONS...",
-                    norwegian ? "AVSLUTT" : "QUIT GAME"
+                    I18n.get("menu.singleplayer"),
+                    I18n.get("menu.options"),
+                    I18n.get("menu.quit")
             };
             String[] descs = {
-                    norwegian ? "Velg verden eller lag ny fra seed" : "Choose a world or create new from seed",
-                    norwegian ? "Grafikk, kontroller, lyd og sprak" : "Video, controls, sound and language",
-                    norwegian ? "Avslutt spillet og lukk vinduet" : "Quit the game and close window"
+                    I18n.get("menu.singleplayer.description"),
+                    I18n.get("menu.options.description"),
+                    I18n.get("menu.quit.description")
             };
             int[] iconTiles = {
                     BlockType.GRASS.getTexture(BlockType.Face.TOP),
@@ -877,17 +863,14 @@ public class MainMenu {
                 drawSmallDescription(overlayGeom, descs[i], startX + 28.0f * p, by + 14.5f * p, p * 0.55f);
             }
 
-            drawSmallDescription(overlayGeom, "Minecraft Java Edition 1.16.1 Clone", width / 2.0f - 90.0f * p, height - 16.0f * p, p * 0.65f);
+            drawSmallDescription(overlayGeom, I18n.get("menu.version_footer"), width / 2.0f - 90.0f * p, height - 16.0f * p, p * 0.65f);
 
         } else if (currentScreen == Screen.CONFIRM_DELETE) {
-            drawCenteredButtonLabel(overlayGeom, norwegian ? "ER DU SIKKER PA AT DU VIL SLETTE?" : "ARE YOU SURE YOU WANT TO DELETE?",
+            String wName = (pendingDeleteWorld != null) ? ("'" + pendingDeleteWorld.getName() + "'") : I18n.get("menu.delete.this_world");
+            drawCenteredButtonLabel(overlayGeom, I18n.format("menu.delete.title", wName),
                     width / 2.0f, height * 0.32f, p * 0.95f, 1.0f, 1.0f, 1.0f);
 
-            String wName = (pendingDeleteWorld != null) ? ("'" + pendingDeleteWorld.getName() + "'") : "denne verdenen";
-            drawCenteredButtonLabel(overlayGeom, wName, width / 2.0f, height * 0.40f, p * 0.90f, 1.0f, 0.85f, 0.2f);
-
-            drawCenteredButtonLabel(overlayGeom,
-                    norwegian ? "Denne verdenen vil bli slettet for alltid! (Kan ikke angres)" : "This world will be lost forever! (A long time!)",
+            drawCenteredButtonLabel(overlayGeom, I18n.get("menu.delete.warning"),
                     width / 2.0f, height * 0.48f, p * 0.65f, 0.9f, 0.35f, 0.35f);
 
             float btnW = 130.0f * p;
@@ -899,12 +882,12 @@ public class MainMenu {
 
             boolean hDel = (mx >= b1X && mx <= b1X + btnW && my >= btnY && my <= btnY + btnH);
             drawMinecraftMenuButton(geom, b1X, btnY, btnW, btnH, hDel, false, p);
-            drawCenteredButtonLabel(overlayGeom, norwegian ? "SLETT" : "DELETE",
+            drawCenteredButtonLabel(overlayGeom, I18n.get("menu.delete"),
                     b1X + btnW / 2.0f, btnY + 7.0f * p, p * 0.75f, 1.0f, 0.3f, 0.3f);
 
             boolean hCan = (mx >= b2X && mx <= b2X + btnW && my >= btnY && my <= btnY + btnH);
             drawMinecraftMenuButton(geom, b2X, btnY, btnW, btnH, hCan, false, p);
-            drawCenteredButtonLabel(overlayGeom, norwegian ? "AVBRYT" : "CANCEL",
+            drawCenteredButtonLabel(overlayGeom, I18n.get("menu.cancel"),
                     b2X + btnW / 2.0f, btnY + 7.0f * p, p * 0.75f, 1.0f, 1.0f, 1.0f);
 
         } else {
@@ -927,9 +910,9 @@ public class MainMenu {
             float tabY = 5.0f * p;
 
             String[] tabLabels = {
-                    norwegian ? "GAME" : "GAME",
-                    norwegian ? "WORLD" : "WORLD",
-                    norwegian ? "MORE" : "MORE"
+                    I18n.get("menu.tab.game"),
+                    I18n.get("menu.tab.world"),
+                    I18n.get("menu.tab.more")
             };
             Tab[] tabs = {Tab.GAME, Tab.WORLD, Tab.MORE};
 
@@ -968,7 +951,7 @@ public class MainMenu {
 
                 // Label: World Name
                 float labelY = 38.0f * p;
-                drawButtonLabel(overlayGeom, norwegian ? "World Name" : "World Name", boxX, labelY, p * 0.65f, 0.85f, 0.85f, 0.85f);
+                drawButtonLabel(overlayGeom, I18n.get("menu.world_name"), boxX, labelY, p * 0.65f, 0.85f, 0.85f, 0.85f);
 
                 // Text Box: World Name
                 float nameY = 48.0f * p;
@@ -981,12 +964,7 @@ public class MainMenu {
                 boolean hlMode = (focusedElement == FocusedElement.GAME_MODE);
                 drawMinecraftMenuButton(geom, boxX, modeY, boxW, boxH, hMode, hlMode, p);
 
-                String modeStr = switch (createGameMode) {
-                    case CREATIVE -> "Creative";
-                    case HARDCORE -> "Hardcore";
-                    default -> "Survival";
-                };
-                String modeLabel = "Game Mode: " + modeStr;
+                String modeLabel = I18n.format("menu.game_mode", createGameMode.getDisplayName());
                 drawCenteredButtonLabel(overlayGeom, modeLabel, boxX + boxW / 2.0f, modeY + 6.0f * p, p * 0.75f, 1.0f, 1.0f, 1.0f);
 
                 // Button 2: Difficulty
@@ -995,10 +973,7 @@ public class MainMenu {
                 boolean hlDiff = (focusedElement == FocusedElement.GAME_DIFFICULTY);
                 drawMinecraftMenuButton(geom, boxX, diffY, boxW, boxH, hDiff, hlDiff, p);
 
-                String diffDisplay = (createGameMode == GameMode.HARDCORE)
-                        ? "Hard"
-                        : createDifficulty.getDisplayName(false);
-                String diffLabel = "Difficulty: " + diffDisplay;
+                String diffLabel = I18n.format("menu.difficulty", createDifficulty.getDisplayName());
                 drawCenteredButtonLabel(overlayGeom, diffLabel, boxX + boxW / 2.0f, diffY + 6.0f * p, p * 0.75f, 1.0f, 1.0f, 1.0f);
 
                 // Button 3: Allow Cheats
@@ -1007,8 +982,7 @@ public class MainMenu {
                 boolean hlCheats = (focusedElement == FocusedElement.GAME_CHEATS);
                 drawMinecraftMenuButton(geom, boxX, cheatsY, boxW, boxH, hCheats, hlCheats, p);
 
-                String cheatsStr = allowCheats ? "ON" : "OFF";
-                String cheatsLabel = "Allow Cheats: " + cheatsStr;
+                String cheatsLabel = I18n.format("menu.allow_cheats", I18n.get(allowCheats ? "options.on" : "options.off"));
                 drawCenteredButtonLabel(overlayGeom, cheatsLabel, boxX + boxW / 2.0f, cheatsY + 6.0f * p, p * 0.75f, 1.0f, 1.0f, 1.0f);
 
                 // Button 4: Game Rules
@@ -1016,7 +990,7 @@ public class MainMenu {
                 boolean hRules = (mx >= boxX && mx <= boxX + boxW && my >= rulesY && my <= rulesY + boxH);
                 boolean hlRules = (focusedElement == FocusedElement.GAME_RULES);
                 drawMinecraftMenuButton(geom, boxX, rulesY, boxW, boxH, hRules, hlRules, p);
-                drawCenteredButtonLabel(overlayGeom, norwegian ? "Game Rules" : "Game Rules", boxX + boxW / 2.0f, rulesY + 6.0f * p, p * 0.75f, 1.0f, 1.0f, 1.0f);
+                drawCenteredButtonLabel(overlayGeom, I18n.get("menu.game_rules"), boxX + boxW / 2.0f, rulesY + 6.0f * p, p * 0.75f, 1.0f, 1.0f, 1.0f);
 
                 // Bottom Buttons
                 float btnW = 145.0f * p;
@@ -1028,12 +1002,12 @@ public class MainMenu {
 
                 boolean hCreate = (mx >= b1X && mx <= b1X + btnW && my >= btnY && my <= btnY + btnH);
                 drawMinecraftMenuButton(geom, b1X, btnY, btnW, btnH, hCreate, false, p);
-                drawCenteredButtonLabel(overlayGeom, norwegian ? "Create New World" : "Create New World",
+                drawCenteredButtonLabel(overlayGeom, I18n.get("menu.create_world"),
                         b1X + btnW / 2.0f, btnY + 6.0f * p, p * 0.75f, 1.0f, 1.0f, 1.0f);
 
                 boolean hCancel = (mx >= b2X && mx <= b2X + btnW && my >= btnY && my <= btnY + btnH);
                 drawMinecraftMenuButton(geom, b2X, btnY, btnW, btnH, hCancel, false, p);
-                drawCenteredButtonLabel(overlayGeom, norwegian ? "Cancel" : "Cancel",
+                drawCenteredButtonLabel(overlayGeom, I18n.get("menu.cancel"),
                         b2X + btnW / 2.0f, btnY + 6.0f * p, p * 0.75f, 1.0f, 1.0f, 1.0f);
 
             } else if (activeTab == Tab.WORLD) {
@@ -1044,8 +1018,8 @@ public class MainMenu {
                 float listGap = 38.0f * p;
 
                 if (worlds.isEmpty()) {
-                    drawCenteredButtonLabel(overlayGeom, norwegian ? "INGEN VERDENER FUNNET" : "NO WORLDS FOUND", width / 2.0f, height * 0.35f, p * 0.85f, 0.7f, 0.7f, 0.7f);
-                    drawCenteredButtonLabel(overlayGeom, norwegian ? "GA TIL 'GAME'-FANEN FOR A OPPRETTE NY" : "CLICK 'GAME' TAB TO CREATE A WORLD", width / 2.0f, height * 0.43f, p * 0.65f, 0.6f, 0.6f, 0.6f);
+                    drawCenteredButtonLabel(overlayGeom, I18n.get("menu.worlds_empty"), width / 2.0f, height * 0.35f, p * 0.85f, 0.7f, 0.7f, 0.7f);
+                    drawCenteredButtonLabel(overlayGeom, I18n.get("menu.worlds_empty_hint"), width / 2.0f, height * 0.43f, p * 0.65f, 0.6f, 0.6f, 0.6f);
                 } else {
                     int maxVisible = 4;
                     int visibleCount = Math.min(maxVisible, Math.max(0, worlds.size() - scrollOffset));
@@ -1089,7 +1063,7 @@ public class MainMenu {
                         drawSmallDescription(overlayGeom, line2, listX + 36.0f * p, wy + 14.5f * p, p * 0.52f);
 
                         // Line 3: Mode and Version (gray/yellow)
-                        String line3 = wi.getModeDisplayName(norwegian) + ", 1.16.1";
+                        String line3 = wi.getModeDisplayName() + ", 1.16.1";
                         drawSmallDescription(overlayGeom, line3, listX + 36.0f * p, wy + 23.0f * p, p * 0.52f);
                     }
                 }
@@ -1111,21 +1085,21 @@ public class MainMenu {
                 // 1. Play Selected World
                 boolean h1 = hasSelection && (mx >= b1X && mx <= b1X + btnW && my >= btnY && my <= btnY + btnH);
                 drawMenuButtonOrDisabled(geom, b1X, btnY, btnW, btnH, h1, hasSelection, p);
-                drawCenteredButtonLabel(overlayGeom, norwegian ? "SPILL VERDEN" : "PLAY WORLD",
+                drawCenteredButtonLabel(overlayGeom, I18n.get("menu.play_world"),
                         b1X + btnW / 2.0f, btnY + 6.0f * p, p * 0.70f,
                         hasSelection ? 1.0f : 0.45f, hasSelection ? 1.0f : 0.45f, hasSelection ? 1.0f : 0.45f);
 
                 // 2. Delete
                 boolean h2 = hasSelection && (mx >= b2X && mx <= b2X + btnW && my >= btnY && my <= btnY + btnH);
                 drawMenuButtonOrDisabled(geom, b2X, btnY, btnW, btnH, h2, hasSelection, p);
-                drawCenteredButtonLabel(overlayGeom, norwegian ? "SLETT" : "DELETE",
+                drawCenteredButtonLabel(overlayGeom, I18n.get("menu.delete"),
                         b2X + btnW / 2.0f, btnY + 6.0f * p, p * 0.70f,
                         hasSelection ? 1.0f : 0.45f, hasSelection ? 0.35f : 0.45f, hasSelection ? 0.35f : 0.45f);
 
                 // 3. Cancel
                 boolean h3 = (mx >= b3X && mx <= b3X + btnW && my >= btnY && my <= btnY + btnH);
                 drawMinecraftMenuButton(geom, b3X, btnY, btnW, btnH, h3, false, p);
-                drawCenteredButtonLabel(overlayGeom, norwegian ? "AVBRYT" : "CANCEL",
+                drawCenteredButtonLabel(overlayGeom, I18n.get("menu.cancel"),
                         b3X + btnW / 2.0f, btnY + 6.0f * p, p * 0.70f, 1.0f, 1.0f, 1.0f);
 
             } else if (activeTab == Tab.MORE) {
@@ -1135,13 +1109,13 @@ public class MainMenu {
 
                 // Subtitle: Seed for generator
                 float seedLabelY = 42.0f * p;
-                drawButtonLabel(overlayGeom, norwegian ? "Seed for World Generator" : "Seed for World Generator", boxX, seedLabelY, p * 0.65f, 0.85f, 0.85f, 0.85f);
+                drawButtonLabel(overlayGeom, I18n.get("menu.seed_label"), boxX, seedLabelY, p * 0.65f, 0.85f, 0.85f, 0.85f);
 
                 // Input box: Seed
                 float seedY = 54.0f * p;
                 boolean seedFocused = (focusedElement == FocusedElement.MORE_SEED);
                 drawTextBox(geom, overlayGeom, boxX, seedY, boxW, boxH, createSeedInput,
-                        norwegian ? "Leave blank for random seed" : "Leave blank for random seed",
+                        I18n.get("menu.seed_hint"),
                         seedFocused, blink, p);
 
                 // Button 1: Generate Structures
@@ -1149,7 +1123,7 @@ public class MainMenu {
                 boolean hStruct = (mx >= boxX && mx <= boxX + boxW && my >= structY && my <= structY + boxH);
                 boolean hlStruct = (focusedElement == FocusedElement.MORE_STRUCTURES);
                 drawMinecraftMenuButton(geom, boxX, structY, boxW, boxH, hStruct, hlStruct, p);
-                String structLabel = "Generate Structures: " + (generateStructures ? "ON" : "OFF");
+                String structLabel = I18n.format("menu.generate_structures", I18n.get(generateStructures ? "options.on" : "options.off"));
                 drawCenteredButtonLabel(overlayGeom, structLabel, boxX + boxW / 2.0f, structY + 6.0f * p, p * 0.75f, 1.0f, 1.0f, 1.0f);
 
                 // Button 2: World Type
@@ -1157,14 +1131,14 @@ public class MainMenu {
                 boolean hType = (mx >= boxX && mx <= boxX + boxW && my >= typeY && my <= typeY + boxH);
                 boolean hlType = (focusedElement == FocusedElement.MORE_WORLDTYPE);
                 drawMinecraftMenuButton(geom, boxX, typeY, boxW, boxH, hType, hlType, p);
-                drawCenteredButtonLabel(overlayGeom, "World Type: Default", boxX + boxW / 2.0f, typeY + 6.0f * p, p * 0.75f, 1.0f, 1.0f, 1.0f);
+                drawCenteredButtonLabel(overlayGeom, I18n.get("menu.world_type"), boxX + boxW / 2.0f, typeY + 6.0f * p, p * 0.75f, 1.0f, 1.0f, 1.0f);
 
                 // Button 3: Bonus Chest
                 float chestY = 138.0f * p;
                 boolean hChest = (mx >= boxX && mx <= boxX + boxW && my >= chestY && my <= chestY + boxH);
                 boolean hlChest = (focusedElement == FocusedElement.MORE_BONUSCHEST);
                 drawMinecraftMenuButton(geom, boxX, chestY, boxW, boxH, hChest, hlChest, p);
-                String chestLabel = "Bonus Chest: " + (bonusChest ? "ON" : "OFF");
+                String chestLabel = I18n.format("menu.bonus_chest", I18n.get(bonusChest ? "options.on" : "options.off"));
                 drawCenteredButtonLabel(overlayGeom, chestLabel, boxX + boxW / 2.0f, chestY + 6.0f * p, p * 0.75f, 1.0f, 1.0f, 1.0f);
 
                 // Bottom Buttons
@@ -1177,12 +1151,12 @@ public class MainMenu {
 
                 boolean hCreate = (mx >= b1X && mx <= b1X + btnW && my >= btnY && my <= btnY + btnH);
                 drawMinecraftMenuButton(geom, b1X, btnY, btnW, btnH, hCreate, false, p);
-                drawCenteredButtonLabel(overlayGeom, norwegian ? "Create New World" : "Create New World",
+                drawCenteredButtonLabel(overlayGeom, I18n.get("menu.create_world"),
                         b1X + btnW / 2.0f, btnY + 6.0f * p, p * 0.75f, 1.0f, 1.0f, 1.0f);
 
                 boolean hCancel = (mx >= b2X && mx <= b2X + btnW && my >= btnY && my <= btnY + btnH);
                 drawMinecraftMenuButton(geom, b2X, btnY, btnW, btnH, hCancel, false, p);
-                drawCenteredButtonLabel(overlayGeom, norwegian ? "Cancel" : "Cancel",
+                drawCenteredButtonLabel(overlayGeom, I18n.get("menu.cancel"),
                         b2X + btnW / 2.0f, btnY + 6.0f * p, p * 0.75f, 1.0f, 1.0f, 1.0f);
             }
         }

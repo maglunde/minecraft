@@ -1,5 +1,6 @@
 package no.minecraft.render;
 
+import no.minecraft.i18n.I18n;
 import no.minecraft.player.ItemStack;
 import no.minecraft.player.Player;
 import no.minecraft.world.ChestData;
@@ -40,9 +41,9 @@ public class ChestScreen extends AbstractContainerScreen {
         // 2. Main Window Panel
         drawMinecraftWindowFrame(geom, ix, iy, invW, invH, p);
 
-        // 3. Titles: "KISTE" and "INVENTAR"
-        hud.drawHudText(overlayGeom, "KISTE", ix + 8.0f * p, iy + 6.0f * p, p * 0.48f, 0.25f, 0.25f, 0.25f);
-        hud.drawHudText(overlayGeom, "INVENTAR", ix + 8.0f * p, iy + 73.0f * p, p * 0.48f, 0.25f, 0.25f, 0.25f);
+        // 3. Titles (container.chest / container.inventory)
+        hud.drawHudText(overlayGeom, I18n.get("container.chest"), ix + 8.0f * p, iy + 6.0f * p, p * 0.48f, 0.25f, 0.25f, 0.25f);
+        hud.drawHudText(overlayGeom, I18n.get("container.inventory"), ix + 8.0f * p, iy + 73.0f * p, p * 0.48f, 0.25f, 0.25f, 0.25f);
 
         // 4. Chest Slots Grid (3 rows x 9 columns = 27 slots)
         float chestGridX = ix + 8.0f * p;

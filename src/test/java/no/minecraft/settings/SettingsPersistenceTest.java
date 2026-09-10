@@ -35,4 +35,27 @@ public class SettingsPersistenceTest {
             Files.deleteIfExists(tmp);
         }
     }
+
+    @Test
+    public void testLanguageSaveLoadRoundtrip() throws Exception {
+        Path tmp = Files.createTempFile("settings-lang-test", ".properties");
+        try {
+            GameSettings gs = GameSettings.getInstance();
+            GameSettings.Language original = gs.getLanguage();
+            try {
+                // Persistence uses the enum name (language=NORWEGIAN), not the bundle code.
+                gs.setLanguage(GameSettings.Language.ENGLISH);
+                gs.saveTo(tmp);
+
+                gs.setLanguage(GameSettings.Language.NORWEGIAN);
+                gs.loadFrom(tmp);
+                assertEquals(GameSettings.Language.ENGLISH, gs.getLanguage(),
+                        "Språk skal gjenopprettes fra fil");
+            } finally {
+                gs.setLanguage(original);
+            }
+        } finally {
+            Files.deleteIfExists(tmp);
+        }
+    }
 }

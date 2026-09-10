@@ -1,8 +1,11 @@
 package no.minecraft.chat;
 
 import no.minecraft.player.Player;
+import no.minecraft.settings.GameSettings;
+import no.minecraft.testutil.LanguageTestSupport;
 import no.minecraft.world.BlockType;
 import no.minecraft.world.World;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -13,6 +16,17 @@ public class ChatCommandTest {
     private World world;
     private Player player;
     private ChatManager chat;
+
+    @BeforeEach
+    public void pinLanguage() {
+        // All tests share one JVM; pin the language so translations are deterministic.
+        LanguageTestSupport.pin(GameSettings.Language.NORWEGIAN);
+    }
+
+    @AfterEach
+    public void restoreLanguage() {
+        LanguageTestSupport.restore();
+    }
 
     @BeforeEach
     public void setUp() {

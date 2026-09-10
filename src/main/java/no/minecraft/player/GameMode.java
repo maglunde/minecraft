@@ -1,24 +1,15 @@
 package no.minecraft.player;
 
-import no.minecraft.settings.GameSettings;
+import no.minecraft.i18n.I18n;
+
+import java.util.Locale;
 
 public enum GameMode {
-    SURVIVAL("Survival", "Overlevelse"),
-    CREATIVE("Creative", "Kreativ"),
-    HARDCORE("Hardcore", "Hardcore");
-
-    private final String englishName;
-    private final String norwegianName;
-
-    GameMode(String englishName, String norwegianName) {
-        this.englishName = englishName;
-        this.norwegianName = norwegianName;
-    }
+    SURVIVAL,
+    CREATIVE,
+    HARDCORE;
 
     public String getDisplayName() {
-        if (GameSettings.getInstance().getLanguage() == GameSettings.Language.NORWEGIAN) {
-            return norwegianName;
-        }
-        return englishName;
+        return I18n.get("game_mode." + name().toLowerCase(Locale.ROOT));
     }
 }

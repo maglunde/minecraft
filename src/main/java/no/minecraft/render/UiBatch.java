@@ -74,7 +74,11 @@ public final class UiBatch {
                                        float r, float gr, float b, float a) {
         ch = Character.toUpperCase(ch);
         int[][] glyph = getGlyph(ch);
-        if (glyph == null) return;
+        if (glyph == null) {
+            if (Character.isWhitespace(ch)) return;   // whitespace gap is invisible by design
+            glyph = getGlyph('?');                    // unknown char shows a placeholder instead of vanishing
+            if (glyph == null) return;
+        }
 
         for (int row = 0; row < glyph.length; row++) {
             for (int col = 0; col < glyph[row].length; col++) {

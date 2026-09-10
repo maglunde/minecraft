@@ -1,5 +1,6 @@
 package no.minecraft.render;
 
+import no.minecraft.i18n.I18n;
 import no.minecraft.player.CraftingRecipe;
 import no.minecraft.player.GameMode;
 import no.minecraft.player.ItemStack;
@@ -248,13 +249,14 @@ public class HUD {
         if (recipeSearchText == null || recipeSearchText.trim().isEmpty()) {
             return recipes;
         }
-        String q = recipeSearchText.trim().toLowerCase();
+        String q = recipeSearchText.trim().toLowerCase(java.util.Locale.ROOT);
         List<CraftingRecipe> list = new ArrayList<>();
         for (CraftingRecipe r : recipes) {
-            String name = r.getName().toLowerCase();
-            String disp = r.getOutput().getType().getName().toLowerCase();
-            String enumName = r.getOutput().getType().name().toLowerCase();
-            if (name.contains(q) || disp.contains(q) || enumName.contains(q)) {
+            String name = r.getName().toLowerCase(java.util.Locale.ROOT);
+            String disp = r.getOutput().getType().getName().toLowerCase(java.util.Locale.ROOT);
+            String enumName = r.getOutput().getType().name().toLowerCase(java.util.Locale.ROOT);
+            String localized = I18n.get(r.getNameKey()).toLowerCase(java.util.Locale.ROOT);
+            if (name.contains(q) || disp.contains(q) || enumName.contains(q) || localized.contains(q)) {
                 list.add(r);
             }
         }
@@ -2316,7 +2318,7 @@ public class HUD {
         float by = 12.0f * p;
 
         // Boss Title text: "Ender Dragon"
-        String title = "ENDER DRAGON";
+        String title = I18n.get("boss.ender_dragon");
         float scale = p * 0.70f;
         float textW = title.length() * (6.0f * scale);
         float tx = (windowWidth - textW) / 2.0f;
@@ -2341,8 +2343,8 @@ public class HUD {
 
         float p = getGuiScale(windowWidth, windowHeight);
         // Game Over / Victory banners
-        String title = "SPILLET ER VUNNET";
-        String titleSub = "FREE THE END!";
+        String title = I18n.get("victory.title");
+        String titleSub = I18n.get("victory.subtitle");
         float scale = p * 1.4f;
         float textW = title.length() * (6.0f * scale);
         float tx = (windowWidth - textW) / 2.0f;
@@ -2354,11 +2356,11 @@ public class HUD {
         float textW2 = titleSub.length() * (6.0f * scale2);
         drawHudText(overlayGeom, titleSub, (windowWidth - textW2) / 2.0f, ty + 16.0f * p, scale2, 0.85f, 0.45f, 0.95f);
 
-        String desc1 = "DRAGEN ER BESEIRET";
+        String desc1 = I18n.get("victory.dragon_defeated");
         float scale3 = p * 0.70f;
         drawHudText(overlayGeom, desc1, (windowWidth - desc1.length() * (6.0f * scale3)) / 2.0f, ty + 34.0f * p, scale3, 0.9f, 0.9f, 0.9f);
 
-        String hint = "TRYKK ESC FOR MENY";
+        String hint = I18n.get("victory.hint");
         drawHudText(overlayGeom, hint, (windowWidth - hint.length() * (6.0f * scale3)) / 2.0f, ty + 50.0f * p, scale3, 0.7f, 0.7f, 0.7f);
     }
 
@@ -2457,19 +2459,19 @@ public class HUD {
         String toward;
         if (Math.abs(fwd.x) > Math.abs(fwd.z)) {
             if (fwd.x > 0) {
-                facing = "east";
-                toward = "Towards positive X (+X)";
+                facing = I18n.get("debug.facing.east");
+                toward = I18n.get("debug.towards.positive_x");
             } else {
-                facing = "west";
-                toward = "Towards negative X (-X)";
+                facing = I18n.get("debug.facing.west");
+                toward = I18n.get("debug.towards.negative_x");
             }
         } else {
             if (fwd.z > 0) {
-                facing = "south";
-                toward = "Towards positive Z (+Z)";
+                facing = I18n.get("debug.facing.south");
+                toward = I18n.get("debug.towards.positive_z");
             } else {
-                facing = "north";
-                toward = "Towards negative Z (-Z)";
+                facing = I18n.get("debug.facing.north");
+                toward = I18n.get("debug.towards.negative_z");
             }
         }
 
@@ -2481,20 +2483,20 @@ public class HUD {
         int light = openToSky ? skyLight : Math.max(0, skyLight - 8);
 
         int day = (int) (world.getWorldTime() / no.minecraft.world.World.DAY_LENGTH_SECONDS) + 1;
-        String timeStr = world.isNight() ? "Night" : "Day";
+        String timeStr = world.isNight() ? I18n.get("debug.time.night") : I18n.get("debug.time.day");
 
         List<String> leftLines = new ArrayList<>();
-        leftLines.add(String.format("Minecraft 1.16.1 Clone (%d fps)", lastFps));
-        leftLines.add(String.format(java.util.Locale.ROOT, "XYZ: %.3f / %.3f / %.3f", pos.x, pos.y, pos.z));
-        leftLines.add(String.format(java.util.Locale.ROOT, "Block: %d %d %d", bx, by, bz));
-        leftLines.add(String.format(java.util.Locale.ROOT, "Chunk: %d %d %d [%d %d %d in chunk]", cx, cy, cz, inCx, inCy, inCz));
-        leftLines.add(String.format(java.util.Locale.ROOT, "Facing: %s (%s) (%.1f / %.1f)", facing, toward, yaw, pitch));
-        leftLines.add(String.format("Camera: %s", player.getCamera().getPerspective().name()));
-        leftLines.add(String.format("Dimension: %s", world.getCurrentDimension().name().toLowerCase()));
-        leftLines.add(String.format("Biome: %s", world.getBiomeName(bx, by, bz)));
-        leftLines.add(String.format(java.util.Locale.ROOT, "Light: %d (%d sky, %d block)", light, skyLight, 0));
-        leftLines.add(String.format(java.util.Locale.ROOT, "Day %d (%s, sun: %.2f)", day, timeStr, world.getSunLightLevel()));
-        leftLines.add(String.format(java.util.Locale.ROOT, "Chunks: %d rendered, %d loaded | Mobs: %d | Drops: %d",
+        leftLines.add(I18n.format("debug.header", lastFps));
+        leftLines.add(I18n.format("debug.xyz", pos.x, pos.y, pos.z));
+        leftLines.add(I18n.format("debug.block", bx, by, bz));
+        leftLines.add(I18n.format("debug.chunk", cx, cy, cz, inCx, inCy, inCz));
+        leftLines.add(I18n.format("debug.facing", facing, toward, yaw, pitch));
+        leftLines.add(I18n.format("debug.camera", player.getCamera().getPerspective().name()));
+        leftLines.add(I18n.format("debug.dimension", world.getCurrentDimension().name().toLowerCase()));
+        leftLines.add(I18n.format("debug.biome", world.getBiomeName(bx, by, bz)));
+        leftLines.add(I18n.format("debug.light", light, skyLight, 0));
+        leftLines.add(I18n.format("debug.day", day, timeStr, world.getSunLightLevel()));
+        leftLines.add(I18n.format("debug.chunks",
                 world.getRenderedChunkCount(), world.getLoadedChunkCount(), world.getMobs().size(), world.getDroppedItems().size()));
 
         for (int i = 0; i < leftLines.size(); i++) {
@@ -2516,19 +2518,20 @@ public class HUD {
         String javaVer = System.getProperty("java.version");
         String arch = System.getProperty("os.arch").contains("64") ? "64bit" : "32bit";
 
-        rightLines.add(String.format("Java: %s %s", javaVer, arch));
-        rightLines.add(String.format(java.util.Locale.ROOT, "Mem: %d%% %d/%dMB", memPct, usedMem, totalMem));
-        rightLines.add(String.format(java.util.Locale.ROOT, "Allocated: %dMB (Max: %dMB)", totalMem, maxMem));
-        rightLines.add(String.format("Display: %dx%d", windowWidth, windowHeight));
-        rightLines.add(String.format("GameMode: %s%s", player.getGameMode().name(), player.isFlying() ? " [FLY]" : ""));
+        rightLines.add(I18n.format("debug.java", javaVer, arch));
+        rightLines.add(I18n.format("debug.mem", memPct, usedMem, totalMem));
+        rightLines.add(I18n.format("debug.allocated", totalMem, maxMem));
+        rightLines.add(I18n.format("debug.display", windowWidth, windowHeight));
+        String flyStr = player.isFlying() ? " " + I18n.get("debug.flying") : "";
+        rightLines.add(I18n.format("debug.gamemode", player.getGameMode().getDisplayName(), flyStr));
 
         if (lastTargetedHit != null) {
             rightLines.add(""); // spacer
-            rightLines.add(String.format(java.util.Locale.ROOT, "Targeted Block: %d, %d, %d",
+            rightLines.add(I18n.format("debug.targeted_block",
                     lastTargetedHit.hitX, lastTargetedHit.hitY, lastTargetedHit.hitZ));
             BlockType tb = world.getBlock(lastTargetedHit.hitX, lastTargetedHit.hitY, lastTargetedHit.hitZ);
-            rightLines.add("Block: " + tb.name());
-            rightLines.add("Solid: " + tb.isSolid());
+            rightLines.add(I18n.get("debug.block_name") + " " + tb.name());
+            rightLines.add(I18n.get("debug.solid") + " " + tb.isSolid());
         }
 
         for (int i = 0; i < rightLines.size(); i++) {

@@ -2,6 +2,7 @@ package no.minecraft.render;
 
 import no.minecraft.advancement.AdvancementManager;
 import no.minecraft.advancement.AdvancementManager.Advancement;
+import no.minecraft.i18n.I18n;
 import no.minecraft.player.GameMode;
 import no.minecraft.settings.GameSettings;
 import no.minecraft.sound.SoundManager;
@@ -180,7 +181,6 @@ public class PauseMenu {
         if (button == GLFW_MOUSE_BUTTON_RIGHT && currentScreen != Screen.OPTIONS) return false;
 
         float p = GameSettings.getInstance().calculateGuiScale(width, height);
-        boolean norwegian = GameSettings.getInstance().getLanguage() == GameSettings.Language.NORWEGIAN;
 
         if (currentScreen == Screen.MAIN) {
             return handleMainClick(mx, my, width, height, p);
@@ -313,7 +313,7 @@ public class PauseMenu {
         float y3 = startY + gap * 3.0f;
         if (mx >= leftX && mx <= leftX + btnW && my >= y3 && my <= y3 + btnH) {
             SoundManager.getInstance().play("click");
-            s.toggleLanguage();
+            s.nextLanguage();
             return true;
         }
         if (mx >= rightX && mx <= rightX + btnW && my >= y3 && my <= y3 + btnH) {
@@ -449,11 +449,10 @@ public class PauseMenu {
 
     private void renderMainScreen(List<Float> geom, List<Float> tex, List<Float> overlayGeom,
                                   int width, int height, float mx, float my, float p, TextureAtlas atlas) {
-        boolean norwegian = GameSettings.getInstance().getLanguage() == GameSettings.Language.NORWEGIAN;
         float cx = width / 2.0f;
 
         // Title text: "Game Menu" / "Spillmeny"
-        String title = norwegian ? "SPILLMENY" : "GAME MENU";
+        String title = I18n.get("pause.title");
         drawCenteredText(overlayGeom, title, cx, height * 0.16f, p * 1.3f, 1.0f, 1.0f, 1.0f);
 
         float btnW = 200.0f * p;
@@ -467,7 +466,7 @@ public class PauseMenu {
         float y1 = startY;
         boolean h1 = (mx >= startX && mx <= startX + btnW && my >= y1 && my <= y1 + btnH);
         drawMenuButton(geom, startX, y1, btnW, btnH, h1, p);
-        String t1 = norwegian ? "TILBAKE TIL SPILLET" : "BACK TO GAME";
+        String t1 = I18n.get("pause.back_to_game");
         drawCenteredButtonText(overlayGeom, t1, startX + btnW / 2.0f, y1 + 5.5f * p, p * 0.85f, h1);
 
         // Button 2: Advancements (left) & Statistics placeholder (right)
@@ -477,36 +476,35 @@ public class PauseMenu {
 
         boolean hAdv = (mx >= leftX && mx <= leftX + halfW && my >= y2 && my <= y2 + btnH);
         drawMenuButton(geom, leftX, y2, halfW, btnH, hAdv, p);
-        String tAdv = norwegian ? "FREMSKRITT" : "ADVANCEMENTS";
+        String tAdv = I18n.get("pause.advancements");
         drawCenteredButtonText(overlayGeom, tAdv, leftX + halfW / 2.0f, y2 + 5.5f * p, p * 0.75f, hAdv);
 
         // Right slot: Statistics (disabled aesthetic)
         drawMenuButton(geom, rightX, y2, halfW, btnH, false, p);
-        String tStat = norwegian ? "STATISTIKK" : "STATISTICS";
+        String tStat = I18n.get("pause.statistics");
         drawCenteredButtonText(overlayGeom, tStat, rightX + halfW / 2.0f, y2 + 5.5f * p, p * 0.75f, false);
 
         // Button 3: Options... (left) & Empty / None on right (No Open to LAN)
         float y3 = startY + gap * 2.0f;
         boolean hOpt = (mx >= leftX && mx <= leftX + halfW && my >= y3 && my <= y3 + btnH);
         drawMenuButton(geom, leftX, y3, halfW, btnH, hOpt, p);
-        String tOpt = norwegian ? "INNSTILLINGER..." : "OPTIONS...";
+        String tOpt = I18n.get("pause.options");
         drawCenteredButtonText(overlayGeom, tOpt, leftX + halfW / 2.0f, y3 + 5.5f * p, p * 0.70f, hOpt);
 
         // Button 4: Save and Quit to Title
         float y4 = startY + gap * 3.0f;
         boolean hQuit = (mx >= startX && mx <= startX + btnW && my >= y4 && my <= y4 + btnH);
         drawMenuButton(geom, startX, y4, btnW, btnH, hQuit, p);
-        String tQuit = norwegian ? "LAGRE OG GA TIL MENY" : "SAVE AND QUIT TO TITLE";
+        String tQuit = I18n.get("pause.save_quit");
         drawCenteredButtonText(overlayGeom, tQuit, startX + btnW / 2.0f, y4 + 5.5f * p, p * 0.75f, hQuit);
     }
 
     private void renderOptionsScreen(List<Float> geom, List<Float> tex, List<Float> overlayGeom,
                                      int width, int height, float mx, float my, float p) {
         GameSettings s = GameSettings.getInstance();
-        boolean norwegian = s.getLanguage() == GameSettings.Language.NORWEGIAN;
         float cx = width / 2.0f;
 
-        drawCenteredText(overlayGeom, norwegian ? "INNSTILLINGER" : "OPTIONS", cx, height * 0.08f, p * 1.3f, 1.0f, 1.0f, 1.0f);
+        drawCenteredText(overlayGeom, I18n.get("options.title"), cx, height * 0.08f, p * 1.3f, 1.0f, 1.0f, 1.0f);
 
         float btnW = 150.0f * p;
         float btnH = 20.0f * p;
@@ -519,50 +517,50 @@ public class PauseMenu {
         float y0 = startY;
         boolean h0L = (mx >= leftX && mx <= leftX + btnW && my >= y0 && my <= y0 + btnH);
         drawMenuButton(geom, leftX, y0, btnW, btnH, h0L, p);
-        String fovStr = s.getFov() == 70.0f ? "NORMAL" : (int) s.getFov() + "";
-        drawCenteredButtonText(overlayGeom, "FOV: " + fovStr, leftX + btnW / 2.0f, y0 + 5.5f * p, p * 0.8f, h0L);
+        String fovStr = s.getFov() == 70.0f ? I18n.get("options.fov_normal") : (int) s.getFov() + "";
+        drawCenteredButtonText(overlayGeom, I18n.format("options.fov", fovStr), leftX + btnW / 2.0f, y0 + 5.5f * p, p * 0.8f, h0L);
 
         boolean h0R = (mx >= rightX && mx <= rightX + btnW && my >= y0 && my <= y0 + btnH);
         drawMenuButton(geom, rightX, y0, btnW, btnH, h0R, p);
         int sensPercent = (int) (s.getMouseSensitivity() / 0.12f * 100.0f);
-        String sensLabel = norwegian ? "MUS: " + sensPercent + "%" : "SENSITIVITY: " + sensPercent + "%";
+        String sensLabel = I18n.format("options.sensitivity", sensPercent);
         drawCenteredButtonText(overlayGeom, sensLabel, rightX + btnW / 2.0f, y0 + 5.5f * p, p * 0.75f, h0R);
 
         // Row 1: Render Distance & Brightness
         float y1 = startY + gap;
         boolean h1L = (mx >= leftX && mx <= leftX + btnW && my >= y1 && my <= y1 + btnH);
         drawMenuButton(geom, leftX, y1, btnW, btnH, h1L, p);
-        String rdLabel = (norwegian ? "RENDER: " : "RENDER DISTANCE: ") + s.getRenderDistance() + " CHUNKS";
+        String rdLabel = I18n.format("options.render_distance", s.getRenderDistance());
         drawCenteredButtonText(overlayGeom, rdLabel, leftX + btnW / 2.0f, y1 + 5.5f * p, p * 0.70f, h1L);
 
         boolean h1R = (mx >= rightX && mx <= rightX + btnW && my >= y1 && my <= y1 + btnH);
         drawMenuButton(geom, rightX, y1, btnW, btnH, h1R, p);
-        String brightStr = s.getBrightness() > 0.5f ? (norwegian ? "LYS" : "BRIGHT") : (norwegian ? "MORK" : "MOODY");
-        drawCenteredButtonText(overlayGeom, (norwegian ? "LYSSTYRKE: " : "BRIGHTNESS: ") + brightStr, rightX + btnW / 2.0f, y1 + 5.5f * p, p * 0.70f, h1R);
+        String brightStr = s.getBrightness() > 0.5f ? I18n.get("options.bright") : I18n.get("options.moody");
+        drawCenteredButtonText(overlayGeom, I18n.format("options.brightness", brightStr), rightX + btnW / 2.0f, y1 + 5.5f * p, p * 0.70f, h1R);
 
         // Row 2: Volume & Controls
         float y2 = startY + gap * 2.0f;
         boolean h2L = (mx >= leftX && mx <= leftX + btnW && my >= y2 && my <= y2 + btnH);
         drawMenuButton(geom, leftX, y2, btnW, btnH, h2L, p);
         int volPercent = (int) Math.round(s.getSoundVolume() * 100);
-        String volStr = volPercent == 0 ? (norwegian ? "AV" : "OFF") : volPercent + "%";
-        drawCenteredButtonText(overlayGeom, (norwegian ? "VOLUM: " : "VOLUME: ") + volStr, leftX + btnW / 2.0f, y2 + 5.5f * p, p * 0.75f, h2L);
+        String volStr = volPercent == 0 ? I18n.get("options.off") : volPercent + "%";
+        drawCenteredButtonText(overlayGeom, I18n.format("options.volume", volStr), leftX + btnW / 2.0f, y2 + 5.5f * p, p * 0.75f, h2L);
 
         boolean h2R = (mx >= rightX && mx <= rightX + btnW && my >= y2 && my <= y2 + btnH);
         drawMenuButton(geom, rightX, y2, btnW, btnH, h2R, p);
-        drawCenteredButtonText(overlayGeom, norwegian ? "STYRING (CONTROLS)..." : "CONTROLS...", rightX + btnW / 2.0f, y2 + 5.5f * p, p * 0.75f, h2R);
+        drawCenteredButtonText(overlayGeom, I18n.get("options.controls"), rightX + btnW / 2.0f, y2 + 5.5f * p, p * 0.75f, h2R);
 
         // Row 3: Language (left) & GUI Scale (right)
         float y3 = startY + gap * 3.0f;
         boolean h3L = (mx >= leftX && mx <= leftX + btnW && my >= y3 && my <= y3 + btnH);
         drawMenuButton(geom, leftX, y3, btnW, btnH, h3L, p);
-        String langStr = (norwegian ? "SPRAK: " : "LANGUAGE: ") + s.getLanguage().getDisplayName();
+        String langStr = I18n.format("options.language", s.getLanguage().getDisplayName());
         drawCenteredButtonText(overlayGeom, langStr, leftX + btnW / 2.0f, y3 + 5.5f * p, p * 0.65f, h3L);
 
         boolean h3R = (mx >= rightX && mx <= rightX + btnW && my >= y3 && my <= y3 + btnH);
         drawMenuButton(geom, rightX, y3, btnW, btnH, h3R, p);
-        String guiScaleStr = s.getGuiScale() == 0 ? "AUTO" : String.valueOf(s.getGuiScale());
-        drawCenteredButtonText(overlayGeom, (norwegian ? "GUI SKALA: " : "GUI SCALE: ") + guiScaleStr, rightX + btnW / 2.0f, y3 + 5.5f * p, p * 0.75f, h3R);
+        String guiScaleStr = s.getGuiScale() == 0 ? I18n.get("options.auto") : String.valueOf(s.getGuiScale());
+        drawCenteredButtonText(overlayGeom, I18n.format("options.gui_scale", guiScaleStr), rightX + btnW / 2.0f, y3 + 5.5f * p, p * 0.75f, h3R);
 
         // Done button
         float doneW = 200.0f * p;
@@ -570,25 +568,24 @@ public class PauseMenu {
         float doneY = height * 0.85f;
         boolean hDone = (mx >= doneX && mx <= doneX + doneW && my >= doneY && my <= doneY + btnH);
         drawMenuButton(geom, doneX, doneY, doneW, btnH, hDone, p);
-        drawCenteredButtonText(overlayGeom, norwegian ? "FERDIG" : "DONE", doneX + doneW / 2.0f, doneY + 5.5f * p, p * 0.85f, hDone);
+        drawCenteredButtonText(overlayGeom, I18n.get("pause.done"), doneX + doneW / 2.0f, doneY + 5.5f * p, p * 0.85f, hDone);
     }
 
     private void renderControlsScreen(List<Float> geom, List<Float> tex, List<Float> overlayGeom,
                                       int width, int height, float mx, float my, float p) {
         GameSettings s = GameSettings.getInstance();
-        boolean norwegian = s.getLanguage() == GameSettings.Language.NORWEGIAN;
         float cx = width / 2.0f;
 
-        drawCenteredText(overlayGeom, norwegian ? "TASTATUR OG STYRING" : "KEYBOARD & CONTROLS", cx, height * 0.08f, p * 1.2f, 1.0f, 1.0f, 1.0f);
+        drawCenteredText(overlayGeom, I18n.get("controls.title"), cx, height * 0.08f, p * 1.2f, 1.0f, 1.0f, 1.0f);
 
         String[] actions = {
-                norwegian ? "FREMOVER" : "WALK FORWARD",
-                norwegian ? "BAKOVER" : "WALK BACKWARD",
-                norwegian ? "VENSTRE" : "STRAFE LEFT",
-                norwegian ? "HOYRE" : "STRAFE RIGHT",
-                norwegian ? "HOPP" : "JUMP",
-                norwegian ? "SNEAK / DYKK" : "SNEAK",
-                norwegian ? "INVENTORY / CRAFTING" : "OPEN INVENTORY"
+                I18n.get("controls.forward"),
+                I18n.get("controls.backward"),
+                I18n.get("controls.left"),
+                I18n.get("controls.right"),
+                I18n.get("controls.jump"),
+                I18n.get("controls.sneak"),
+                I18n.get("controls.inventory")
         };
         int[] keys = {
                 s.keyForward, s.keyBackward, s.keyLeft, s.keyRight, s.keyJump, s.keySneak, s.keyInventory
@@ -624,15 +621,14 @@ public class PauseMenu {
         float doneY = height * 0.86f;
         boolean hDone = (mx >= doneX && mx <= doneX + doneW && my >= doneY && my <= doneY + btnH);
         drawMenuButton(geom, doneX, doneY, doneW, btnH, hDone, p);
-        drawCenteredButtonText(overlayGeom, norwegian ? "FERDIG" : "DONE", doneX + doneW / 2.0f, doneY + 5.5f * p, p * 0.85f, hDone);
+        drawCenteredButtonText(overlayGeom, I18n.get("pause.done"), doneX + doneW / 2.0f, doneY + 5.5f * p, p * 0.85f, hDone);
     }
 
     private void renderAdvancementsScreen(List<Float> geom, List<Float> tex, List<Float> overlayGeom,
                                           int width, int height, float mx, float my, float p, TextureAtlas atlas) {
-        boolean norwegian = GameSettings.getInstance().getLanguage() == GameSettings.Language.NORWEGIAN;
         float cx = width / 2.0f;
 
-        drawCenteredText(overlayGeom, norwegian ? "FREMSKRITT (ADVANCEMENTS)" : "ADVANCEMENTS", cx, height * 0.08f, p * 1.2f, 1.0f, 0.95f, 0.3f);
+        drawCenteredText(overlayGeom, I18n.get("pause.advancements_title"), cx, height * 0.08f, p * 1.2f, 1.0f, 0.95f, 0.3f);
 
         AdvancementManager am = AdvancementManager.getInstance();
         Advancement[] allAdv = Advancement.values();
@@ -663,7 +659,8 @@ public class PauseMenu {
                     isUnlocked ? 1.0f : 0.45f, isUnlocked ? 1.0f : 0.45f, isUnlocked ? 1.0f : 0.45f, 1.0f);
 
             // Title
-            String title = adv.getTitle(norwegian) + (isUnlocked ? " [LUKKET OPP]" : " [LAST]");
+            String title = adv.getTitle() + " "
+                    + (isUnlocked ? I18n.get("advancement.status.unlocked") : I18n.get("advancement.status.locked"));
             float tr = isUnlocked ? 1.0f : 0.55f;
             float tg = isUnlocked ? 0.85f : 0.55f;
             float tb = isUnlocked ? 0.2f : 0.55f;
@@ -680,7 +677,7 @@ public class PauseMenu {
         float doneY = height * 0.86f;
         boolean hDone = (mx >= doneX && mx <= doneX + doneW && my >= doneY && my <= doneY + doneH);
         drawMenuButton(geom, doneX, doneY, doneW, doneH, hDone, p);
-        drawCenteredButtonText(overlayGeom, norwegian ? "TILBAKE" : "BACK", doneX + doneW / 2.0f, doneY + 5.5f * p, p * 0.85f, hDone);
+        drawCenteredButtonText(overlayGeom, I18n.get("pause.back"), doneX + doneW / 2.0f, doneY + 5.5f * p, p * 0.85f, hDone);
     }
 
     private void drawMenuButton(List<Float> g, float x, float y, float w, float h, boolean hovered, float p) {

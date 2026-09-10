@@ -1,7 +1,11 @@
 package no.minecraft.render;
 
 import no.minecraft.player.CraftingRecipe;
+import no.minecraft.settings.GameSettings;
+import no.minecraft.testutil.LanguageTestSupport;
 import no.minecraft.world.BlockType;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -9,6 +13,16 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class RecipeFilterTest {
+
+    @BeforeEach
+    public void pinNorwegian() {
+        LanguageTestSupport.pin(GameSettings.Language.NORWEGIAN);
+    }
+
+    @AfterEach
+    public void restoreLanguage() {
+        LanguageTestSupport.restore();
+    }
 
     private HUD hudWithQuery(String query) {
         HUD hud = new HUD(false);

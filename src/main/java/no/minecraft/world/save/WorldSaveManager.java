@@ -2,6 +2,7 @@ package no.minecraft.world.save;
 
 import no.minecraft.advancement.AdvancementManager;
 import no.minecraft.advancement.AdvancementManager.Advancement;
+import no.minecraft.i18n.I18n;
 import no.minecraft.player.GameMode;
 import no.minecraft.player.Inventory;
 import no.minecraft.player.ItemStack;
@@ -111,7 +112,7 @@ public class WorldSaveManager {
     }
 
     public static WorldInfo createNewWorld(String name, String seedInput, GameMode mode, World world, Player player, boolean bonusChest) {
-        String safeName = (name == null || name.trim().isEmpty()) ? "Ny verden" : name.trim();
+        String safeName = (name == null || name.trim().isEmpty()) ? I18n.get("menu.default_world_name") : name.trim();
         long seed = parseSeed(seedInput);
         String folderName = generateUniqueFolderName(safeName);
 
