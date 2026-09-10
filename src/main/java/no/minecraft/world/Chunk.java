@@ -125,6 +125,11 @@ public class Chunk {
                         addTorch(vertices, wx, wy, wz, x, y, z);
                         continue;
                     }
+                    if (type == BlockType.CACTUS) {
+                        float boost = getTorchLightBoost(torches, x, y, z);
+                        addCactus(vertices, wx, wy, wz, x, y, z, boost);
+                        continue;
+                    }
 
                     float boost = getTorchLightBoost(torches, x, y, z);
 
@@ -286,6 +291,100 @@ public class Chunk {
         if (y >= SIZE_Y) return false;
         BlockType b = getBlock(x, y, z);
         return b != null && b.isSolid();
+    }
+
+    private void addCactus(List<Float> v, float wx, float wy, float wz, int x, int y, int z, float boost) {
+        float x0 = wx + 0.0625f; // 1/16
+        float x1 = wx + 0.9375f; // 15/16
+        float y0 = wy;
+        float y1 = wy + 1.0f;
+        float z0 = wz + 0.0625f; // 1/16
+        float z1 = wz + 0.9375f; // 15/16
+
+        // Top and bottom textures (Tile 82)
+        int topTexId = BlockType.CACTUS.getTexture(BlockType.Face.TOP);
+        float[] uvTop = TextureAtlas.getUVs(topTexId);
+        float px = (uvTop[2] - uvTop[0]) / 16.0f;
+        float py = (uvTop[3] - uvTop[1]) / 16.0f;
+        // The solid green square in cactus_top.png is at pixels 1..15
+        float uTop0 = uvTop[0] + 1.0f * px;
+        float uTop1 = uvTop[0] + 15.0f * px;
+        float vTop0 = uvTop[1] + 1.0f * py;
+        float vTop1 = uvTop[1] + 15.0f * py;
+
+        // Side texture (Tile 83)
+        int sideTexId = BlockType.CACTUS.getTexture(BlockType.Face.NORTH);
+        float[] uvSide = TextureAtlas.getUVs(sideTexId);
+        float sx = (uvSide[2] - uvSide[0]) / 16.0f;
+        // The solid green section in cactus_side.png is columns 1..15
+        float uSide0 = uvSide[0] + 1.0f * sx;
+        float uSide1 = uvSide[0] + 15.0f * sx;
+        float vSide0 = uvSide[1];
+        float vSide1 = uvSide[3];
+
+        // Top face (+Y)
+        if (getBlock(x, y + 1, z) != BlockType.CACTUS) {
+            float light = Math.min(1.0f, 1.0f + boost);
+            addVertex(v, x0, y1, z0, uTop0, vTop0, light);
+            addVertex(v, x0, y1, z1, uTop0, vTop1, light);
+            addVertex(v, x1, y1, z1, uTop1, vTop1, light);
+
+            addVertex(v, x0, y1, z0, uTop0, vTop0, light);
+            addVertex(v, x1, y1, z1, uTop1, vTop1, light);
+            addVertex(v, x1, y1, z0, uTop1, vTop0, light);
+        }
+
+        // Bottom face (-Y)
+        if (getBlock(x, y - 1, z) != BlockType.CACTUS) {
+            float light = Math.min(1.0f, 0.5f + boost);
+            addVertex(v, x0, y0, z0, uTop0, vTop0, light);
+            addVertex(v, x1, y0, z0, uTop1, vTop0, light);
+            addVertex(v, x1, y0, z1, uTop1, vTop1, light);
+
+            addVertex(v, x0, y0, z0, uTop0, vTop0, light);
+            addVertex(v, x1, y0, z1, uTop1, vTop1, light);
+            addVertex(v, x0, y0, z1, uTop0, vTop1, light);
+        }
+
+        // North face (-Z, plane at z = z0)
+        float lightN = Math.min(1.0f, 0.7f + boost);
+        addVertex(v, x0, y0, z0, uSide1, vSide1, lightN);
+        addVertex(v, x0, y1, z0, uSide1, vSide0, lightN);
+        addVertex(v, x1, y1, z0, uSide0, vSide0, lightN);
+
+        addVertex(v, x0, y0, z0, uSide1, vSide1, lightN);
+        addVertex(v, x1, y1, z0, uSide0, vSide0, lightN);
+        addVertex(v, x1, y0, z0, uSide0, vSide1, lightN);
+
+        // South face (+Z, plane at z = z1)
+        float lightS = Math.min(1.0f, 0.7f + boost);
+        addVertex(v, x0, y0, z1, uSide0, vSide1, lightS);
+        addVertex(v, x1, y0, z1, uSide1, vSide1, lightS);
+        addVertex(v, x1, y1, z1, uSide1, vSide0, lightS);
+
+        addVertex(v, x0, y0, z1, uSide0, vSide1, lightS);
+        addVertex(v, x1, y1, z1, uSide1, vSide0, lightS);
+        addVertex(v, x0, y1, z1, uSide0, vSide0, lightS);
+
+        // West face (-X, plane at x = x0)
+        float lightW = Math.min(1.0f, 0.8f + boost);
+        addVertex(v, x0, y0, z1, uSide1, vSide1, lightW);
+        addVertex(v, x0, y1, z1, uSide1, vSide0, lightW);
+        addVertex(v, x0, y1, z0, uSide0, vSide0, lightW);
+
+        addVertex(v, x0, y0, z1, uSide1, vSide1, lightW);
+        addVertex(v, x0, y1, z0, uSide0, vSide0, lightW);
+        addVertex(v, x0, y0, z0, uSide0, vSide1, lightW);
+
+        // East face (+X, plane at x = x1)
+        float lightE = Math.min(1.0f, 0.8f + boost);
+        addVertex(v, x1, y0, z0, uSide1, vSide1, lightE);
+        addVertex(v, x1, y1, z0, uSide1, vSide0, lightE);
+        addVertex(v, x1, y1, z1, uSide0, vSide0, lightE);
+
+        addVertex(v, x1, y0, z0, uSide1, vSide1, lightE);
+        addVertex(v, x1, y1, z1, uSide0, vSide0, lightE);
+        addVertex(v, x1, y0, z1, uSide0, vSide1, lightE);
     }
 
     private void addTorch(List<Float> v, float wx, float wy, float wz, int x, int y, int z) {

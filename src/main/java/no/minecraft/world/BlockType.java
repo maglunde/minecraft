@@ -67,7 +67,7 @@ public enum BlockType {
     SANDSTONE((byte) 63, "Sandstein", true, false, 77, 79, 78),
     SNOW_BLOCK((byte) 64, "Snøblokk", true, false, 80, 80, 80),
     GRAVEL((byte) 65, "Grus", true, false, 81, 81, 81),
-    CACTUS((byte) 66, "Kaktus", true, false, 82, 82, 83),
+    CACTUS((byte) 66, "Kaktus", true, true, 82, 82, 83),
     COAL_ORE((byte) 67, "Kullmalm", true, false, 84, 84, 84),
     COAL((byte) 68, "Kull", false, true, 85, 85, 85),
     IRON_ORE((byte) 69, "Jernmalm", true, false, 86, 86, 86),

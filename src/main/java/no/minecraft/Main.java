@@ -1085,7 +1085,8 @@ public class Main {
 
             // 6. Render Selection Box around targeted block (if inventory is not open)
             if (!hud.isInventoryOpen() && targetedHit != null) {
-                blockOutline.render(projection, view, targetedHit.hitX, targetedHit.hitY, targetedHit.hitZ);
+                BlockType targetType = world.getBlock(targetedHit.hitX, targetedHit.hitY, targetedHit.hitZ);
+                blockOutline.render(projection, view, targetedHit.hitX, targetedHit.hitY, targetedHit.hitZ, targetType);
             }
 
             // 6.5 Render First-Person Hand & Held Item (only in first-person mode)

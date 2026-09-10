@@ -79,6 +79,10 @@ public class BlockOutline {
     }
 
     public void render(Matrix4f projection, Matrix4f view, int bx, int by, int bz) {
+        render(projection, view, bx, by, bz, null);
+    }
+
+    public void render(Matrix4f projection, Matrix4f view, int bx, int by, int bz, no.minecraft.world.BlockType type) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glLineWidth(2.5f);
@@ -88,6 +92,9 @@ public class BlockOutline {
         shader.setUniform("uView", view);
 
         Matrix4f model = new Matrix4f().translate(bx, by, bz);
+        if (type == no.minecraft.world.BlockType.CACTUS) {
+            model.translate(0.0625f, 0.0f, 0.0625f).scale(0.875f, 1.0f, 0.875f);
+        }
         shader.setUniform("uModel", model);
 
         glBindVertexArray(vaoId);
