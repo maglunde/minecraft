@@ -128,4 +128,44 @@ public class TerrainGenerationTest {
         BlockType ground = world.getBlock(sx, sy - 1, sz);
         assertTrue(ground.isSolid(), "Blokken under spawn skal være solid, var: " + ground);
     }
+
+    @Test
+    public void mountainsGenerateCoalAndIronAndNaturalSurfaces() {
+        // Search across seeds and chunks to verify coal and iron can generate in mountains
+        boolean foundCoalInMountain = false;
+        boolean foundIronInMountain = false;
+
+        for (long seed : new long[]{12345L, 8260489323939082048L, 9999L}) {
+            World world = new World(seed);
+            world.updateLoadedChunks(0, 0);
+
+            for (int cx = -4; cx <= 4; cx++) {
+                for (int cz = -4; cz <= 4; cz++) {
+                    world.ensureChunkGenerated(cx, cz);
+                    int startX = cx * Chunk.SIZE_X;
+                    int startZ = cz * Chunk.SIZE_Z;
+
+                    for (int lx = 0; lx < Chunk.SIZE_X; lx++) {
+                        for (int lz = 0; lz < Chunk.SIZE_Z; lz++) {
+                            int wx = startX + lx;
+                            int wz = startZ + lz;
+                            int height = world.getTerrainHeight(wx, wz);
+                            String biome = world.getBiomeName(wx, height, wz);
+
+                            if (biome.equals("minecraft:mountains") && height >= 30) {
+                                for (int y = Math.max(1, height - 3); y <= height; y++) {
+                                    BlockType b = world.getBlock(wx, y, wz);
+                                    if (b == BlockType.COAL_ORE) foundCoalInMountain = true;
+                                    if (b == BlockType.IRON_ORE) foundIronInMountain = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assertTrue(foundCoalInMountain, "Kullmalm skal kunne genereres i fjellet");
+        assertTrue(foundIronInMountain, "Jernmalm skal kunne genereres i fjellet");
+    }
 }

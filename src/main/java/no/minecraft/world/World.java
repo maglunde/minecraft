@@ -38,7 +38,7 @@ public class World {
     private final Random rand = new Random();
     private boolean shouldClearHostileMobs = false;
 
-    public static final float DAY_LENGTH_SECONDS = 480.0f;
+    public static final float DAY_LENGTH_SECONDS = 600.0f;
     private float worldTime = 20.0f;
 
     // Victory state when Dragon is slain
@@ -430,10 +430,10 @@ public class World {
             return new Vector3f(originX + 0.5f, y + 0.05f, originZ + 0.5f);
         }
 
-        // 2. Search outwards in an expanding box pattern for bare ground
-        int maxRadius = 160;
-        for (int r = 1; r <= maxRadius; r += 2) {
-            for (int dx = -r; dx <= r; dx += 2) {
+        // 2. Search outwards in an expanding box pattern for bare ground (within immediate 2-chunk radius)
+        int maxRadius = 32;
+        for (int r = 2; r <= maxRadius; r += 4) {
+            for (int dx = -r; dx <= r; dx += 4) {
                 for (int dz : new int[]{-r, r}) {
                     int tx = originX + dx;
                     int tz = originZ + dz;
@@ -446,7 +446,7 @@ public class World {
                     }
                 }
             }
-            for (int dz = -r + 2; dz <= r - 2; dz += 2) {
+            for (int dz = -r + 4; dz <= r - 4; dz += 4) {
                 for (int dx : new int[]{-r, r}) {
                     int tx = originX + dx;
                     int tz = originZ + dz;
@@ -462,7 +462,7 @@ public class World {
         }
 
         // 3. Fallback: accept leaves if no bare ground was found
-        for (int r = 0; r <= maxRadius; r += 4) {
+        for (int r = 0; r <= maxRadius; r += 8) {
             int tx = originX + r;
             int tz = originZ;
             int cx = Math.floorDiv(tx, Chunk.SIZE_X);
@@ -1119,10 +1119,9 @@ public class World {
                     }
                 } else if (biome.equals("minecraft:mountains")) {
                     if (height >= 30) {
-                        // Rocky cliffs and high peaks: Stone and gravel scree (NO snow on normal mountains)
-                        boolean isGravel = (Math.abs(wx * 11 + wz * 17) % 5 == 0);
+                        // Rocky cliffs and high peaks: Stone, with naturally occurring ores and gravel pockets
                         for (int y = Math.max(1, height - 3); y <= height; y++) {
-                            chunk.setBlock(lx, y, lz, isGravel ? BlockType.GRAVEL : BlockType.STONE);
+                            chunk.setBlock(lx, y, lz, getUndergroundBlock(wx, y, wz));
                         }
                     } else {
                         // Lower mountain base: Dirt and grass
@@ -1177,7 +1176,7 @@ public class World {
         long clusterHash = ((long) cx2 * 3129871L) ^ ((long) cz2 * 116129781L) ^ ((long) cy2 * 8429183L) ^ seed;
         clusterHash = (clusterHash ^ (clusterHash >> 16)) * 0x45d9f3bL;
         clusterHash = clusterHash ^ (clusterHash >> 16);
-        int clusterType = (int) Math.abs(clusterHash % 1000);
+        int clusterType = (int) Math.abs(clusterHash % 10000);
 
         long blockHash = ((long) wx * 918273L) ^ ((long) wz * 482917L) ^ ((long) y * 182739L);
         int blockVar = (int) Math.abs(blockHash % 10);
@@ -1192,12 +1191,12 @@ public class World {
             return BlockType.GOLD_ORE;
         }
 
-        // Iron Ore: From y = 2 to y = 42, frequent
-        if (y <= 42 && clusterType >= 40 && clusterType <= 85 && blockVar < 8) {
+        // Iron Ore: Underground and throughout mountains, frequent
+        if (clusterType >= 40 && clusterType <= 85 && blockVar < 8) {
             return BlockType.IRON_ORE;
         }
 
-        // Coal Ore: Abundant anywhere underground
+        // Coal Ore: Abundant underground and throughout mountains
         if (clusterType >= 100 && clusterType <= 170 && blockVar < 8) {
             return BlockType.COAL_ORE;
         }
