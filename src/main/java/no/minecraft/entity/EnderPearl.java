@@ -67,28 +67,19 @@ public class EnderPearl {
         int bz = (int) Math.floor(z);
         int feetY = (int) Math.floor(y);
 
-        // Find a solid block to land on so the player can never end up inside a
-        // wall or floating over nothing (which previously dropped them into the void)
-        int groundY = -1;
-        for (int cy = Math.min(feetY, Chunk.SIZE_Y - 3); cy >= 1; cy--) {
-            if (isLandingSpot(world, bx, cy, bz)) {
-                groundY = cy;
-                break;
-            }
+        // Fall through open air to the first solid ground below the impact.
+        // Never scans through solid rock, so the player can neither end up
+        // inside a mountain nor be teleported through it; if the impact cell
+        // itself is inside a wall (point-blank throw), cancel instead.
+        for (int cy = Math.min(feetY, Chunk.SIZE_Y - 3); cy >= 0; cy--) {
+            BlockType ground = world.getBlock(bx, cy, bz);
+            if (ground == BlockType.AIR || !ground.isSolid()) continue;
+            if (!isLandingSpot(world, bx, cy, bz)) return; // Solid but blocked: inside a wall
+            owner.teleportTo(bx + 0.5f, cy + 1.05f, bz + 0.5f);
+            owner.damage(5); // 2.5 hearts, like vanilla fall damage
+            return;
         }
-        if (groundY < 0) {
-            // No ground below: try above (landing on top of a thin wall/floor)
-            for (int cy = feetY + 1; cy <= Chunk.SIZE_Y - 3; cy++) {
-                if (isLandingSpot(world, bx, cy, bz)) {
-                    groundY = cy;
-                    break;
-                }
-            }
-        }
-        if (groundY < 0) return; // Nothing safe to land on: cancel the teleport instead of glitching
-
-        owner.teleportTo(bx + 0.5f, groundY + 1.05f, bz + 0.5f);
-        owner.damage(5); // 2.5 hearts, like vanilla fall damage
+        // Only air all the way down: no safe landing, cancel the teleport
     }
 
     /** True when a player can stand here: solid ground with free feet and head cells. */

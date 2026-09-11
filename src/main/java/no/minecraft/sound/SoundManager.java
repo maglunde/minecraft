@@ -13,9 +13,20 @@ public class SoundManager {
     private static final SoundManager INSTANCE = new SoundManager();
     private final Map<String, byte[]> soundCache = new HashMap<>();
     private final ExecutorService soundPool = Executors.newFixedThreadPool(4);
+    private static volatile boolean muted = Boolean.getBoolean("minecraft.sound.disabled")
+            || System.getProperty("surefire.test.class.path") != null
+            || System.getProperty("test") != null;
 
     public static SoundManager getInstance() {
         return INSTANCE;
+    }
+
+    public static void setMuted(boolean mute) {
+        muted = mute;
+    }
+
+    public static boolean isMuted() {
+        return muted;
     }
 
     private SoundManager() {
@@ -59,6 +70,7 @@ public class SoundManager {
     }
 
     public void play(String name, float volume) {
+        if (muted) return;
         float masterVolume = no.minecraft.settings.GameSettings.getInstance().getSoundVolume();
         if (masterVolume <= 0.001f) return;
         final float finalVol = volume * masterVolume;

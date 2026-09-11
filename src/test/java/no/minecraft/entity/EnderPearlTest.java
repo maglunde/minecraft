@@ -83,6 +83,59 @@ public class EnderPearlTest {
     }
 
     @Test
+    public void pearlIntoMountainFaceNeverGlitchesIntoTerrain() {
+        World world = new World(12345L);
+        Player player = new Player(world, 0.5f, 20.9f, 0.5f);
+        player.setHealth(20);
+        // Steep mountain wall at x=3..6, y=15..45
+        for (int x = 3; x <= 6; x++) {
+            for (int y = 15; y <= 45; y++) {
+                for (int z = -1; z <= 2; z++) {
+                    world.setBlock(x, y, z, BlockType.STONE);
+                }
+            }
+        }
+        // Clear the flight area in front of the wall
+        for (int x = 0; x <= 2; x++) {
+            for (int y = 15; y <= 45; y++) {
+                for (int z = -1; z <= 2; z++) {
+                    world.setBlock(x, y, z, BlockType.AIR);
+                }
+            }
+        }
+
+        // Thrown up and forward, arcs into the mountain face
+        EnderPearl pearl = new EnderPearl(0.5f, 20.5f, 0.5f, 12.0f, 16.0f, 0.0f, player);
+        for (int i = 0; i < 300 && !pearl.isDead(); i++) {
+            pearl.update(1.0f / 60.0f, world, player);
+        }
+
+        assertTrue(pearl.isDead(), "Perlen skal treffe fjellveggen");
+        assertNoOverlap(world, player, "Player skal aldri være inne i terrenget etter teleport");
+        assertTrue(player.getPosition().x < 3.0f,
+                "Player skal lande i luftsøylen foran fjellet, ikke inne i det (x=" + player.getPosition().x + ")");
+
+        // Settle the physics and verify the player never ends up inside a block
+        for (int i = 0; i < 180; i++) {
+            player.update(1.0f / 60.0f, false, false, false, false, false, false, false);
+        }
+        assertNoOverlap(world, player, "Player skal ikke glitche inn i terrenget under landing");
+        assertTrue(player.isOnGround(), "Player skal stå på bakken etter landing");
+    }
+
+    private void assertNoOverlap(World world, Player player, String message) {
+        var box = player.getBoundingBox();
+        for (int x = (int) Math.floor(box.minX); x <= (int) Math.floor(box.maxX); x++) {
+            for (int y = (int) Math.floor(box.minY); y <= (int) Math.floor(box.maxY); y++) {
+                for (int z = (int) Math.floor(box.minZ); z <= (int) Math.floor(box.maxZ); z++) {
+                    assertFalse(world.getBlock(x, y, z).isSolid(),
+                            message + " (overlapper blokk " + x + "," + y + "," + z + ")");
+                }
+            }
+        }
+    }
+
+    @Test
     public void pearlNeverFallsIntoVoid() {
         World world = new World(12345L);
         Player player = new Player(world, 0.5f, 20.9f, 0.5f);

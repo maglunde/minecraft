@@ -1002,6 +1002,129 @@ public class TextureAtlas {
             return rgba(0, 0, 0, 0);
         });
 
+        // 131: Birch Log Side (White bark with dark horizontal specks)
+        loadOrPaint(pixelData, 131, "birch_log.png", (x, y, rand) -> {
+            boolean darkSpot = ((y % 5 == 0 && (x >= 2 && x <= 6)) || (y % 7 == 2 && (x >= 9 && x <= 13)) || (y == 11 && (x >= 5 && x <= 8)));
+            if (darkSpot) {
+                int d = 35 + rand.nextInt(25);
+                return rgba(d, d, d, 255);
+            }
+            int b = 215 + rand.nextInt(35);
+            return rgba(b, (int)(b * 0.98f), (int)(b * 0.92f), 255);
+        });
+
+        // 132: Birch Log Top (Pale wood rings with white outer bark)
+        loadOrPaint(pixelData, 132, "birch_log_top.png", (x, y, rand) -> {
+            float dx = x - 7.5f;
+            float dy = y - 7.5f;
+            float dist = (float) Math.sqrt(dx * dx + dy * dy);
+            if (dist > 6.5f) {
+                int b = 220 + rand.nextInt(30);
+                return rgba(b, (int)(b * 0.98f), (int)(b * 0.92f), 255);
+            }
+            int v = (((int) dist % 2 == 0) ? 175 : 195) + rand.nextInt(15);
+            return rgba((int)(v * 1.05f), (int)(v * 0.95f), (int)(v * 0.65f), 255);
+        });
+
+        // 133: Birch Leaves (Bright fresh yellow-green)
+        loadOrPaint(pixelData, 133, "birch_leaves.png", (x, y, rand) -> {
+            if (rand.nextInt(5) == 0) return rgba(0, 0, 0, 0);
+            int g = 135 + rand.nextInt(60);
+            return rgba((int)(g * 0.55f), g, (int)(g * 0.25f), 240);
+        });
+
+        // 134: Acacia Log Side (Dark gray grooved bark)
+        loadOrPaint(pixelData, 134, "acacia_log.png", (x, y, rand) -> {
+            int stripe = (x % 3 == 0) ? 85 : 110;
+            int v = stripe + rand.nextInt(20);
+            return rgba(v, (int)(v * 0.95f), (int)(v * 0.90f), 255);
+        });
+
+        // 135: Acacia Log Top (Vibrant orange heartwood)
+        loadOrPaint(pixelData, 135, "acacia_log_top.png", (x, y, rand) -> {
+            float dx = x - 7.5f;
+            float dy = y - 7.5f;
+            float dist = (float) Math.sqrt(dx * dx + dy * dy);
+            if (dist > 6.5f) {
+                int v = 95 + rand.nextInt(20);
+                return rgba(v, v, v, 255);
+            }
+            int r = 175 + rand.nextInt(35);
+            return rgba(r, (int)(r * 0.55f), (int)(r * 0.25f), 255);
+        });
+
+        // 136: Acacia Leaves (Muted olive green)
+        loadOrPaint(pixelData, 136, "acacia_leaves.png", (x, y, rand) -> {
+            if (rand.nextInt(5) == 0) return rgba(0, 0, 0, 0);
+            int g = 115 + rand.nextInt(50);
+            return rgba((int)(g * 0.70f), g, (int)(g * 0.25f), 240);
+        });
+
+        // 137: Dark Oak Log Side (Very deep dark brown)
+        loadOrPaint(pixelData, 137, "dark_oak_log.png", (x, y, rand) -> {
+            int stripe = (x % 4 == 0) ? 35 : 55;
+            int v = stripe + rand.nextInt(15);
+            return rgba((int)(v * 1.1f), (int)(v * 0.75f), (int)(v * 0.45f), 255);
+        });
+
+        // 138: Dark Oak Log Top (Dark brown rings)
+        loadOrPaint(pixelData, 138, "dark_oak_log_top.png", (x, y, rand) -> {
+            float dx = x - 7.5f;
+            float dy = y - 7.5f;
+            float dist = (float) Math.sqrt(dx * dx + dy * dy);
+            int v = (dist > 6.5f) ? (40 + rand.nextInt(10)) : (((int) dist % 2 == 0) ? 80 : 95) + rand.nextInt(15);
+            return rgba((int)(v * 1.15f), (int)(v * 0.85f), (int)(v * 0.55f), 255);
+        });
+
+        // 139: Dark Oak Leaves (Deep dark emerald green)
+        loadOrPaint(pixelData, 139, "dark_oak_leaves.png", (x, y, rand) -> {
+            if (rand.nextInt(5) == 0) return rgba(0, 0, 0, 0);
+            int g = 80 + rand.nextInt(50);
+            return rgba((int)(g * 0.35f), g, (int)(g * 0.25f), 240);
+        });
+
+        // 140: Red Sand (Warm terracotta reddish orange sand)
+        loadOrPaint(pixelData, 140, "red_sand.png", (x, y, rand) -> {
+            int base = 180 + rand.nextInt(25);
+            return rgba(base, (int)(base * 0.55f), (int)(base * 0.30f), 255);
+        });
+
+        // 141: Terracotta (Natural clay)
+        loadOrPaint(pixelData, 141, "terracotta.png", (x, y, rand) -> {
+            int base = 150 + rand.nextInt(20);
+            return rgba(base, (int)(base * 0.60f), (int)(base * 0.45f), 255);
+        });
+
+        // 142: Red Terracotta
+        loadOrPaint(pixelData, 142, "red_terracotta.png", (x, y, rand) -> {
+            int r = 140 + rand.nextInt(25);
+            return rgba(r, (int)(r * 0.42f), (int)(r * 0.35f), 255);
+        });
+
+        // 143: Orange Terracotta
+        loadOrPaint(pixelData, 143, "orange_terracotta.png", (x, y, rand) -> {
+            int r = 160 + rand.nextInt(25);
+            return rgba(r, (int)(r * 0.55f), (int)(r * 0.25f), 255);
+        });
+
+        // 144: Yellow Terracotta
+        loadOrPaint(pixelData, 144, "yellow_terracotta.png", (x, y, rand) -> {
+            int r = 185 + rand.nextInt(25);
+            return rgba(r, (int)(r * 0.75f), (int)(r * 0.25f), 255);
+        });
+
+        // 145: White Terracotta
+        loadOrPaint(pixelData, 145, "white_terracotta.png", (x, y, rand) -> {
+            int base = 205 + rand.nextInt(20);
+            return rgba(base, (int)(base * 0.90f), (int)(base * 0.85f), 255);
+        });
+
+        // 146: Brown Terracotta
+        loadOrPaint(pixelData, 146, "brown_terracotta.png", (x, y, rand) -> {
+            int base = 80 + rand.nextInt(20);
+            return rgba((int)(base * 1.1f), (int)(base * 0.75f), (int)(base * 0.55f), 255);
+        });
+
         for (int y = 0; y < ATLAS_SIZE; y++) {
             buffer.put(pixelData[y]);
         }
