@@ -98,4 +98,30 @@ public class MobAITest {
 
         assertFalse(creeper.isIgnited(), "Creeper should not ignite player in Creative mode");
     }
+
+    @Test
+    public void testEnderDragonPerchAndDamageResistance() {
+        World world = new World(12345L);
+        Player player = new Player(world, 2.0f, 33.5f, 0.0f);
+        player.setGameMode(GameMode.SURVIVAL);
+
+        Mob dragon = new Mob(MobType.ENDER_DRAGON, 0.0f, 40.0f, 0.0f);
+        assertEquals(Mob.DragonPhase.CIRCLING, dragon.getDragonPhase());
+
+        // Simulate circling timeout to trigger landing
+        for (int i = 0; i < 150; i++) {
+            dragon.update(0.1f, world, player);
+            if (dragon.getDragonPhase() == Mob.DragonPhase.LANDING || dragon.getDragonPhase() == Mob.DragonPhase.PERCHED) {
+                break;
+            }
+        }
+        assertTrue(dragon.getDragonPhase() == Mob.DragonPhase.LANDING || dragon.getDragonPhase() == Mob.DragonPhase.PERCHED || dragon.getDragonPhase() == Mob.DragonPhase.SWOOPING);
+
+        // Test damage knockback resistance on Ender Dragon
+        org.joml.Vector3f initialPos = new org.joml.Vector3f(dragon.getPosition());
+        dragon.takeDamage(10, 1.0f, 1.0f, world);
+        // Dragon velocity should not be launched by knockback
+        assertEquals(0.0f, dragon.getVelocity().x, 0.001f);
+        assertEquals(0.0f, dragon.getVelocity().z, 0.001f);
+    }
 }
