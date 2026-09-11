@@ -225,8 +225,20 @@ public class Player {
 
             boolean wasInAir = !onGround;
 
+            float dx = velocity.x * dt;
+            float dz = velocity.z * dt;
+            if (isSneaking && onGround && !inWater && !onLadder) {
+                // Sneaking: refuse a horizontal axis whose leading edge has no solid ground below
+                if (dx != 0.0f && !hasGroundSupport(position.x + dx, position.z)) {
+                    dx = 0.0f;
+                }
+                if (dz != 0.0f && !hasGroundSupport(position.x + dx, position.z + dz)) {
+                    dz = 0.0f;
+                }
+            }
+
             // Move with AABB collision resolution
-            moveWithCollision(velocity.x * dt, velocity.y * dt, velocity.z * dt);
+            moveWithCollision(dx, velocity.y * dt, dz);
 
             // Fall damage calculation on hard landing in Survival
             if (wasInAir && onGround && gameMode != GameMode.CREATIVE && !inWater) {
@@ -420,6 +432,28 @@ public class Player {
     private void moveWithCollision(float dx, float dy, float dz) {
         collider.resolveMove(world, position, velocity, WIDTH / 2.0f, HEIGHT, dx, dy, dz, true, moveResult);
         onGround = moveResult.onGround;
+    }
+
+    private static final float EDGE_CORNER_INSET = 0.01f;
+    private static final float EDGE_PROBE_DEPTH = 0.05f;
+
+    /** True when both leading corners of the destination footprint have solid ground below. */
+    private boolean hasGroundSupport(float dstX, float dstZ) {
+        float half = WIDTH / 2.0f - EDGE_CORNER_INSET;
+        float probeY = position.y - EDGE_PROBE_DEPTH;
+        float deltaX = dstX - position.x;
+        float deltaZ = dstZ - position.z;
+        if (Math.abs(deltaX) >= Math.abs(deltaZ)) {
+            float leadX = (deltaX > 0) ? dstX + half : dstX - half;
+            return isSupportAt(leadX, probeY, dstZ - half) && isSupportAt(leadX, probeY, dstZ + half);
+        }
+        float leadZ = (deltaZ > 0) ? dstZ + half : dstZ - half;
+        return isSupportAt(dstX - half, probeY, leadZ) && isSupportAt(dstX + half, probeY, leadZ);
+    }
+
+    private boolean isSupportAt(float x, float y, float z) {
+        BlockType b = world.getBlock((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+        return b != BlockType.AIR && b.isSolid();
     }
 
     public AABB getBoundingBox() {
