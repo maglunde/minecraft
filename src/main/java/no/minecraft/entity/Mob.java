@@ -407,9 +407,24 @@ public class Mob {
         }
     }
 
+    public enum DragonPhase {
+        CIRCLING,
+        LANDING,
+        PERCHED,
+        TAKEOFF,
+        SWOOPING
+    }
+
+    private DragonPhase dragonPhase = DragonPhase.CIRCLING;
+    private float phaseTimer = 0.0f;
     private float dragonAngle = 0.0f;
-    private boolean dragonSwooping = false;
-    private float swoopTimer = 0.0f;
+    private float perchedTimer = 0.0f;
+    private float perchedDamageTaken = 0.0f;
+    private boolean lastPerchedWasLanding = false;
+
+    public DragonPhase getDragonPhase() {
+        return dragonPhase;
+    }
 
     private void updateDragonAI(float dt, World world, Player player) {
         // Find nearest active End Crystal to heal from
@@ -429,56 +444,129 @@ public class Mob {
             health = Math.min(type.getMaxHealth(), health + (int)(6 * dt) + 1);
         }
 
-        // Dragon flight: circles island or swoops down at player
-        swoopTimer += dt;
-        if (swoopTimer > 15.0f && !dragonSwooping) {
-            dragonSwooping = true;
-            swoopTimer = 0.0f;
-        }
+        Vector3f ppos = player.getPosition();
 
-        if (dragonSwooping) {
-            // Swoop towards player
-            Vector3f ppos = player.getPosition();
-            float dx = ppos.x - position.x;
-            float dy = (ppos.y + 1.0f) - position.y;
-            float dz = ppos.z - position.z;
-            float dist = (float) Math.sqrt(dx * dx + dz * dz);
-            yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
+        switch (dragonPhase) {
+            case CIRCLING -> {
+                phaseTimer += dt;
+                dragonAngle += dt * 0.40f;
+                float circleRadius = 26.0f;
+                float targetX = (float) Math.cos(dragonAngle) * circleRadius;
+                float targetZ = (float) Math.sin(dragonAngle) * circleRadius;
+                float targetY = 36.0f + (float) Math.sin(dragonAngle * 2.0f) * 3.5f;
 
-            float speed = 12.0f;
-            position.x += (dx / Math.max(1.0f, dist)) * speed * dt;
-            position.y += Math.signum(dy) * 4.0f * dt;
-            position.z += (dz / Math.max(1.0f, dist)) * speed * dt;
+                float dx = targetX - position.x;
+                float dy = targetY - position.y;
+                float dz = targetZ - position.z;
 
-            // Attack player on contact
-            if (position.distance(ppos) < 3.8f) {
-                player.damage(type.getAttackDamage());
-                // Launch player up & back
-                player.getVelocity().add(dx * 2.0f, 10.0f, dz * 2.0f);
-                dragonSwooping = false;
-                swoopTimer = 0.0f;
+                yaw = (float) Math.toDegrees(Math.atan2(-Math.cos(dragonAngle), Math.sin(dragonAngle)));
+                position.x += dx * 1.5f * dt;
+                position.y += dy * 1.5f * dt;
+                position.z += dz * 1.5f * dt;
+
+                // After 12-16 seconds, choose next action (Landing on platform or Swooping)
+                if (phaseTimer > 14.0f) {
+                    phaseTimer = 0.0f;
+                    if (!lastPerchedWasLanding || random.nextFloat() < 0.65f) {
+                        dragonPhase = DragonPhase.LANDING;
+                    } else {
+                        dragonPhase = DragonPhase.SWOOPING;
+                    }
+                }
             }
 
-            if (dist < 2.0f || swoopTimer > 8.0f) {
-                dragonSwooping = false;
-                swoopTimer = 0.0f;
+            case LANDING -> {
+                phaseTimer += dt;
+                // Fly towards central bedrock platform pillar at (0, 33.5, 0)
+                float targetX = 0.0f;
+                float targetY = 33.5f;
+                float targetZ = 0.0f;
+
+                float dx = targetX - position.x;
+                float dy = targetY - position.y;
+                float dz = targetZ - position.z;
+                float distXZ = (float) Math.sqrt(dx * dx + dz * dz);
+
+                yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
+
+                float speed = 9.0f;
+                position.x += (dx / Math.max(1.0f, distXZ)) * speed * dt;
+                position.y += Math.signum(dy) * 4.0f * dt;
+                position.z += (dz / Math.max(1.0f, distXZ)) * speed * dt;
+
+                // Landed on platform!
+                if (distXZ < 2.0f && Math.abs(dy) < 1.5f || phaseTimer > 10.0f) {
+                    dragonPhase = DragonPhase.PERCHED;
+                    position.set(0.0f, 33.5f, 0.0f);
+                    velocity.set(0, 0, 0);
+                    perchedTimer = 0.0f;
+                    perchedDamageTaken = 0.0f;
+                    lastPerchedWasLanding = true;
+                    no.minecraft.sound.SoundManager.getInstance().play("growl", 1.0f);
+                }
             }
-        } else {
-            // Circle center of End island (0, 35, 0)
-            dragonAngle += dt * 0.45f;
-            float circleRadius = 26.0f;
-            float targetX = (float) Math.cos(dragonAngle) * circleRadius;
-            float targetZ = (float) Math.sin(dragonAngle) * circleRadius;
-            float targetY = 36.0f + (float) Math.sin(dragonAngle * 2.0f) * 4.0f;
 
-            float dx = targetX - position.x;
-            float dy = targetY - position.y;
-            float dz = targetZ - position.z;
+            case PERCHED -> {
+                perchedTimer += dt;
+                position.set(0.0f, 33.5f, 0.0f);
+                velocity.set(0, 0, 0);
 
-            yaw = (float) Math.toDegrees(Math.atan2(-Math.cos(dragonAngle), Math.sin(dragonAngle)));
-            position.x += dx * 1.5f * dt;
-            position.y += dy * 1.5f * dt;
-            position.z += dz * 1.5f * dt;
+                // Face the player while perched
+                float dx = ppos.x - position.x;
+                float dz = ppos.z - position.z;
+                yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
+
+                // Melee contact damage if player touches the dragon directly
+                if (position.distance(ppos) < 3.0f) {
+                    player.damage(2);
+                    player.getVelocity().add(dx * 1.5f, 4.0f, dz * 1.5f);
+                }
+
+                // Dragon stays perched for 14 seconds or until taking 40+ damage
+                if (perchedTimer > 14.0f || perchedDamageTaken >= 40.0f) {
+                    dragonPhase = DragonPhase.TAKEOFF;
+                    phaseTimer = 0.0f;
+                    no.minecraft.sound.SoundManager.getInstance().play("growl", 1.0f);
+                }
+            }
+
+            case TAKEOFF -> {
+                position.y += 6.0f * dt;
+                if (position.y >= 38.0f) {
+                    dragonPhase = DragonPhase.CIRCLING;
+                    phaseTimer = 0.0f;
+                    dragonAngle = (float) Math.atan2(position.z, position.x);
+                }
+            }
+
+            case SWOOPING -> {
+                phaseTimer += dt;
+                float dx = ppos.x - position.x;
+                float dy = (ppos.y + 1.0f) - position.y;
+                float dz = ppos.z - position.z;
+                float dist = (float) Math.sqrt(dx * dx + dz * dz);
+                yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
+
+                float speed = 12.0f;
+                position.x += (dx / Math.max(1.0f, dist)) * speed * dt;
+                position.y += Math.signum(dy) * 4.0f * dt;
+                position.z += (dz / Math.max(1.0f, dist)) * speed * dt;
+
+                // Attack player on contact
+                if (position.distance(ppos) < 3.8f) {
+                    player.damage(type.getAttackDamage());
+                    player.getVelocity().add(dx * 2.0f, 10.0f, dz * 2.0f);
+                    dragonPhase = DragonPhase.TAKEOFF;
+                    phaseTimer = 0.0f;
+                    lastPerchedWasLanding = false;
+                }
+
+                if (dist < 2.0f || phaseTimer > 8.0f) {
+                    dragonPhase = DragonPhase.TAKEOFF;
+                    phaseTimer = 0.0f;
+                    lastPerchedWasLanding = false;
+                }
+            }
         }
     }
 
@@ -527,10 +615,15 @@ public class Mob {
         if (type == MobType.ENDERMAN) {
             aggressive = true;
         }
-        velocity.x += knockbackX * 6.0f;
-        velocity.y += 4.5f;
-        velocity.z += knockbackZ * 6.0f;
-        onGround = false;
+        if (type == MobType.ENDER_DRAGON && dragonPhase == DragonPhase.PERCHED) {
+            perchedDamageTaken += amount;
+        }
+        if (type != MobType.ENDER_DRAGON && type != MobType.END_CRYSTAL) {
+            velocity.x += knockbackX * 6.0f;
+            velocity.y += 4.5f;
+            velocity.z += knockbackZ * 6.0f;
+            onGround = false;
+        }
 
         if (health <= 0) {
             dead = true;
@@ -548,8 +641,10 @@ public class Mob {
             }
 
             // Drop mob loot
-            int count = (type == MobType.ENDER_DRAGON) ? 1 : (1 + random.nextInt(2));
-            world.spawnItemDrop(position.x, position.y + 0.5f, position.z, type.getDropItem(), count);
+            for (MobType.MobDrop drop : type.getDrops()) {
+                int count = drop.min() + random.nextInt(drop.max() - drop.min() + 1);
+                world.spawnItemDrop(position.x, position.y + 0.5f, position.z, drop.type(), count);
+            }
         }
     }
 

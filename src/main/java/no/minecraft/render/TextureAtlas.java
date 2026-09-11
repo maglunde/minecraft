@@ -986,6 +986,22 @@ public class TextureAtlas {
         // 128: Diamond Boots
         loadOrPaint(pixelData, 128, "diamond_boots.png", (x, y, rand) -> paintBoots(x, y, rand, diamondBase, diamondDark, diamondLight));
 
+        // 129: Wool (white with subtle weave)
+        loadOrPaint(pixelData, 129, "wool.png", (x, y, rand) -> {
+            int base = 228 + rand.nextInt(14);
+            boolean weave = ((x + y) % 4 == 0);
+            return weave ? rgba(base - 26, base - 26, base - 22, 255) : rgba(base, base, base - 4, 255);
+        });
+
+        // 130: Raw Mutton (red meat with pale fat rim)
+        loadOrPaint(pixelData, 130, "mutton.png", (x, y, rand) -> {
+            float dx = Math.abs(x - 7.5f), dy = Math.abs(y - 7.5f);
+            if (dx <= 5 && dy <= 5 && dx + dy <= 8) {
+                return (y < 6) ? rgba(232, 214, 200, 255) : rgba(190 + rand.nextInt(20), 70 + rand.nextInt(15), 70, 255);
+            }
+            return rgba(0, 0, 0, 0);
+        });
+
         for (int y = 0; y < ATLAS_SIZE; y++) {
             buffer.put(pixelData[y]);
         }

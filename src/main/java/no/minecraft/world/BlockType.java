@@ -110,7 +110,9 @@ public enum BlockType {
     DIAMOND_HELMET((byte) 102, false, true, 125, 125, 125),
     DIAMOND_CHESTPLATE((byte) 103, false, true, 126, 126, 126),
     DIAMOND_LEGGINGS((byte) 104, false, true, 127, 127, 127),
-    DIAMOND_BOOTS((byte) 105, false, true, 128, 128, 128);
+    DIAMOND_BOOTS((byte) 105, false, true, 128, 128, 128),
+    WOOL((byte) 106, true, false, 129, 129, 129),
+    MUTTON((byte) 107, false, true, 130, 130, 130);
 
     public enum ArmorSlot {
         HELMET(0),
@@ -176,6 +178,7 @@ public enum BlockType {
             case SAND -> 0.5f;
             case CACTUS -> 0.4f;
             case GLASS, LEAVES, SNOW_BLOCK -> 0.2f;
+            case WOOL -> 0.8f;
             case TORCH -> 0.0f;
             default -> 0.0f;
         };
@@ -378,7 +381,7 @@ public enum BlockType {
                  BLAZE_ROD, BLAZE_POWDER, ENDER_PEARL, EYE_OF_ENDER,
                  COAL, IRON_INGOT, GOLD_INGOT, DIAMOND, LEATHER, FEATHER -> false;
             case APPLE, BREAD, PORKCHOP, COOKED_PORKCHOP, BEEF, COOKED_BEEF,
-                 CHICKEN_MEAT, COOKED_CHICKEN -> false;
+                 CHICKEN_MEAT, COOKED_CHICKEN, MUTTON -> false;
             default -> true;
         };
     }
@@ -401,7 +404,7 @@ public enum BlockType {
             case BREAD -> 5;
             case APPLE, ROTTEN_FLESH -> 4;
             case PORKCHOP, BEEF -> 3;
-            case CHICKEN_MEAT -> 2;
+            case CHICKEN_MEAT, MUTTON -> 2;
             default -> 0;
         };
     }
@@ -413,7 +416,7 @@ public enum BlockType {
             case BREAD -> 6.0f;
             case APPLE -> 2.4f;
             case PORKCHOP, BEEF -> 1.8f;
-            case CHICKEN_MEAT -> 1.2f;
+            case CHICKEN_MEAT, MUTTON -> 1.2f;
             case ROTTEN_FLESH -> 0.8f;
             default -> 0.0f;
         };
@@ -428,7 +431,7 @@ public enum BlockType {
             case STONE, COBBLESTONE, BRICKS, BEDROCK, FURNACE, OBSIDIAN, NETHERRACK, NETHER_BRICKS, END_STONE, DRAGON_EGG, END_PORTAL_FRAME, END_PORTAL_FRAME_FILLED, NETHER_QUARTZ_ORE, BASALT, SANDSTONE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE -> "dig_stone";
             case WOOD, PLANKS, CRAFTING_TABLE, CHEST, TRAPDOOR, FENCE, FENCE_GATE, WOODEN_SLAB, WOODEN_STAIRS, CACTUS, TORCH -> "dig_wood";
             case SAND, SOUL_SAND, GRAVEL -> "dig_sand";
-            case DIRT, GRASS, LEAVES, SNOW_BLOCK -> "dig_grass";
+            case DIRT, GRASS, LEAVES, SNOW_BLOCK, WOOL -> "dig_grass";
             case GLOWSTONE -> "dig_stone";
             default -> "dig_stone";
         };
@@ -438,7 +441,7 @@ public enum BlockType {
         return switch (this) {
             case STONE, COBBLESTONE, BRICKS, BEDROCK, FURNACE, OBSIDIAN, NETHERRACK, NETHER_BRICKS, END_STONE, DRAGON_EGG, END_PORTAL_FRAME, END_PORTAL_FRAME_FILLED, NETHER_QUARTZ_ORE, BASALT, SANDSTONE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE -> "break_stone";
             case WOOD, PLANKS, CRAFTING_TABLE, CHEST, TRAPDOOR, FENCE, FENCE_GATE, WOODEN_SLAB, WOODEN_STAIRS, CACTUS, TORCH -> "break_wood";
-            case DIRT, GRASS, LEAVES, SAND, SOUL_SAND, GRAVEL, SNOW_BLOCK -> "break_grass";
+            case DIRT, GRASS, LEAVES, SAND, SOUL_SAND, GRAVEL, SNOW_BLOCK, WOOL -> "break_grass";
             case GLOWSTONE -> "break_stone";
             default -> "break_stone";
         };
