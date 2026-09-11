@@ -25,13 +25,15 @@ public class World {
     private double offsetZ;
 
     // Stronghold coordinates in Overworld
-    public static final int STRONGHOLD_X = 48;
-    public static final int STRONGHOLD_Y = 14;
-    public static final int STRONGHOLD_Z = 48;
+    public static final int STRONGHOLD_X = 54;
+    public static final int STRONGHOLD_Y = 12;
+    public static final int STRONGHOLD_Z = 54;
 
     private final List<DroppedItem> droppedItems = new ArrayList<>();
     private final List<no.minecraft.entity.Mob> mobs = new ArrayList<>();
     private final List<no.minecraft.entity.Arrow> arrows = new ArrayList<>();
+    private final List<no.minecraft.entity.EnderPearl> enderPearls = new ArrayList<>();
+    private final List<no.minecraft.entity.EyeOfEnder> eyeOfEnders = new ArrayList<>();
     private float mobSpawnTimer = 0.0f;
     private final Random rand = new Random();
     private boolean shouldClearHostileMobs = false;
@@ -490,6 +492,8 @@ public class World {
         if (this.currentDimension == newDim) return;
         mobs.clear();
         arrows.clear();
+        enderPearls.clear();
+        eyeOfEnders.clear();
         droppedItems.clear();
         this.lastUpdateCx = Integer.MIN_VALUE;
         this.lastUpdateCz = Integer.MIN_VALUE;
@@ -560,6 +564,18 @@ public class World {
         arrows.add(new no.minecraft.entity.Arrow(x, y, z, vx, vy, vz, hostileShooter));
     }
 
+    public void spawnArrow(float x, float y, float z, float vx, float vy, float vz, Player shooter, boolean hostileShooter) {
+        arrows.add(new no.minecraft.entity.Arrow(x, y, z, vx, vy, vz, shooter, hostileShooter));
+    }
+
+    public void spawnEnderPearl(float x, float y, float z, float vx, float vy, float vz, Player owner) {
+        enderPearls.add(new no.minecraft.entity.EnderPearl(x, y, z, vx, vy, vz, owner));
+    }
+
+    public void spawnEyeOfEnder(float x, float y, float z, float vx, float vy, float vz) {
+        eyeOfEnders.add(new no.minecraft.entity.EyeOfEnder(x, y, z, vx, vy, vz));
+    }
+
     public void spawnMob(no.minecraft.entity.MobType type, float x, float y, float z) {
         mobs.add(new no.minecraft.entity.Mob(type, x, y, z));
     }
@@ -571,6 +587,8 @@ public class World {
     public List<DroppedItem> getDroppedItems() { return droppedItems; }
     public List<no.minecraft.entity.Mob> getMobs() { return mobs; }
     public List<no.minecraft.entity.Arrow> getArrows() { return arrows; }
+    public List<no.minecraft.entity.EnderPearl> getEnderPearls() { return enderPearls; }
+    public List<no.minecraft.entity.EyeOfEnder> getEyeOfEnders() { return eyeOfEnders; }
     private final List<no.minecraft.entity.Boat> boats = new ArrayList<>();
     public List<no.minecraft.entity.Boat> getBoats() { return boats; }
 
@@ -676,7 +694,7 @@ public class World {
 
     public float getSunLightLevel() {
         if (currentDimension == Dimension.NETHER) return 0.65f;
-        if (currentDimension == Dimension.THE_END) return 0.40f;
+        if (currentDimension == Dimension.THE_END) return 0.70f;
         float f = getDayFraction();
         double angle = f * 2.0 * Math.PI;
         double sunHeight = Math.sin(angle);
@@ -698,6 +716,21 @@ public class World {
             }
         }
         return true;
+    }
+
+    /**
+     * True when the cell at (x, y, z) has no opaque block above it in its column.
+     * O(1) via per-chunk column heightmaps; unlike isOpenToSky this never triggers
+     * chunk generation, so it is safe to call from mesh builds. Non-overworld
+     * dimensions are always "exposed" since their sun level is constant.
+     */
+    public boolean isSkyExposed(int x, int y, int z) {
+        if (currentDimension != Dimension.OVERWORLD) return true;
+        int cx = Math.floorDiv(x, Chunk.SIZE_X);
+        int cz = Math.floorDiv(z, Chunk.SIZE_Z);
+        Chunk c = getChunk(cx, cz);
+        if (c == null) return true; // Unloaded neighbour: assume open (degrades to old behaviour)
+        return c.getColumnHeight(x - c.getWorldStartX(), z - c.getWorldStartZ()) <= y;
     }
 
     public boolean isDarkAt(int x, int y, int z) {
@@ -821,6 +854,22 @@ public class World {
             no.minecraft.entity.Arrow arrow = arrows.get(i);
             arrow.update(dt, this, player);
             if (arrow.isDead() && i < arrows.size()) arrows.remove(i);
+        }
+
+        // Update Ender Pearls
+        for (int i = enderPearls.size() - 1; i >= 0; i--) {
+            if (i >= enderPearls.size()) continue;
+            no.minecraft.entity.EnderPearl pearl = enderPearls.get(i);
+            pearl.update(dt, this, player);
+            if (pearl.isDead() && i < enderPearls.size()) enderPearls.remove(i);
+        }
+
+        // Update Eyes of Ender
+        for (int i = eyeOfEnders.size() - 1; i >= 0; i--) {
+            if (i >= eyeOfEnders.size()) continue;
+            no.minecraft.entity.EyeOfEnder eye = eyeOfEnders.get(i);
+            eye.update(dt, this, player);
+            if (eye.isDead() && i < eyeOfEnders.size()) eyeOfEnders.remove(i);
         }
     }
 
@@ -1100,18 +1149,22 @@ public class World {
         }
     }
 
-    private boolean isOverworldCave(int wx, int y, int wz, int height) {
+    boolean isOverworldCave(int wx, int y, int wz, int height) {
         if (y <= 1 || y >= height - 3) return false;
         if (height <= SEA_LEVEL && y >= height - 6) return false;
 
-        double sx = wx + offsetX;
-        double sz = wz + offsetZ;
+        // Cave density varies by region: some areas are riddled with caves, others barely any
+        double density = Noise.fbm2D(seed ^ 0x43415644L, wx * 0.0070, wz * 0.0070, 2, 0.5) * 0.5 + 0.5;
+        double threshold = 0.045 + 0.030 * density;
 
-        // Two continuous 3D worm noise tunnels
-        double n1 = Math.sin(sx * 0.08 + y * 0.12) * Math.cos(sz * 0.08) + Math.sin(y * 0.07) * 0.4;
-        double n2 = Math.cos(sx * 0.08) * Math.sin(sz * 0.08 + y * 0.12) + Math.cos((sx + sz) * 0.05) * 0.4;
+        // Two continuous worm tunnels winding through 3D
+        double n1 = Noise.value2D(seed ^ 0x43415645L, wx * 0.07 + y * 0.035, wz * 0.07 - y * 0.035);
+        double n2 = Noise.value2D(seed ^ 0x43415646L, wx * 0.07 - y * 0.030, wz * 0.07 + y * 0.030);
+        if (n1 * n1 + n2 * n2 < threshold) return true;
 
-        return (n1 * n1 + n2 * n2) < 0.06;
+        // Large open caverns at mid-depth in some regions
+        double cav = Noise.fbm2D(seed ^ 0x43415647L, wx * 0.020, wz * 0.020 + y * 0.02, 2, 0.5);
+        return y > 6 && y < 34 && cav > 0.62;
     }
 
     private BlockType getUndergroundBlock(int wx, int y, int wz) {
@@ -1411,48 +1464,57 @@ public class World {
         }
 
         if (biome.equals("minecraft:desert")) {
-            // Cacti: 1-3 per chunk on sand
+            // Cacti: 1-3 per chunk on sand, clumped by density noise
             int numCacti = 1 + decRand.nextInt(3);
-            for (int i = 0; i < numCacti; i++) {
+            int placed = 0;
+            for (int attempt = 0; attempt < numCacti * 4 && placed < numCacti; attempt++) {
                 int lx = 2 + decRand.nextInt(Chunk.SIZE_X - 4);
                 int lz = 2 + decRand.nextInt(Chunk.SIZE_Z - 4);
                 int wx = startX + lx;
                 int wz = startZ + lz;
+                if (!treeDensityAt(wx, wz)) continue;
                 int groundY = getTerrainHeight(wx, wz);
                 if (groundY > SEA_LEVEL && getBlock(wx, groundY, wz) == BlockType.SAND) {
                     spawnCactus(wx, groundY + 1, wz, decRand);
+                    placed++;
                 }
             }
             return;
         }
 
         if (biome.equals("minecraft:snowy_plains")) {
-            // Pine/Spruce trees: 1-3 per chunk on snow
+            // Pine/Spruce trees: 1-3 per chunk on snow, clumped by density noise
             int numTrees = 1 + decRand.nextInt(3);
-            for (int t = 0; t < numTrees; t++) {
+            int placed = 0;
+            for (int attempt = 0; attempt < numTrees * 4 && placed < numTrees; attempt++) {
                 int lx = 2 + decRand.nextInt(Chunk.SIZE_X - 4);
                 int lz = 2 + decRand.nextInt(Chunk.SIZE_Z - 4);
                 int wx = startX + lx;
                 int wz = startZ + lz;
+                if (!treeDensityAt(wx, wz)) continue;
                 int groundY = getTerrainHeight(wx, wz);
                 if (groundY > SEA_LEVEL && getBlock(wx, groundY, wz) == BlockType.SNOW_BLOCK) {
                     spawnPineTree(wx, groundY + 1, wz, decRand);
+                    placed++;
                 }
             }
             return;
         }
 
         if (biome.equals("minecraft:forest")) {
-            // Dense forest: 4-7 oak trees per chunk
+            // Dense forest: 4-7 oak trees per chunk, growing in groves with clearings
             int numTrees = 4 + decRand.nextInt(4);
-            for (int t = 0; t < numTrees; t++) {
+            int placed = 0;
+            for (int attempt = 0; attempt < numTrees * 4 && placed < numTrees; attempt++) {
                 int lx = 2 + decRand.nextInt(Chunk.SIZE_X - 4);
                 int lz = 2 + decRand.nextInt(Chunk.SIZE_Z - 4);
                 int wx = startX + lx;
                 int wz = startZ + lz;
+                if (!treeDensityAt(wx, wz)) continue;
                 int groundY = getTerrainHeight(wx, wz);
                 if (groundY > SEA_LEVEL && getBlock(wx, groundY, wz) == BlockType.GRASS) {
                     spawnTree(wx, groundY + 1, wz, decRand);
+                    placed++;
                 }
             }
             return;
@@ -1473,19 +1535,27 @@ public class World {
             return;
         }
 
-        // Plains: 0-2 trees per chunk
+        // Plains: 0-2 trees per chunk, clumped by density noise
         int numTrees = decRand.nextInt(3);
-        for (int t = 0; t < numTrees; t++) {
+        int placed = 0;
+        for (int attempt = 0; attempt < numTrees * 4 && placed < numTrees; attempt++) {
             int lx = 2 + decRand.nextInt(Chunk.SIZE_X - 4);
             int lz = 2 + decRand.nextInt(Chunk.SIZE_Z - 4);
             int wx = startX + lx;
             int wz = startZ + lz;
+            if (!treeDensityAt(wx, wz)) continue;
 
             int groundY = getTerrainHeight(wx, wz);
             if (groundY > SEA_LEVEL && getBlock(wx, groundY, wz) == BlockType.GRASS) {
                 spawnTree(wx, groundY + 1, wz, decRand);
+                placed++;
             }
         }
+    }
+
+    /** Noise-driven tree density: forests clump into groves instead of uniform scatter. */
+    private boolean treeDensityAt(int wx, int wz) {
+        return Noise.fbm2D(seed ^ 0x4445434FL, wx * 0.040, wz * 0.040, 2, 0.5) > -0.15;
     }
 
     private void spawnCactus(int rootX, int rootY, int rootZ, Random rand) {
@@ -1568,60 +1638,46 @@ public class World {
         }
     }
 
-    private int getTerrainHeight(int x, int z) {
-        double sx = x + offsetX;
-        double sz = z + offsetZ;
+    int getTerrainHeight(int x, int z) {
+        // Seeded value-noise fields: each seed produces a completely different landscape
+        double cont = Noise.fbm2D(seed ^ 0x434F4E54L, x * 0.0040, z * 0.0040, 4, 0.5);
+        double ero  = Noise.fbm2D(seed ^ 0x45524F53L, x * 0.0080, z * 0.0080, 3, 0.5);
+        double rid  = Noise.ridged2D(seed ^ 0x52494447L, x * 0.0120, z * 0.0120, 4);
+        double det  = Noise.fbm2D(seed ^ 0x44455441L, x * 0.060, z * 0.060, 3, 0.5);
+        double temp = temperatureAt(x, z);
 
-        // 1. Continentalness noise (oceans vs coastal lowlands vs inland continents)
-        double cont = Math.sin(sx * 0.005) * Math.cos(sz * 0.005)
-                    + 0.5 * Math.sin((sx + 150.0) * 0.010) * Math.cos((sz + 80.0) * 0.010);
+        // Continentalness -> smooth blend from ocean floor to inland plateau
+        double land = Noise.smoothstep(-0.25, 0.10, cont);
+        double oceanFloor = 6.0 + 4.0 * (cont + 1.0);
+        double inland = 21.0 + 6.0 * cont;
+        double base = oceanFloor + (inland - oceanFloor) * land;
 
-        // 2. Mountain ridge noise (ridged multifractal for sharp, continuous peaks & crests)
-        double r1 = Math.sin((sx + 350.0) * 0.008) * Math.cos((sz - 250.0) * 0.008);
-        double r2 = Math.sin((sx - 180.0) * 0.016) * Math.cos((sz + 220.0) * 0.016);
-        double ridge = 1.0 - Math.abs(r1 + 0.5 * r2); // 0.0 (valleys) to 1.5 (sharp ridges)
+        // Ridged mountain ranges fading into hills (smooth mask instead of a hard cutoff)
+        double mask = Noise.smoothstep(0.30, 0.70, rid) * (1.0 - 0.35 * ero);
+        double peak = 24.0 + 30.0 * Noise.smoothstep(0.30, 0.90, rid) - 6.0 * ero;
+        base += (Math.max(base, peak) - base) * mask;
 
-        // 3. Valley & river canyon carving noise
-        double vNoise = Math.sin((sx * 0.5 + sz * 0.5) * 0.011) * Math.cos((sx * 0.5 - sz * 0.5) * 0.011);
-        double valley = Math.abs(vNoise);
-
-        // 4. Rolling hills & terrain undulations
-        double hills = Math.sin((sx + 80.0) * 0.022) * Math.cos((sz - 60.0) * 0.022) * 3.5
-                     + Math.sin((sx - 200.0) * 0.014) * Math.cos((sz + 150.0) * 0.014) * 5.0;
-
-        // 5. Fine surface roughness
-        double detail = Math.sin(sx * 0.045) * Math.cos(sz * 0.045) * 2.5
-                      + Math.sin((sx + 40.0) * 0.09) * Math.cos((sz + 70.0) * 0.09) * 1.2;
-
-        double base;
-        if (cont < -0.32) {
-            // Deep ocean floor
-            base = 9.0 + (cont + 0.32) * 8.0 + detail * 0.6;
-        } else if (cont < -0.15) {
-            // Coastal shelf & beaches
-            base = 13.5 + (cont + 0.15) * 13.0 + detail * 0.8;
-        } else {
-            // Inland terrain: rolling plains & plateaus
-            base = 20.5 + (cont + 0.15) * 7.5;
-
-            // Dramatic mountain spines and alpine peaks
-            if (ridge > 0.82) {
-                double mFactor = Math.pow((ridge - 0.82) / 0.68, 1.35);
-                double mountainHeight = 28.0 + mFactor * 26.0; // Up to height 54
-                base = Math.max(base, mountainHeight);
-            }
-
-            // Valley & gorge erosion between high grounds
-            if (valley < 0.12 && base > SEA_LEVEL + 3.0) {
-                double carve = (1.0 - valley / 0.12) * 8.0;
-                base = Math.max(SEA_LEVEL + 1.0, base - carve);
-            }
-
-            base += hills + detail;
+        // Rivers and lakes carved below sea level (the ocean branch fills them with water)
+        double river = Math.abs(Noise.fbm2D(seed ^ 0x52495652L, x * 0.0040, z * 0.0040, 2, 0.5));
+        double riverF = 1.0 - Noise.smoothstep(0.0, 0.055, river);
+        if (riverF > 0.0 && base > SEA_LEVEL - 2.0) {
+            base += ((SEA_LEVEL - 2.5) - base) * riverF * 0.9;
         }
+
+        // Fine detail: deserts flatten out, forests and plains keep rolling hills
+        double detailAmp = (temp > 0.30) ? 0.45 : 1.0;
+        base += (det * 3.0 + Noise.fbm2D(seed ^ 0x44455442L, x * 0.18, z * 0.18, 2, 0.5) * 1.2) * detailAmp;
 
         int height = (int) Math.round(base);
         return (int) Math.clamp(height, 5, Chunk.SIZE_Y - 7);
+    }
+
+    private double temperatureAt(int x, int z) {
+        return Noise.fbm2D(seed ^ 0x54454D50L, x * 0.010, z * 0.010, 3, 0.5);
+    }
+
+    private double humidityAt(int x, int z) {
+        return Noise.fbm2D(seed ^ 0x48554D49L, x * 0.011, z * 0.011, 3, 0.5);
     }
 
     public void updateAndRender(int centerCx, int centerCz, int renderDistance) {
@@ -1677,12 +1733,8 @@ public class World {
             if (h >= 32) {
                 return "minecraft:mountains";
             }
-            double sx = x + offsetX;
-            double sz = z + offsetZ;
-            double temp = Math.sin((sx + 800.0) * 0.010) * Math.cos((sz + 600.0) * 0.010)
-                        + 0.5 * Math.sin((sx + 180.0) * 0.022) * Math.cos((sz + 40.0) * 0.022);
-            double hum  = Math.sin((sx - 500.0) * 0.010) * Math.cos((sz - 300.0) * 0.010)
-                        + 0.5 * Math.sin((sx + 120.0) * 0.021) * Math.cos((sz - 160.0) * 0.021);
+            double temp = temperatureAt(x, z);
+            double hum  = humidityAt(x, z);
 
             if (temp > 0.30) {
                 return "minecraft:desert";
@@ -1700,6 +1752,8 @@ public class World {
         mobs.clear();
         droppedItems.clear();
         arrows.clear();
+        enderPearls.clear();
+        eyeOfEnders.clear();
         fallingBlocks.clear();
         pendingFallingBlocks.clear();
         furnaces.clear();

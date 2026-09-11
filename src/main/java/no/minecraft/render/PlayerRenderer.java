@@ -3,6 +3,7 @@ package no.minecraft.render;
 import no.minecraft.player.GameMode;
 import no.minecraft.player.Player;
 import no.minecraft.world.BlockType;
+import no.minecraft.world.World;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
@@ -27,16 +28,19 @@ public class PlayerRenderer {
             layout (location = 0) in vec3 aPos;
             layout (location = 1) in vec2 aTexCoord;
             layout (location = 2) in vec4 aColor;
+            layout (location = 3) in float aLight;
 
             uniform mat4 uProjection;
             uniform mat4 uView;
 
             out vec2 vTexCoord;
             out vec4 vColor;
+            out float vLight;
 
             void main() {
                 vTexCoord = aTexCoord;
                 vColor = aColor;
+                vLight = aLight;
                 gl_Position = uProjection * uView * vec4(aPos, 1.0);
             }
             """;
@@ -45,10 +49,10 @@ public class PlayerRenderer {
             #version 330 core
             in vec2 vTexCoord;
             in vec4 vColor;
+            in float vLight;
 
             uniform sampler2D uTexture;
             uniform int uUseTexture;
-            uniform float uSunLight;
 
             out vec4 FragColor;
 
@@ -62,9 +66,7 @@ public class PlayerRenderer {
                     baseColor = vColor;
                 }
 
-                float ambient = 0.35;
-                float light = ambient + (1.0 - ambient) * uSunLight;
-                FragColor = vec4(baseColor.rgb * light, baseColor.a);
+                FragColor = vec4(baseColor.rgb * vLight, baseColor.a);
             }
             """;
 
@@ -76,8 +78,8 @@ public class PlayerRenderer {
         glBindVertexArray(vaoId);
         glBindBuffer(GL_ARRAY_BUFFER, vboId);
 
-        // Pos: 3, UV: 2, Color: 4 -> Stride: 9 floats (36 bytes)
-        int stride = 9 * Float.BYTES;
+        // Pos: 3, UV: 2, Color: 4, Light: 1 -> Stride: 10 floats (40 bytes)
+        int stride = 10 * Float.BYTES;
         glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0);
         glEnableVertexAttribArray(0);
 
@@ -87,11 +89,17 @@ public class PlayerRenderer {
         glVertexAttribPointer(2, 4, GL_FLOAT, false, stride, 5 * Float.BYTES);
         glEnableVertexAttribArray(2);
 
+        glVertexAttribPointer(3, 1, GL_FLOAT, false, stride, 9 * Float.BYTES);
+        glEnableVertexAttribArray(3);
+
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
     }
 
-    public void render(Player player, Matrix4f projection, Matrix4f view, float sunLight, TextureAtlas atlas) {
+    public void render(World world, Player player, Matrix4f projection, Matrix4f view, float sunLight, TextureAtlas atlas) {
+        Vector3f eye = player.getEyePosition();
+        boolean exposed = world.isSkyExposed((int) Math.floor(eye.x), (int) Math.floor(eye.y), (int) Math.floor(eye.z));
+        playerLight = exposed ? 0.35f + 0.65f * sunLight : 0.15f;
         Vector3f pos = player.getPosition();
         float yaw = player.getCamera().getYaw();
         float pitch = player.getCamera().getPitch();
@@ -269,7 +277,6 @@ public class PlayerRenderer {
         shader.bind();
         shader.setUniform("uProjection", projection);
         shader.setUniform("uView", view);
-        shader.setUniform("uSunLight", sunLight);
 
         glBindVertexArray(vaoId);
         glBindBuffer(GL_ARRAY_BUFFER, vboId);
@@ -282,7 +289,7 @@ public class PlayerRenderer {
 
             glBufferData(GL_ARRAY_BUFFER, buffer, GL_DYNAMIC_DRAW);
             shader.setUniform("uUseTexture", 0);
-            glDrawArrays(GL_TRIANGLES, 0, bodyVerts.size() / 9);
+            glDrawArrays(GL_TRIANGLES, 0, bodyVerts.size() / 10);
         }
 
         // 2. Draw Held Item (textured)
@@ -294,7 +301,7 @@ public class PlayerRenderer {
             glBufferData(GL_ARRAY_BUFFER, buffer, GL_DYNAMIC_DRAW);
             atlas.bind();
             shader.setUniform("uUseTexture", 1);
-            glDrawArrays(GL_TRIANGLES, 0, itemVerts.size() / 9);
+            glDrawArrays(GL_TRIANGLES, 0, itemVerts.size() / 10);
             atlas.unbind();
         }
 
@@ -502,7 +509,10 @@ public class PlayerRenderer {
         v.add(x); v.add(y); v.add(z);
         v.add(u); v.add(vCoord);
         v.add(r); v.add(g); v.add(b); v.add(a);
+        v.add(playerLight);
     }
+
+    private float playerLight = 1.0f;
 
     public void cleanup() {
         glDeleteBuffers(vboId);

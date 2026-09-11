@@ -116,7 +116,8 @@ public class Main {
                     discard;
                 }
 
-                // Modulate sky light with dynamic sun light (0.12 ambient) and directional factor
+                // Modulate sky light with dynamic sun light (0.12 ambient) and directional factor.
+                // vLight.x already includes sky exposure, so cave faces get no sun light.
                 float ambient = 0.12;
                 float skyLight = vLight.x * (ambient + (1.0 - ambient) * uSunLight);
 
@@ -124,7 +125,8 @@ public class Main {
                 float faceFactor = 0.8 + 0.2 * vLight.x;
                 float torchLight = vLight.y * faceFactor;
 
-                float totalLight = clamp(max(skyLight, torchLight), 0.0, 1.0);
+                // Unlit caves get a faint constant gray light so they ignore the day/night cycle
+                float totalLight = clamp(max(skyLight, torchLight), 0.12, 1.0);
                 vec3 shadedColor = texColor.rgb * totalLight;
                 float fogFactor = clamp((vDist - uFogStart) / (uFogEnd - uFogStart), 0.0, 1.0);
                 vec3 finalColor = mix(shadedColor, uSkyColor, fogFactor);
@@ -828,7 +830,7 @@ public class Main {
                 }
                 Vector3f eye = player.getEyePosition();
                 Vector3f fwd = player.getCamera().getForward();
-                world.spawnArrow(eye.x, eye.y, eye.z, fwd.x * 24.0f, fwd.y * 24.0f, fwd.z * 24.0f);
+                world.spawnArrow(eye.x + fwd.x * 0.3f, eye.y + fwd.y * 0.3f, eye.z + fwd.z * 0.3f, fwd.x * 24.0f, fwd.y * 24.0f, fwd.z * 24.0f, player, false);
                 no.minecraft.sound.SoundManager.getInstance().play("bow_shoot", 1.0f);
                 return true;
             }
@@ -848,7 +850,7 @@ public class Main {
                     dz /= len;
                 }
                 Vector3f eye = player.getEyePosition();
-                world.spawnArrow(eye.x, eye.y, eye.z, dx * 16.0f, 6.0f, dz * 16.0f);
+                world.spawnEyeOfEnder(eye.x, eye.y, eye.z, dx * 16.0f, 6.0f, dz * 16.0f);
                 no.minecraft.sound.SoundManager.getInstance().play("pop", 1.0f);
                 no.minecraft.advancement.AdvancementManager.getInstance().unlock(no.minecraft.advancement.AdvancementManager.Advancement.EYE_SPY);
                 if (player.getGameMode() != GameMode.CREATIVE) {
@@ -856,6 +858,19 @@ public class Main {
                 }
                 return true;
             }
+        }
+
+        // 2.5 Ender pearl throw -> teleport to impact point
+        if (held == BlockType.ENDER_PEARL) {
+            Vector3f eye = player.getEyePosition();
+            Vector3f fwd = player.getCamera().getForward();
+            world.spawnEnderPearl(eye.x + fwd.x * 0.3f, eye.y + fwd.y * 0.3f, eye.z + fwd.z * 0.3f,
+                    fwd.x * 30.0f, fwd.y * 30.0f + 2.0f, fwd.z * 30.0f, player);
+            no.minecraft.sound.SoundManager.getInstance().play("pop", 1.0f);
+            if (player.getGameMode() != GameMode.CREATIVE) {
+                player.useSelectedBlock();
+            }
+            return true;
         }
 
         // Mount boat if looking at a boat
@@ -1105,11 +1120,11 @@ public class Main {
             glDisable(GL_BLEND);
 
             // 4. Render 3D Mobs (Zombie, Creeper, Spider, Skeleton, Blaze, Enderman, Ender Dragon, End Crystal), Arrows & Boats
-            mobRenderer.render(world.getMobs(), world.getArrows(), world.getBoats(), projection, view, sunLight);
+            mobRenderer.render(world, world.getMobs(), world.getArrows(), world.getBoats(), world.getEnderPearls(), world.getEyeOfEnders(), projection, view, sunLight);
 
             // 4.5 Render 3D Player character model (if in 3rd person mode)
             if (!inMenu() && player.getCamera().getPerspective() != no.minecraft.player.Perspective.FIRST_PERSON) {
-                playerRenderer.render(player, projection, view, dynamicSunLight, atlas);
+                playerRenderer.render(world, player, projection, view, dynamicSunLight, atlas);
             }
 
             // 5. Render Mining crack animation if actively mining

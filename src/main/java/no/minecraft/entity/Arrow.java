@@ -10,6 +10,7 @@ public class Arrow {
     private final Vector3f position = new Vector3f();
     private final Vector3f velocity = new Vector3f();
     private final boolean hostileShooter;
+    private final Player shooter;
     private boolean dead = false;
     private float lifetime = 0.0f;
 
@@ -18,8 +19,13 @@ public class Arrow {
     }
 
     public Arrow(float x, float y, float z, float vx, float vy, float vz, boolean hostileShooter) {
+        this(x, y, z, vx, vy, vz, null, hostileShooter);
+    }
+
+    public Arrow(float x, float y, float z, float vx, float vy, float vz, Player shooter, boolean hostileShooter) {
         this.position.set(x, y, z);
         this.velocity.set(vx, vy, vz);
+        this.shooter = shooter;
         this.hostileShooter = hostileShooter;
     }
 
@@ -61,15 +67,17 @@ public class Arrow {
     }
 
     private boolean hitsEntity(World world, Player player, float x, float y, float z) {
-        // Player
-        AABB pBox = player.getBoundingBox();
-        if (x >= pBox.minX && x <= pBox.maxX &&
-            y >= pBox.minY && y <= pBox.maxY &&
-            z >= pBox.minZ && z <= pBox.maxZ) {
-            player.damage(3);
-            // Knockback
-            player.getVelocity().add(velocity.x * 0.25f, 3.0f, velocity.z * 0.25f);
-            return true;
+        // Player (never hit by their own arrows; only hit by hostile arrows, or self-shot arrows after grace period)
+        if (shooter != player && (hostileShooter || lifetime > 0.5f)) {
+            AABB pBox = player.getBoundingBox();
+            if (x >= pBox.minX && x <= pBox.maxX &&
+                y >= pBox.minY && y <= pBox.maxY &&
+                z >= pBox.minZ && z <= pBox.maxZ) {
+                player.damage(3);
+                // Knockback
+                player.getVelocity().add(velocity.x * 0.25f, 3.0f, velocity.z * 0.25f);
+                return true;
+            }
         }
 
         if (hostileShooter) return false; // Mob-fired arrows only threaten the player

@@ -3,6 +3,7 @@ package no.minecraft.render;
 import no.minecraft.entity.Arrow;
 import no.minecraft.entity.Mob;
 import no.minecraft.entity.MobType;
+import no.minecraft.world.World;
 import org.joml.Matrix4f;
 import org.lwjgl.BufferUtils;
 
@@ -24,14 +25,17 @@ public class MobRenderer {
             #version 330 core
             layout (location = 0) in vec3 aPos;
             layout (location = 1) in vec4 aColor;
+            layout (location = 2) in float aLight;
 
             uniform mat4 uProjection;
             uniform mat4 uView;
 
             out vec4 vColor;
+            out float vLight;
 
             void main() {
                 vColor = aColor;
+                vLight = aLight;
                 gl_Position = uProjection * uView * vec4(aPos, 1.0);
             }
             """;
@@ -39,13 +43,11 @@ public class MobRenderer {
     private static final String FRAG_SRC = """
             #version 330 core
             in vec4 vColor;
-            uniform float uSunLight;
+            in float vLight;
             out vec4 FragColor;
 
             void main() {
-                float ambient = 0.25;
-                float light = ambient + (1.0 - ambient) * uSunLight;
-                FragColor = vec4(vColor.rgb * light, vColor.a);
+                FragColor = vec4(vColor.rgb * vLight, vColor.a);
             }
             """;
 
@@ -57,24 +59,35 @@ public class MobRenderer {
         glBindVertexArray(vaoId);
         glBindBuffer(GL_ARRAY_BUFFER, vboId);
 
-        int stride = (3 + 4) * Float.BYTES;
+        int stride = (3 + 4 + 1) * Float.BYTES;
         glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0);
         glEnableVertexAttribArray(0);
 
         glVertexAttribPointer(1, 4, GL_FLOAT, false, stride, 3 * Float.BYTES);
         glEnableVertexAttribArray(1);
 
+        glVertexAttribPointer(2, 1, GL_FLOAT, false, stride, 7 * Float.BYTES);
+        glEnableVertexAttribArray(2);
+
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
     }
 
-    public void render(List<Mob> mobs, List<Arrow> arrows, Matrix4f projection, Matrix4f view, float sunLight) {
-        render(mobs, arrows, java.util.Collections.emptyList(), projection, view, sunLight);
+    public void render(World world, List<Mob> mobs, List<Arrow> arrows, Matrix4f projection, Matrix4f view, float sunLight) {
+        render(world, mobs, arrows, java.util.Collections.emptyList(), java.util.Collections.emptyList(),
+                java.util.Collections.emptyList(), projection, view, sunLight);
     }
 
-    public void render(List<Mob> mobs, List<Arrow> arrows, List<no.minecraft.entity.Boat> boats, Matrix4f projection, Matrix4f view, float sunLight) {
+    public void render(World world, List<Mob> mobs, List<Arrow> arrows, List<no.minecraft.entity.Boat> boats, Matrix4f projection, Matrix4f view, float sunLight) {
+        render(world, mobs, arrows, boats, java.util.Collections.emptyList(), java.util.Collections.emptyList(), projection, view, sunLight);
+    }
+
+    public void render(World world, List<Mob> mobs, List<Arrow> arrows, List<no.minecraft.entity.Boat> boats,
+                       List<no.minecraft.entity.EnderPearl> pearls, List<no.minecraft.entity.EyeOfEnder> eyes,
+                       Matrix4f projection, Matrix4f view, float sunLight) {
         List<ParticleManager.Particle> particles = ParticleManager.getInstance().getParticles();
-        if (mobs.isEmpty() && arrows.isEmpty() && (boats == null || boats.isEmpty()) && particles.isEmpty()) return;
+        if (mobs.isEmpty() && arrows.isEmpty() && (boats == null || boats.isEmpty())
+                && (pearls == null || pearls.isEmpty()) && (eyes == null || eyes.isEmpty()) && particles.isEmpty()) return;
 
         List<Float> verts = new ArrayList<>();
 
@@ -84,6 +97,7 @@ public class MobRenderer {
             float x = mob.getPosition().x;
             float y = mob.getPosition().y;
             float z = mob.getPosition().z;
+            vertexLight = entityLight(world, x, y + 1.0f, z, sunLight);
 
             // Hurt flash (red tint) or Creeper flash (white flashing)
             float r = 1, g = 1, b = 1;
@@ -291,28 +305,30 @@ public class MobRenderer {
                 float dg = hurt ? 0.2f : 0.12f;
                 float db = hurt ? 0.2f : 0.12f;
 
+                float yaw = mob.getYaw();
+
                 // Dragon Body
-                addBox(verts, x - 0.65f, y + 0.5f, z - 1.2f, 1.3f, 0.9f, 2.4f, dr, dg, db);
+                addRotatedBox(verts, x, y, z, 0.0f, 0.5f, 0.0f, 1.3f, 0.9f, 2.4f, yaw, dr, dg, db);
                 // Dragon Neck & Head
-                addBox(verts, x - 0.35f, y + 0.8f, z + 1.2f, 0.7f, 0.7f, 0.9f, dr * 1.2f, dg * 1.2f, db * 1.2f);
-                addBox(verts, x - 0.30f, y + 1.0f, z + 2.0f, 0.6f, 0.55f, 0.7f, dr, dg, db);
+                addRotatedBox(verts, x, y, z, 0.0f, 0.8f, 1.6f, 0.7f, 0.7f, 0.9f, yaw, dr * 1.2f, dg * 1.2f, db * 1.2f);
+                addRotatedBox(verts, x, y, z, 0.0f, 1.0f, 2.3f, 0.6f, 0.55f, 0.7f, yaw, dr, dg, db);
                 // Purple Dragon Eyes
-                addBox(verts, x - 0.32f, y + 1.3f, z + 2.2f, 0.08f, 0.08f, 0.15f, 0.95f, 0.2f, 0.95f);
-                addBox(verts, x + 0.24f, y + 1.3f, z + 2.2f, 0.08f, 0.08f, 0.15f, 0.95f, 0.2f, 0.95f);
+                addRotatedBox(verts, x, y, z, -0.20f, 1.3f, 2.5f, 0.08f, 0.08f, 0.15f, yaw, 0.95f, 0.2f, 0.95f);
+                addRotatedBox(verts, x, y, z, 0.20f, 1.3f, 2.5f, 0.08f, 0.08f, 0.15f, yaw, 0.95f, 0.2f, 0.95f);
                 // Horns
-                addBox(verts, x - 0.25f, y + 1.55f, z + 1.9f, 0.08f, 0.35f, 0.08f, 0.35f, 0.35f, 0.4f);
-                addBox(verts, x + 0.17f, y + 1.55f, z + 1.9f, 0.08f, 0.35f, 0.08f, 0.35f, 0.35f, 0.4f);
+                addRotatedBox(verts, x, y, z, -0.21f, 1.55f, 2.0f, 0.08f, 0.35f, 0.08f, yaw, 0.35f, 0.35f, 0.4f);
+                addRotatedBox(verts, x, y, z, 0.21f, 1.55f, 2.0f, 0.08f, 0.35f, 0.08f, yaw, 0.35f, 0.35f, 0.4f);
                 // Dragon Tail (segments)
-                addBox(verts, x - 0.25f, y + 0.7f, z - 2.0f, 0.5f, 0.5f, 0.9f, dr, dg, db);
-                addBox(verts, x - 0.18f, y + 0.75f, z - 2.8f, 0.36f, 0.36f, 0.9f, dr, dg, db);
-                addBox(verts, x - 0.12f, y + 0.8f, z - 3.6f, 0.24f, 0.24f, 0.9f, dr, dg, db);
+                addRotatedBox(verts, x, y, z, 0.0f, 0.7f, -1.6f, 0.5f, 0.5f, 0.9f, yaw, dr, dg, db);
+                addRotatedBox(verts, x, y, z, 0.0f, 0.75f, -2.4f, 0.36f, 0.36f, 0.9f, yaw, dr, dg, db);
+                addRotatedBox(verts, x, y, z, 0.0f, 0.8f, -3.2f, 0.24f, 0.24f, 0.9f, yaw, dr, dg, db);
 
                 // Flapping Wings
                 float wingFlap = (float) Math.sin(System.currentTimeMillis() * 0.008f) * 0.4f;
                 // Left Wing
-                addBox(verts, x - 2.8f, y + 0.9f + wingFlap, z - 0.8f, 2.2f, 0.08f, 1.8f, 0.22f, 0.18f, 0.24f);
+                addRotatedBox(verts, x, y, z, -1.75f, 0.9f + wingFlap, 0.1f, 2.2f, 0.08f, 1.8f, yaw, 0.22f, 0.18f, 0.24f);
                 // Right Wing
-                addBox(verts, x + 0.65f, y + 0.9f - wingFlap, z - 0.8f, 2.2f, 0.08f, 1.8f, 0.22f, 0.18f, 0.24f);
+                addRotatedBox(verts, x, y, z, 1.75f, 0.9f - wingFlap, 0.1f, 2.2f, 0.08f, 1.8f, yaw, 0.22f, 0.18f, 0.24f);
 
             } else if (mt == MobType.PIG) {
                 float pr = hurt ? 1.0f : 0.95f;
@@ -407,7 +423,32 @@ public class MobRenderer {
             float ax = a.getPosition().x;
             float ay = a.getPosition().y;
             float az = a.getPosition().z;
+            vertexLight = entityLight(world, ax, ay, az, sunLight);
             addBox(verts, ax - 0.03f, ay - 0.03f, az - 0.25f, 0.06f, 0.06f, 0.5f, 0.9f, 0.85f, 0.75f);
+        }
+
+        // Render Ender Pearls (small teal cubes)
+        if (pearls != null) {
+            for (no.minecraft.entity.EnderPearl p : pearls) {
+                if (p.isDead()) continue;
+                float px = p.getPosition().x;
+                float py = p.getPosition().y;
+                float pz = p.getPosition().z;
+                vertexLight = entityLight(world, px, py, pz, sunLight);
+                addBox(verts, px - 0.11f, py - 0.11f, pz - 0.11f, 0.22f, 0.22f, 0.22f, 0.10f, 0.45f, 0.42f);
+            }
+        }
+
+        // Render Eyes of Ender (green-white cubes)
+        if (eyes != null) {
+            for (no.minecraft.entity.EyeOfEnder e : eyes) {
+                if (e.isDead()) continue;
+                float ex = e.getPosition().x;
+                float ey = e.getPosition().y;
+                float ez = e.getPosition().z;
+                vertexLight = entityLight(world, ex, ey, ez, sunLight);
+                addBox(verts, ex - 0.11f, ey - 0.11f, ez - 0.11f, 0.22f, 0.22f, 0.22f, 0.55f, 0.85f, 0.65f);
+            }
         }
 
         // Render Healing Beams from End Crystals to Ender Dragon
@@ -424,6 +465,7 @@ public class MobRenderer {
                     float dist = m.getPosition().distance(dragon.getPosition());
                     if (dist < 40.0f) {
                         // Render segmented beam
+                        vertexLight = 1.0f;
                         int segments = (int) (dist * 1.5f);
                         for (int s = 0; s < segments; s++) {
                             float t = (float) s / segments;
@@ -444,6 +486,7 @@ public class MobRenderer {
                 float by = boat.getPosition().y;
                 float bz = boat.getPosition().z;
                 float yaw = boat.getYaw();
+                vertexLight = entityLight(world, bx, by, bz, sunLight);
 
                 float wr = 0.58f, wg = 0.38f, wb = 0.22f; // Oak wood plank color
                 float rr = 0.50f, rg = 0.32f, rb = 0.18f; // Oak wood rim color
@@ -469,6 +512,7 @@ public class MobRenderer {
         }
 
         // 8. 3D Particles (e.g. Critical Hit sparkles)
+        vertexLight = 1.0f;
         for (ParticleManager.Particle p : particles) {
             float alpha = Math.max(0.0f, 1.0f - (p.age / p.maxLifetime));
             float s = p.size * (0.6f + alpha * 0.4f);
@@ -483,7 +527,6 @@ public class MobRenderer {
         shader.bind();
         shader.setUniform("uProjection", projection);
         shader.setUniform("uView", view);
-        shader.setUniform("uSunLight", sunLight);
 
         glBindVertexArray(vaoId);
         glBindBuffer(GL_ARRAY_BUFFER, vboId);
@@ -493,7 +536,7 @@ public class MobRenderer {
         buffer.flip();
         glBufferData(GL_ARRAY_BUFFER, buffer, GL_DYNAMIC_DRAW);
 
-        glDrawArrays(GL_TRIANGLES, 0, verts.size() / 7);
+        glDrawArrays(GL_TRIANGLES, 0, verts.size() / 8);
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
@@ -581,6 +624,16 @@ public class MobRenderer {
     private void addVertex(List<Float> v, float x, float y, float z, float r, float g, float b, float a) {
         v.add(x); v.add(y); v.add(z);
         v.add(r); v.add(g); v.add(b); v.add(a);
+        v.add(vertexLight);
+    }
+
+    private float vertexLight = 1.0f;
+
+    /** Light factor for an entity: sky-lit when exposed to the sky, dim constant inside caves. */
+    private static float entityLight(World world, float x, float y, float z, float sunLight) {
+        boolean exposed = world.isSkyExposed((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+        if (exposed) return 0.25f + 0.75f * sunLight;
+        return 0.15f;
     }
 
     public void cleanup() {

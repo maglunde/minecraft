@@ -67,6 +67,7 @@ public class Chunk {
             blocks[getIndex(x, y, z)] = type.getId();
             setDirty(true);
             needsSave = true;
+            heightsValid = false;
             // When placing or breaking a torch, dirty neighbor chunks so lighting updates across borders
             if (type == BlockType.TORCH || oldType == BlockType.TORCH) {
                 for (int dx = -1; dx <= 1; dx++) {
@@ -122,6 +123,32 @@ public class Chunk {
                 }
             }
         }
+    }
+
+    /** Highest opaque block y per column, or -1 for all-air columns. Lazily rebuilt after setBlock. */
+    private final byte[] columnHeight = new byte[SIZE_X * SIZE_Z];
+    private boolean heightsValid = false;
+
+    public int getColumnHeight(int x, int z) {
+        if (!heightsValid) rebuildColumnHeights();
+        return columnHeight[z * SIZE_X + x];
+    }
+
+    private void rebuildColumnHeights() {
+        for (int z = 0; z < SIZE_Z; z++) {
+            for (int x = 0; x < SIZE_X; x++) {
+                int h = -1;
+                for (int y = SIZE_Y - 1; y >= 0; y--) {
+                    BlockType b = getBlock(x, y, z);
+                    if (b != BlockType.AIR && !b.isTransparent()) {
+                        h = y;
+                        break;
+                    }
+                }
+                columnHeight[z * SIZE_X + x] = (byte) h;
+            }
+        }
+        heightsValid = true;
     }
 
     public void rebuildMesh() {
@@ -234,7 +261,22 @@ public class Chunk {
         return false;
     }
 
+    /** Sky exposure (0 or 1) of the air cell in front of a face, so cave walls ignore daylight. */
+    private float skyExposure(int x, int y, int z, BlockType.Face face) {
+        int nx = x, ny = y, nz = z;
+        switch (face) {
+            case TOP -> ny++;
+            case BOTTOM -> ny--;
+            case NORTH -> nz--;
+            case SOUTH -> nz++;
+            case WEST -> nx--;
+            case EAST -> nx++;
+        }
+        return world.isSkyExposed(nx, ny, nz) ? 1.0f : 0.0f;
+    }
+
     private void addFace(List<Float> v, float x, float y, float z, BlockType.Face face, BlockType block, float faceLight, float torchLight) {
+        faceLight *= skyExposure((int) x, (int) y, (int) z, face);
         int textureId = block.getTexture(face);
         float[] uv = TextureAtlas.getUVs(textureId);
         float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
