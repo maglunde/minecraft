@@ -46,6 +46,10 @@
             <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl-stb</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-openal</artifactId>
+        </dependency>
 
         <!-- LWJGL Natives for macOS ARM64 -->
         <dependency>
@@ -66,6 +70,11 @@
         <dependency>
             <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl-stb</artifactId>
+            <classifier>natives-macos-arm64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-openal</artifactId>
             <classifier>natives-macos-arm64</classifier>
         </dependency>
 
@@ -90,6 +99,11 @@
             <artifactId>lwjgl-stb</artifactId>
             <classifier>natives-macos</classifier>
         </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-openal</artifactId>
+            <classifier>natives-macos</classifier>
+        </dependency>
 
         <!-- Windows natives -->
         <dependency>
@@ -112,6 +126,11 @@
             <artifactId>lwjgl-stb</artifactId>
             <classifier>natives-windows</classifier>
         </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-openal</artifactId>
+            <classifier>natives-windows</classifier>
+        </dependency>
 
         <!-- Linux natives -->
         <dependency>
@@ -132,6 +151,11 @@
         <dependency>
             <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl-stb</artifactId>
+            <classifier>natives-linux</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-openal</artifactId>
             <classifier>natives-linux</classifier>
         </dependency>
 
