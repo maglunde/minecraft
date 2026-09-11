@@ -109,7 +109,7 @@ public class ItemRenderer {
         }
 
         float[] uv = TextureAtlas.getUVs(item.getItemTexture());
-        float torchLight = (item == BlockType.TORCH) ? 1.0f : 0.0f;
+        float torchLight = (item == BlockType.TORCH || item == BlockType.LAVA) ? 1.0f : 0.0f;
 
         // Front Face
         addFaceWithUV(v, p[0], p[1], p[2], p[3], uv[0], uv[1], uv[2], uv[3], 0.95f, torchLight);
@@ -143,7 +143,7 @@ public class ItemRenderer {
             p[i][2] = cz + (lx * sin + lz * cos);
         }
 
-        float torchLight = (block == BlockType.TORCH) ? 1.0f : 0.0f;
+        float torchLight = (block == BlockType.TORCH || block == BlockType.LAVA) ? 1.0f : 0.0f;
 
         if (block == BlockType.CACTUS) {
             int topTexId = block.getTexture(BlockType.Face.TOP);

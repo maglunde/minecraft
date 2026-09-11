@@ -146,6 +146,7 @@ public class World {
         Chunk chunk = getChunk(cx, cz);
         if (chunk != null) {
             chunk.setDirty(true);
+            chunk.invalidateLight();
         }
     }
 
@@ -733,6 +734,24 @@ public class World {
         return c.getColumnHeight(x - c.getWorldStartX(), z - c.getWorldStartZ()) <= y;
     }
 
+    /**
+     * Sky light factor (0.0 to 1.0) with Java 1.16.1 horizontal and vertical propagation.
+     * Fully illuminated under open sky (1.0), softly shaded under trees and overhangs (~0.8-0.95),
+     * gradually falls off into cave entrances down to 0.0 in deep unlit caverns.
+     */
+    public float getSkyLight(int x, int y, int z) {
+        if (currentDimension != Dimension.OVERWORLD) return 1.0f;
+        if (y >= Chunk.SIZE_Y) return 1.0f;
+        if (y < 0) return 0.0f;
+        int cx = Math.floorDiv(x, Chunk.SIZE_X);
+        int cz = Math.floorDiv(z, Chunk.SIZE_Z);
+        Chunk c = getChunk(cx, cz);
+        if (c == null) return isSkyExposed(x, y, z) ? 1.0f : 0.0f;
+        int lx = (x % Chunk.SIZE_X + Chunk.SIZE_X) % Chunk.SIZE_X;
+        int lz = (z % Chunk.SIZE_Z + Chunk.SIZE_Z) % Chunk.SIZE_Z;
+        return c.getSkyLight(lx, y, lz) / 15.0f;
+    }
+
     public boolean isDarkAt(int x, int y, int z) {
         if (currentDimension != Dimension.OVERWORLD) return true;
         // Torches prevent darkness in an area of radius 6
@@ -740,7 +759,8 @@ public class World {
             for (int dy = -4; dy <= 4; dy++) {
                 for (int dz = -5; dz <= 5; dz++) {
                     if (dx * dx + dy * dy + dz * dz <= 25) {
-                        if (getBlock(x + dx, y + dy, z + dz) == BlockType.TORCH) {
+                        BlockType b = getBlock(x + dx, y + dy, z + dz);
+                        if (b == BlockType.TORCH || b == BlockType.LAVA) {
                             return false;
                         }
                     }

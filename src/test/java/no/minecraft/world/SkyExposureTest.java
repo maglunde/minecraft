@@ -91,4 +91,54 @@ public class SkyExposureTest {
         world.setBlock(5, 40, 5, BlockType.STONE);
         assertEquals(40, chunk.getColumnHeight(5, 5), "Heightmap skal invalidates av setBlock");
     }
+
+    @Test
+    public void skyLightUnderLeavesIsSoftShade() {
+        World world = new World(12345L);
+        clearColumn(world, 5, 5, 19);
+        world.setBlock(5, 20, 5, BlockType.GRASS);
+        world.setBlock(5, 25, 5, BlockType.LEAVES);
+
+        float lightUnderLeaves = world.getSkyLight(5, 21, 5);
+        assertTrue(lightUnderLeaves >= 0.80f, "Lys under løvverk skal være myk skygge (>= 0.80), fikk: " + lightUnderLeaves);
+    }
+
+    @Test
+    public void skyLightUnderOverhangPropagates() {
+        World world = new World(12345L);
+        clearColumn(world, 5, 5, 19);
+        clearColumn(world, 6, 5, 19);
+        world.setBlock(5, 20, 5, BlockType.STONE);
+        world.setBlock(6, 20, 5, BlockType.STONE);
+        world.setBlock(5, 22, 5, BlockType.STONE); // Overheng over (5, 21, 5)
+
+        float lightUnderOverhang = world.getSkyLight(5, 21, 5);
+        assertTrue(lightUnderOverhang >= 0.85f, "1 blokk under overheng skal motta dagslys fra nabocellen (>= 0.85), fikk: " + lightUnderOverhang);
+    }
+
+    @Test
+    public void caveSkyLightFadesToZero() {
+        World world = new World(12345L);
+        // x=0 er åpen mot himmelen foran inngangen
+        clearColumn(world, 0, 5, 9);
+        world.setBlock(0, 9, 5, BlockType.STONE);
+        world.setBlock(0, 10, 5, BlockType.AIR);
+
+        // Tunnel fra x=1 til x=16
+        for (int x = 1; x <= 16; x++) {
+            clearColumn(world, x, 5, 9);
+            world.setBlock(x, 9, 5, BlockType.STONE); // gulv
+            world.setBlock(x, 11, 5, BlockType.STONE); // tak
+            world.setBlock(x, 10, 4, BlockType.STONE); // nordvegg
+            world.setBlock(x, 10, 6, BlockType.STONE); // sørvegg
+            world.setBlock(x, 10, 5, BlockType.AIR);   // tunnelgang
+        }
+        world.setBlock(16, 10, 5, BlockType.STONE); // lukk enden
+
+        float entranceLight = world.getSkyLight(1, 10, 5); // 1 blokk inn i tunnelen
+        float deepCaveLight = world.getSkyLight(15, 10, 5); // 15 blokker inn i fjellet
+
+        assertTrue(entranceLight >= 0.85f, "Åpning skal ha høyt dagslys (>= 0.85), fikk: " + entranceLight);
+        assertEquals(0.0f, deepCaveLight, 0.05f, "Dyp hule skal falle ned mot 0.0 dagslys, fikk: " + deepCaveLight);
+    }
 }

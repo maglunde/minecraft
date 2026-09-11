@@ -98,8 +98,8 @@ public class PlayerRenderer {
 
     public void render(World world, Player player, Matrix4f projection, Matrix4f view, float sunLight, TextureAtlas atlas) {
         Vector3f eye = player.getEyePosition();
-        boolean exposed = world.isSkyExposed((int) Math.floor(eye.x), (int) Math.floor(eye.y), (int) Math.floor(eye.z));
-        playerLight = exposed ? 0.35f + 0.65f * sunLight : 0.15f;
+        float sky = world.getSkyLight((int) Math.floor(eye.x), (int) Math.floor(eye.y), (int) Math.floor(eye.z));
+        playerLight = 0.15f + (0.20f + 0.65f * sunLight) * sky;
         Vector3f pos = player.getPosition();
         float yaw = player.getCamera().getYaw();
         float pitch = player.getCamera().getPitch();
