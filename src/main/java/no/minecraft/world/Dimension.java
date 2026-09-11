@@ -7,7 +7,7 @@ import java.util.Locale;
 public enum Dimension {
     OVERWORLD(0.70f, 0.85f, 1.0f, 60.0f, 100.0f),
     NETHER(0.35f, 0.05f, 0.05f, 30.0f, 70.0f),
-    THE_END(0.08f, 0.05f, 0.12f, 40.0f, 90.0f);
+    THE_END(0.14f, 0.09f, 0.20f, 50.0f, 120.0f);
 
     private final float skyR, skyG, skyB;
     private final float fogStart, fogEnd;
