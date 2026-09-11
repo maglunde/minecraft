@@ -136,6 +136,10 @@ public class Main {
             """;
 
     public static void main(String[] args) {
+        // MobTextureManager uses java.awt (BufferedImage/Graphics2D/ImageIO).
+        // On macOS, a non-headless AWT starts its own AppKit event loop on the
+        // main thread, which traps the GLFW game loop forever (frozen window).
+        System.setProperty("java.awt.headless", "true");
         new Main().run();
     }
 

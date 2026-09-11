@@ -1,15 +1,22 @@
 package no.minecraft.render;
 
 import no.minecraft.entity.Arrow;
+import no.minecraft.entity.Boat;
+import no.minecraft.entity.EnderPearl;
+import no.minecraft.entity.EyeOfEnder;
 import no.minecraft.entity.Mob;
 import no.minecraft.entity.MobType;
 import no.minecraft.world.World;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
+import org.joml.Vector4f;
 import org.lwjgl.BufferUtils;
 
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL15.*;
@@ -20,20 +27,24 @@ public class MobRenderer {
     private final Shader shader;
     private final int vaoId;
     private final int vboId;
+    private final MobTextureManager textureManager;
 
     private static final String VERT_SRC = """
             #version 330 core
             layout (location = 0) in vec3 aPos;
-            layout (location = 1) in vec4 aColor;
-            layout (location = 2) in float aLight;
+            layout (location = 1) in vec2 aTexCoord;
+            layout (location = 2) in vec4 aColor;
+            layout (location = 3) in float aLight;
 
             uniform mat4 uProjection;
             uniform mat4 uView;
 
+            out vec2 vTexCoord;
             out vec4 vColor;
             out float vLight;
 
             void main() {
+                vTexCoord = aTexCoord;
                 vColor = aColor;
                 vLight = aLight;
                 gl_Position = uProjection * uView * vec4(aPos, 1.0);
@@ -42,32 +53,51 @@ public class MobRenderer {
 
     private static final String FRAG_SRC = """
             #version 330 core
+            in vec2 vTexCoord;
             in vec4 vColor;
             in float vLight;
+
+            uniform sampler2D uTexture;
+            uniform int uUseTexture;
+
             out vec4 FragColor;
 
             void main() {
-                FragColor = vec4(vColor.rgb * vLight, vColor.a);
+                vec4 baseColor;
+                if (uUseTexture == 1) {
+                    vec4 tex = texture(uTexture, vTexCoord);
+                    if (tex.a < 0.1) discard;
+                    baseColor = tex * vColor;
+                } else {
+                    baseColor = vColor;
+                }
+
+                FragColor = vec4(baseColor.rgb * vLight, baseColor.a);
             }
             """;
 
     public MobRenderer() {
         this.shader = new Shader(VERT_SRC, FRAG_SRC);
+        this.textureManager = MobTextureManager.getInstance();
         this.vaoId = glGenVertexArrays();
         this.vboId = glGenBuffers();
 
         glBindVertexArray(vaoId);
         glBindBuffer(GL_ARRAY_BUFFER, vboId);
 
-        int stride = (3 + 4 + 1) * Float.BYTES;
+        // Pos: 3, UV: 2, Color: 4, Light: 1 -> Stride: 10 floats (40 bytes)
+        int stride = 10 * Float.BYTES;
         glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0);
         glEnableVertexAttribArray(0);
 
-        glVertexAttribPointer(1, 4, GL_FLOAT, false, stride, 3 * Float.BYTES);
+        glVertexAttribPointer(1, 2, GL_FLOAT, false, stride, 3 * Float.BYTES);
         glEnableVertexAttribArray(1);
 
-        glVertexAttribPointer(2, 1, GL_FLOAT, false, stride, 7 * Float.BYTES);
+        glVertexAttribPointer(2, 4, GL_FLOAT, false, stride, 5 * Float.BYTES);
         glEnableVertexAttribArray(2);
+
+        glVertexAttribPointer(3, 1, GL_FLOAT, false, stride, 9 * Float.BYTES);
+        glEnableVertexAttribArray(3);
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
@@ -78,380 +108,95 @@ public class MobRenderer {
                 java.util.Collections.emptyList(), projection, view, sunLight);
     }
 
-    public void render(World world, List<Mob> mobs, List<Arrow> arrows, List<no.minecraft.entity.Boat> boats, Matrix4f projection, Matrix4f view, float sunLight) {
+    public void render(World world, List<Mob> mobs, List<Arrow> arrows, List<Boat> boats, Matrix4f projection, Matrix4f view, float sunLight) {
         render(world, mobs, arrows, boats, java.util.Collections.emptyList(), java.util.Collections.emptyList(), projection, view, sunLight);
     }
 
-    public void render(World world, List<Mob> mobs, List<Arrow> arrows, List<no.minecraft.entity.Boat> boats,
-                       List<no.minecraft.entity.EnderPearl> pearls, List<no.minecraft.entity.EyeOfEnder> eyes,
+    public void render(World world, List<Mob> mobs, List<Arrow> arrows, List<Boat> boats,
+                       List<EnderPearl> pearls, List<EyeOfEnder> eyes,
                        Matrix4f projection, Matrix4f view, float sunLight) {
         List<ParticleManager.Particle> particles = ParticleManager.getInstance().getParticles();
         if (mobs.isEmpty() && arrows.isEmpty() && (boats == null || boats.isEmpty())
                 && (pearls == null || pearls.isEmpty()) && (eyes == null || eyes.isEmpty()) && particles.isEmpty()) return;
 
-        List<Float> verts = new ArrayList<>();
+        Map<MobType, List<Float>> mobBatches = new EnumMap<>(MobType.class);
+        for (MobType type : MobType.values()) {
+            mobBatches.put(type, new ArrayList<>());
+        }
+        List<Float> untexturedVerts = new ArrayList<>();
 
+        // 1. Build Mob Geometry per type
         for (Mob mob : mobs) {
             if (mob.isDead()) continue;
 
             float x = mob.getPosition().x;
             float y = mob.getPosition().y;
             float z = mob.getPosition().z;
-            vertexLight = entityLight(world, x, y + 1.0f, z, sunLight);
+            float light = entityLight(world, x, y + 1.0f, z, sunLight);
 
             // Hurt flash (red tint) or Creeper flash (white flashing)
-            float r = 1, g = 1, b = 1;
             boolean hurt = mob.getHurtTimer() > 0;
-            boolean creeperFlash = mob.getType() == MobType.CREEPER && mob.isIgnited() && ((int)(mob.getFuseRatio() * 12) % 2 == 1);
+            boolean creeperFlash = mob.getType() == MobType.CREEPER && mob.isIgnited() && ((int) (mob.getFuseRatio() * 12) % 2 == 1);
 
-            MobType mt = mob.getType();
-
-            if (mt == MobType.ZOMBIE) {
-                // Head (Green skin)
-                float hr = hurt ? 1.0f : 0.28f;
-                float hg = hurt ? 0.2f : 0.55f;
-                float hb = hurt ? 0.2f : 0.28f;
-                addBox(verts, x - 0.22f, y + 1.4f, z - 0.22f, 0.44f, 0.45f, 0.44f, hr, hg, hb);
-
-                // Body (Blue/Cyan shirt)
-                float br = hurt ? 1.0f : 0.05f;
-                float bg = hurt ? 0.2f : 0.58f;
-                float bb = hurt ? 0.2f : 0.65f;
-                addBox(verts, x - 0.24f, y + 0.7f, z - 0.15f, 0.48f, 0.7f, 0.3f, br, bg, bb);
-
-                // Legs (Dark blue)
-                float lr = hurt ? 1.0f : 0.15f;
-                float lg = hurt ? 0.2f : 0.15f;
-                float lb = hurt ? 0.2f : 0.50f;
-                addBox(verts, x - 0.22f, y, z - 0.14f, 0.2f, 0.7f, 0.28f, lr, lg, lb);
-                addBox(verts, x + 0.02f, y, z - 0.14f, 0.2f, 0.7f, 0.28f, lr, lg, lb);
-
-                // Arms outstretched forward (Zombie classic pose)
-                addBox(verts, x - 0.38f, y + 0.95f, z - 0.45f, 0.14f, 0.14f, 0.55f, hr, hg, hb);
-                addBox(verts, x + 0.24f, y + 0.95f, z - 0.45f, 0.14f, 0.14f, 0.55f, hr, hg, hb);
-
-            } else if (mt == MobType.CREEPER) {
-                float cr = creeperFlash ? 1.0f : (hurt ? 1.0f : 0.18f);
-                float cg = creeperFlash ? 1.0f : (hurt ? 0.2f : 0.72f);
-                float cb = creeperFlash ? 1.0f : (hurt ? 0.2f : 0.18f);
-
-                float yaw = mob.getYaw();
-                float scale = 1.0f + (mob.isIgnited() ? mob.getFuseRatio() * 0.22f : 0.0f);
-
-                // Head
-                float headW = 0.48f * scale;
-                float headH = 0.48f * scale;
-                float headD = 0.48f * scale;
-                float headY = 1.20f * scale;
-                addRotatedBox(verts, x, y, z, 0, headY, 0, headW, headH, headD, yaw, cr, cg, cb);
-
-                // Iconic Creeper Face (front face of head)
-                float fr = creeperFlash ? 1.0f : 0.08f;
-                float fg = creeperFlash ? 1.0f : 0.08f;
-                float fb = creeperFlash ? 1.0f : 0.08f;
-                float faceZ = (headD * 0.5f) + 0.005f;
-                float faceD = 0.015f * scale;
-
-                // Eyes (black rectangles)
-                addRotatedBox(verts, x, y, z, -0.10f * scale, (headY + 0.26f * scale), faceZ, 0.09f * scale, 0.09f * scale, faceD, yaw, fr, fg, fb);
-                addRotatedBox(verts, x, y, z, 0.10f * scale, (headY + 0.26f * scale), faceZ, 0.09f * scale, 0.09f * scale, faceD, yaw, fr, fg, fb);
-
-                // Nose bridge
-                addRotatedBox(verts, x, y, z, 0, (headY + 0.16f * scale), faceZ, 0.08f * scale, 0.12f * scale, faceD, yaw, fr, fg, fb);
-
-                // Mouth upper horizontal bar
-                addRotatedBox(verts, x, y, z, 0, (headY + 0.10f * scale), faceZ, 0.22f * scale, 0.06f * scale, faceD, yaw, fr, fg, fb);
-
-                // Mouth outer corners (frown dropping down)
-                addRotatedBox(verts, x, y, z, -0.10f * scale, (headY + 0.04f * scale), faceZ, 0.08f * scale, 0.08f * scale, faceD, yaw, fr, fg, fb);
-                addRotatedBox(verts, x, y, z, 0.10f * scale, (headY + 0.04f * scale), faceZ, 0.08f * scale, 0.08f * scale, faceD, yaw, fr, fg, fb);
-
-                // Body (Torso)
-                float bodyW = 0.44f * scale;
-                float bodyH = 0.75f * scale;
-                float bodyD = 0.28f * scale;
-                addRotatedBox(verts, x, y, z, 0, 0.45f * scale, 0, bodyW, bodyH, bodyD, yaw, cr * 0.9f, cg * 0.9f, cb * 0.9f);
-
-                // 4 Feet with leg swing animation
-                boolean isWalking = (mob.getVelocity().x * mob.getVelocity().x + mob.getVelocity().z * mob.getVelocity().z) > 0.002f;
-                float legSwing = isWalking ? (float) Math.sin(mob.getWalkTime() * 8.0f) * 0.10f : 0.0f;
-                float legW = 0.19f * scale;
-                float legH = 0.45f * scale;
-                float legD = 0.19f * scale;
-
-                // Front-left
-                addRotatedBox(verts, x, y, z, -0.12f * scale, 0, (0.13f + legSwing) * scale, legW, legH, legD, yaw, cr * 0.8f, cg * 0.8f, cb * 0.8f);
-                // Front-right
-                addRotatedBox(verts, x, y, z, 0.12f * scale, 0, (0.13f - legSwing) * scale, legW, legH, legD, yaw, cr * 0.8f, cg * 0.8f, cb * 0.8f);
-                // Back-left
-                addRotatedBox(verts, x, y, z, -0.12f * scale, 0, (-0.13f - legSwing) * scale, legW, legH, legD, yaw, cr * 0.8f, cg * 0.8f, cb * 0.8f);
-                // Back-right
-                addRotatedBox(verts, x, y, z, 0.12f * scale, 0, (-0.13f + legSwing) * scale, legW, legH, legD, yaw, cr * 0.8f, cg * 0.8f, cb * 0.8f);
-
-            } else if (mt == MobType.SKELETON) {
-                float sr = hurt ? 1.0f : 0.82f;
-                float sg = hurt ? 0.2f : 0.82f;
-                float sb = hurt ? 0.2f : 0.82f;
-
-                // Skull
-                addBox(verts, x - 0.22f, y + 1.4f, z - 0.22f, 0.44f, 0.45f, 0.44f, sr, sg, sb);
-                // Ribcage
-                addBox(verts, x - 0.20f, y + 0.7f, z - 0.12f, 0.40f, 0.7f, 0.24f, sr * 0.9f, sg * 0.9f, sb * 0.9f);
-                // Legs
-                addBox(verts, x - 0.16f, y, z - 0.08f, 0.12f, 0.7f, 0.16f, sr * 0.85f, sg * 0.85f, sb * 0.85f);
-                addBox(verts, x + 0.04f, y, z - 0.08f, 0.12f, 0.7f, 0.16f, sr * 0.85f, sg * 0.85f, sb * 0.85f);
-                // Bow in hand
-                addBox(verts, x + 0.22f, y + 0.8f, z - 0.3f, 0.08f, 0.5f, 0.08f, 0.45f, 0.3f, 0.15f);
-
-            } else if (mt == MobType.SPIDER) {
-                float spr = hurt ? 1.0f : 0.18f;
-                float spg = hurt ? 0.2f : 0.14f;
-                float spb = hurt ? 0.2f : 0.14f;
-
-                // Head
-                addBox(verts, x - 0.22f, y + 0.15f, z - 0.48f, 0.44f, 0.35f, 0.4f, spr * 1.1f, spg * 1.1f, spb * 1.1f);
-                // Glowing Red eyes
-                addBox(verts, x - 0.16f, y + 0.26f, z - 0.50f, 0.08f, 0.08f, 0.05f, 0.9f, 0.05f, 0.05f);
-                addBox(verts, x + 0.08f, y + 0.26f, z - 0.50f, 0.08f, 0.08f, 0.05f, 0.9f, 0.05f, 0.05f);
-
-                // Body (Abdomen)
-                addBox(verts, x - 0.35f, y + 0.2f, z - 0.1f, 0.7f, 0.5f, 0.8f, spr, spg, spb);
-
-                // 8 Spider Legs sprawled out wide
-                for (int l = 0; l < 4; l++) {
-                    float lz = z - 0.3f + l * 0.22f;
-                    // Left leg
-                    addBox(verts, x - 0.75f, y + 0.15f, lz, 0.45f, 0.08f, 0.08f, 0.12f, 0.10f, 0.10f);
-                    // Right leg
-                    addBox(verts, x + 0.30f, y + 0.15f, lz, 0.45f, 0.08f, 0.08f, 0.12f, 0.10f, 0.10f);
-                }
-            } else if (mt == MobType.BLAZE) {
-                float br = hurt ? 1.0f : 1.0f;
-                float bg = hurt ? 0.2f : 0.65f;
-                float bb = hurt ? 0.2f : 0.08f;
-
-                // Blaze Head
-                addBox(verts, x - 0.20f, y + 1.25f, z - 0.20f, 0.40f, 0.40f, 0.40f, br, bg, bb);
-                // Eyes
-                addBox(verts, x - 0.15f, y + 1.42f, z - 0.22f, 0.08f, 0.06f, 0.04f, 1.0f, 1.0f, 0.9f);
-                addBox(verts, x + 0.07f, y + 1.42f, z - 0.22f, 0.08f, 0.06f, 0.04f, 1.0f, 1.0f, 0.9f);
-
-                // Orbiting Blaze Rods (upper, middle, lower layers)
-                float rodW = 0.08f, rodH = 0.38f;
-                // Layer 1 (4 rods)
-                for (int rIdx = 0; rIdx < 4; rIdx++) {
-                    double angle = (System.currentTimeMillis() * 0.003) + (rIdx * Math.PI / 2.0);
-                    float rx = x + (float) Math.cos(angle) * 0.38f;
-                    float rz = z + (float) Math.sin(angle) * 0.38f;
-                    addBox(verts, rx - rodW / 2, y + 0.8f, rz - rodW / 2, rodW, rodH, rodW, 1.0f, 0.75f, 0.12f);
-                }
-                // Layer 2 (4 rods)
-                for (int rIdx = 0; rIdx < 4; rIdx++) {
-                    double angle = -(System.currentTimeMillis() * 0.003) + (rIdx * Math.PI / 2.0) + (Math.PI / 4.0);
-                    float rx = x + (float) Math.cos(angle) * 0.46f;
-                    float rz = z + (float) Math.sin(angle) * 0.46f;
-                    addBox(verts, rx - rodW / 2, y + 0.4f, rz - rodW / 2, rodW, rodH, rodW, 0.95f, 0.55f, 0.05f);
-                }
-                // Layer 3 (4 rods)
-                for (int rIdx = 0; rIdx < 4; rIdx++) {
-                    double angle = (System.currentTimeMillis() * 0.0035) + (rIdx * Math.PI / 2.0);
-                    float rx = x + (float) Math.cos(angle) * 0.30f;
-                    float rz = z + (float) Math.sin(angle) * 0.30f;
-                    addBox(verts, rx - rodW / 2, y + 0.05f, rz - rodW / 2, rodW, rodH, rodW, 1.0f, 0.45f, 0.02f);
-                }
-
-            } else if (mt == MobType.ENDERMAN) {
-                float er = hurt ? 1.0f : 0.08f;
-                float eg = hurt ? 0.2f : 0.08f;
-                float eb = hurt ? 0.2f : 0.08f;
-
-                boolean aggro = mob.isAggressive();
-                float shake = aggro ? (float) Math.sin(System.currentTimeMillis() * 0.05) * 0.02f : 0.0f;
-                float headY = aggro ? 2.30f : 2.25f;
-
-                // Long slender legs
-                addBox(verts, x - 0.12f, y, z - 0.05f, 0.08f, 1.5f, 0.08f, er, eg, eb);
-                addBox(verts, x + 0.04f, y, z - 0.05f, 0.08f, 1.5f, 0.08f, er, eg, eb);
-                // Torso
-                addBox(verts, x - 0.18f, y + 1.5f, z - 0.08f, 0.36f, 0.75f, 0.16f, er, eg, eb);
-                // Long slender arms
-                addBox(verts, x - 0.28f, y + 0.6f, z - 0.05f, 0.08f, 1.65f, 0.08f, er, eg, eb);
-                addBox(verts, x + 0.20f, y + 0.6f, z - 0.05f, 0.08f, 1.65f, 0.08f, er, eg, eb);
-                // Head
-                addBox(verts, x - 0.20f + shake, y + headY, z - 0.20f, 0.40f, 0.35f, 0.40f, er, eg, eb);
-                if (aggro) {
-                    // Open lower jaw
-                    addBox(verts, x - 0.18f + shake, y + 2.15f, z - 0.18f, 0.36f, 0.10f, 0.36f, er, eg, eb);
-                }
-                // Glowing Purple eyes (brighter when angry)
-                float eyeR = aggro ? 1.0f : 0.85f;
-                float eyeG = aggro ? 0.05f : 0.15f;
-                float eyeB = aggro ? 1.0f : 0.95f;
-                addBox(verts, x - 0.15f + shake, y + headY + 0.17f, z - 0.21f, 0.09f, 0.06f, 0.03f, eyeR, eyeG, eyeB);
-                addBox(verts, x + 0.06f + shake, y + headY + 0.17f, z - 0.21f, 0.09f, 0.06f, 0.03f, eyeR, eyeG, eyeB);
-
-            } else if (mt == MobType.END_CRYSTAL) {
-                // Glass outer shell
-                float time = (System.currentTimeMillis() % 10000) * 0.001f;
-                float pulse = 0.85f + 0.15f * (float) Math.sin(time * 5.0f);
-                addBox(verts, x - 0.35f, y + 0.2f, z - 0.35f, 0.7f, 0.7f, 0.7f, 0.8f * pulse, 0.3f, 0.9f * pulse);
-                // Inner core
-                addBox(verts, x - 0.20f, y + 0.35f, z - 0.20f, 0.4f, 0.4f, 0.4f, 1.0f, 0.85f, 1.0f);
-                // Base stand (Obsidian/Bedrock pedestal)
-                addBox(verts, x - 0.45f, y, z - 0.45f, 0.9f, 0.2f, 0.9f, 0.15f, 0.15f, 0.18f);
-
-            } else if (mt == MobType.ENDER_DRAGON) {
-                float dr = hurt ? 1.0f : 0.12f;
-                float dg = hurt ? 0.2f : 0.12f;
-                float db = hurt ? 0.2f : 0.12f;
-
-                float yaw = mob.getYaw();
-
-                // Dragon Body
-                addRotatedBox(verts, x, y, z, 0.0f, 0.5f, 0.0f, 1.3f, 0.9f, 2.4f, yaw, dr, dg, db);
-                // Dragon Neck & Head
-                addRotatedBox(verts, x, y, z, 0.0f, 0.8f, 1.6f, 0.7f, 0.7f, 0.9f, yaw, dr * 1.2f, dg * 1.2f, db * 1.2f);
-                addRotatedBox(verts, x, y, z, 0.0f, 1.0f, 2.3f, 0.6f, 0.55f, 0.7f, yaw, dr, dg, db);
-                // Purple Dragon Eyes
-                addRotatedBox(verts, x, y, z, -0.20f, 1.3f, 2.5f, 0.08f, 0.08f, 0.15f, yaw, 0.95f, 0.2f, 0.95f);
-                addRotatedBox(verts, x, y, z, 0.20f, 1.3f, 2.5f, 0.08f, 0.08f, 0.15f, yaw, 0.95f, 0.2f, 0.95f);
-                // Horns
-                addRotatedBox(verts, x, y, z, -0.21f, 1.55f, 2.0f, 0.08f, 0.35f, 0.08f, yaw, 0.35f, 0.35f, 0.4f);
-                addRotatedBox(verts, x, y, z, 0.21f, 1.55f, 2.0f, 0.08f, 0.35f, 0.08f, yaw, 0.35f, 0.35f, 0.4f);
-                // Dragon Tail (segments)
-                addRotatedBox(verts, x, y, z, 0.0f, 0.7f, -1.6f, 0.5f, 0.5f, 0.9f, yaw, dr, dg, db);
-                addRotatedBox(verts, x, y, z, 0.0f, 0.75f, -2.4f, 0.36f, 0.36f, 0.9f, yaw, dr, dg, db);
-                addRotatedBox(verts, x, y, z, 0.0f, 0.8f, -3.2f, 0.24f, 0.24f, 0.9f, yaw, dr, dg, db);
-
-                // Flapping Wings
-                float wingFlap = (float) Math.sin(System.currentTimeMillis() * 0.008f) * 0.4f;
-                // Left Wing
-                addRotatedBox(verts, x, y, z, -1.75f, 0.9f + wingFlap, 0.1f, 2.2f, 0.08f, 1.8f, yaw, 0.22f, 0.18f, 0.24f);
-                // Right Wing
-                addRotatedBox(verts, x, y, z, 1.75f, 0.9f - wingFlap, 0.1f, 2.2f, 0.08f, 1.8f, yaw, 0.22f, 0.18f, 0.24f);
-
-            } else if (mt == MobType.PIG) {
-                float pr = hurt ? 1.0f : 0.95f;
-                float pg = hurt ? 0.3f : 0.65f;
-                float pb = hurt ? 0.3f : 0.65f;
-
-                // Body
-                addBox(verts, x - 0.28f, y + 0.32f, z - 0.42f, 0.56f, 0.48f, 0.84f, pr, pg, pb);
-                // Head
-                addBox(verts, x - 0.22f, y + 0.40f, z + 0.36f, 0.44f, 0.44f, 0.38f, pr, pg, pb);
-                // Snout
-                addBox(verts, x - 0.11f, y + 0.46f, z + 0.72f, 0.22f, 0.14f, 0.08f, pr * 0.92f, pg * 0.85f, pb * 0.85f);
-                // Eyes
-                addBox(verts, x - 0.18f, y + 0.66f, z + 0.72f, 0.06f, 0.06f, 0.02f, 0.1f, 0.1f, 0.1f);
-                addBox(verts, x + 0.12f, y + 0.66f, z + 0.72f, 0.06f, 0.06f, 0.02f, 0.1f, 0.1f, 0.1f);
-                // 4 Legs
-                addBox(verts, x - 0.25f, y, z - 0.36f, 0.18f, 0.32f, 0.18f, pr * 0.9f, pg * 0.9f, pb * 0.9f);
-                addBox(verts, x + 0.07f, y, z - 0.36f, 0.18f, 0.32f, 0.18f, pr * 0.9f, pg * 0.9f, pb * 0.9f);
-                addBox(verts, x - 0.25f, y, z + 0.18f, 0.18f, 0.32f, 0.18f, pr * 0.9f, pg * 0.9f, pb * 0.9f);
-                addBox(verts, x + 0.07f, y, z + 0.18f, 0.18f, 0.32f, 0.18f, pr * 0.9f, pg * 0.9f, pb * 0.9f);
-
-            } else if (mt == MobType.COW) {
-                float cr = hurt ? 1.0f : 0.40f;
-                float cg = hurt ? 0.3f : 0.26f;
-                float cb = hurt ? 0.3f : 0.18f;
-
-                // Body
-                addBox(verts, x - 0.32f, y + 0.55f, z - 0.50f, 0.64f, 0.65f, 1.00f, cr, cg, cb);
-                // White patch on body
-                addBox(verts, x - 0.33f, y + 0.65f, z - 0.20f, 0.66f, 0.40f, 0.45f, 0.92f, 0.92f, 0.92f);
-                // Head
-                addBox(verts, x - 0.21f, y + 0.85f, z + 0.45f, 0.42f, 0.42f, 0.38f, cr, cg, cb);
-                // Muzzle (white)
-                addBox(verts, x - 0.14f, y + 0.88f, z + 0.78f, 0.28f, 0.18f, 0.08f, 0.88f, 0.88f, 0.85f);
-                // Horns (grey)
-                addBox(verts, x - 0.28f, y + 1.25f, z + 0.50f, 0.08f, 0.15f, 0.08f, 0.75f, 0.75f, 0.75f);
-                addBox(verts, x + 0.20f, y + 1.25f, z + 0.50f, 0.08f, 0.15f, 0.08f, 0.75f, 0.75f, 0.75f);
-                // 4 Legs
-                addBox(verts, x - 0.28f, y, z - 0.42f, 0.18f, 0.55f, 0.18f, cr * 0.85f, cg * 0.85f, cb * 0.85f);
-                addBox(verts, x + 0.10f, y, z - 0.42f, 0.18f, 0.55f, 0.18f, cr * 0.85f, cg * 0.85f, cb * 0.85f);
-                addBox(verts, x - 0.28f, y, z + 0.24f, 0.18f, 0.55f, 0.18f, cr * 0.85f, cg * 0.85f, cb * 0.85f);
-                addBox(verts, x + 0.10f, y, z + 0.24f, 0.18f, 0.55f, 0.18f, cr * 0.85f, cg * 0.85f, cb * 0.85f);
-
-            } else if (mt == MobType.SHEEP) {
-                float sr = hurt ? 1.0f : 0.92f;
-                float sg = hurt ? 0.3f : 0.92f;
-                float sb = hurt ? 0.3f : 0.92f;
-
-                // Fleece Body
-                addBox(verts, x - 0.34f, y + 0.55f, z - 0.48f, 0.68f, 0.65f, 0.96f, sr, sg, sb);
-                // Head (tan skin)
-                addBox(verts, x - 0.18f, y + 0.75f, z + 0.45f, 0.36f, 0.38f, 0.36f, 0.85f, 0.74f, 0.68f);
-                // 4 Legs (tan skin)
-                addBox(verts, x - 0.26f, y, z - 0.40f, 0.16f, 0.55f, 0.16f, 0.85f, 0.74f, 0.68f);
-                addBox(verts, x + 0.10f, y, z - 0.40f, 0.16f, 0.55f, 0.16f, 0.85f, 0.74f, 0.68f);
-                addBox(verts, x - 0.26f, y, z + 0.24f, 0.16f, 0.55f, 0.16f, 0.85f, 0.74f, 0.68f);
-                addBox(verts, x + 0.10f, y, z + 0.24f, 0.16f, 0.55f, 0.16f, 0.85f, 0.74f, 0.68f);
-
-            } else if (mt == MobType.CHICKEN) {
-                float chr = hurt ? 1.0f : 0.95f;
-                float chg = hurt ? 0.3f : 0.95f;
-                float chb = hurt ? 0.3f : 0.95f;
-
-                // Body
-                addBox(verts, x - 0.18f, y + 0.22f, z - 0.22f, 0.36f, 0.28f, 0.44f, chr, chg, chb);
-                // Head
-                addBox(verts, x - 0.11f, y + 0.38f, z + 0.16f, 0.22f, 0.28f, 0.20f, chr, chg, chb);
-                // Yellow Beak
-                addBox(verts, x - 0.05f, y + 0.50f, z + 0.34f, 0.10f, 0.08f, 0.10f, 0.95f, 0.75f, 0.10f);
-                // Red Wattle
-                addBox(verts, x - 0.03f, y + 0.42f, z + 0.32f, 0.06f, 0.10f, 0.06f, 0.90f, 0.15f, 0.15f);
-                // 2 Yellow Legs
-                addBox(verts, x - 0.10f, y, z - 0.04f, 0.06f, 0.22f, 0.06f, 0.95f, 0.75f, 0.10f);
-                addBox(verts, x + 0.04f, y, z - 0.04f, 0.06f, 0.22f, 0.06f, 0.95f, 0.75f, 0.10f);
+            float r = 1.0f, g = 1.0f, b = 1.0f;
+            if (creeperFlash) {
+                r = 1.8f; g = 1.8f; b = 1.8f;
+            } else if (hurt) {
+                r = 1.0f; g = 0.35f; b = 0.35f;
             }
 
+            List<Float> verts = mobBatches.get(mob.getType());
+            buildMobModel(verts, mob, x, y, z, r, g, b, light);
+
+            // Burning fire overlay
             if (mob.isOnFire()) {
-                // Flickering fire flames around the mob
                 float flameAnim = (float) Math.sin(System.currentTimeMillis() * 0.02) * 0.06f;
                 float fH = mob.getType().getHeight();
                 float fW = mob.getType().getWidth() + 0.16f;
-                // Outer fire orange quad/box
-                addBox(verts, x - fW * 0.5f, y, z - fW * 0.5f, fW, fH * 0.85f + flameAnim, fW, 1.0f, 0.45f, 0.05f);
-                // Inner bright yellow flame
-                addBox(verts, x - fW * 0.35f, y + 0.1f, z - fW * 0.35f, fW * 0.7f, fH * 0.65f - flameAnim, fW * 0.7f, 1.0f, 0.85f, 0.1f);
+                Matrix4f fireMat = new Matrix4f().translate(x, y, z);
+                addUntexturedBox(untexturedVerts, fireMat, -fW * 0.5f, 0, -fW * 0.5f, fW, fH * 0.85f + flameAnim, fW, 1.0f, 0.45f, 0.05f, 0.6f, 1.0f);
+                addUntexturedBox(untexturedVerts, fireMat, -fW * 0.35f, 0.1f, -fW * 0.35f, fW * 0.7f, fH * 0.65f - flameAnim, fW * 0.7f, 1.0f, 0.85f, 0.1f, 0.7f, 1.0f);
             }
         }
 
-        // Render Arrows
+        // 2. Build Arrows
         for (Arrow a : arrows) {
             if (a.isDead()) continue;
             float ax = a.getPosition().x;
             float ay = a.getPosition().y;
             float az = a.getPosition().z;
-            vertexLight = entityLight(world, ax, ay, az, sunLight);
-            addBox(verts, ax - 0.03f, ay - 0.03f, az - 0.25f, 0.06f, 0.06f, 0.5f, 0.9f, 0.85f, 0.75f);
+            float aLight = entityLight(world, ax, ay, az, sunLight);
+            Matrix4f mat = new Matrix4f().translate(ax, ay, az);
+            addUntexturedBox(untexturedVerts, mat, -0.03f, -0.03f, -0.25f, 0.06f, 0.06f, 0.5f, 0.9f, 0.85f, 0.75f, 1.0f, aLight);
         }
 
-        // Render Ender Pearls (small teal cubes)
+        // 3. Build Ender Pearls
         if (pearls != null) {
-            for (no.minecraft.entity.EnderPearl p : pearls) {
+            for (EnderPearl p : pearls) {
                 if (p.isDead()) continue;
                 float px = p.getPosition().x;
                 float py = p.getPosition().y;
                 float pz = p.getPosition().z;
-                vertexLight = entityLight(world, px, py, pz, sunLight);
-                addBox(verts, px - 0.11f, py - 0.11f, pz - 0.11f, 0.22f, 0.22f, 0.22f, 0.10f, 0.45f, 0.42f);
+                float pLight = entityLight(world, px, py, pz, sunLight);
+                Matrix4f mat = new Matrix4f().translate(px, py, pz);
+                addUntexturedBox(untexturedVerts, mat, -0.11f, -0.11f, -0.11f, 0.22f, 0.22f, 0.22f, 0.10f, 0.45f, 0.42f, 1.0f, pLight);
             }
         }
 
-        // Render Eyes of Ender (green-white cubes)
+        // 4. Build Eyes of Ender
         if (eyes != null) {
-            for (no.minecraft.entity.EyeOfEnder e : eyes) {
+            for (EyeOfEnder e : eyes) {
                 if (e.isDead()) continue;
                 float ex = e.getPosition().x;
                 float ey = e.getPosition().y;
                 float ez = e.getPosition().z;
-                vertexLight = entityLight(world, ex, ey, ez, sunLight);
-                addBox(verts, ex - 0.11f, ey - 0.11f, ez - 0.11f, 0.22f, 0.22f, 0.22f, 0.55f, 0.85f, 0.65f);
+                float eLight = entityLight(world, ex, ey, ez, sunLight);
+                Matrix4f mat = new Matrix4f().translate(ex, ey, ez);
+                addUntexturedBox(untexturedVerts, mat, -0.11f, -0.11f, -0.11f, 0.22f, 0.22f, 0.22f, 0.55f, 0.85f, 0.65f, 1.0f, eLight);
             }
         }
 
-        // Render Healing Beams from End Crystals to Ender Dragon
+        // 5. Build Healing Beams from End Crystals to Ender Dragon
         Mob dragon = null;
         for (Mob m : mobs) {
             if (m.getType() == MobType.ENDER_DRAGON && !m.isDead()) {
@@ -464,66 +209,65 @@ public class MobRenderer {
                 if (m.getType() == MobType.END_CRYSTAL && !m.isDead()) {
                     float dist = m.getPosition().distance(dragon.getPosition());
                     if (dist < 40.0f) {
-                        // Render segmented beam
-                        vertexLight = 1.0f;
                         int segments = (int) (dist * 1.5f);
                         for (int s = 0; s < segments; s++) {
                             float t = (float) s / segments;
                             float bx = m.getPosition().x + (dragon.getPosition().x - m.getPosition().x) * t;
                             float by = (m.getPosition().y + 0.6f) + (dragon.getPosition().y + 0.8f - (m.getPosition().y + 0.6f)) * t;
                             float bz = m.getPosition().z + (dragon.getPosition().z - m.getPosition().z) * t;
-                            addBox(verts, bx - 0.06f, by - 0.06f, bz - 0.06f, 0.12f, 0.12f, 0.12f, 0.9f, 0.2f, 0.95f);
+                            Matrix4f mat = new Matrix4f().translate(bx, by, bz);
+                            addUntexturedBox(untexturedVerts, mat, -0.06f, -0.06f, -0.06f, 0.12f, 0.12f, 0.12f, 0.9f, 0.2f, 0.95f, 1.0f, 1.0f);
                         }
                     }
                 }
             }
         }
 
+        // 6. Build Boats
         if (boats != null) {
-            for (no.minecraft.entity.Boat boat : boats) {
+            for (Boat boat : boats) {
                 if (boat.isDead()) continue;
                 float bx = boat.getPosition().x;
                 float by = boat.getPosition().y;
                 float bz = boat.getPosition().z;
                 float yaw = boat.getYaw();
-                vertexLight = entityLight(world, bx, by, bz, sunLight);
+                float bLight = entityLight(world, bx, by, bz, sunLight);
+
+                Matrix4f boatMat = new Matrix4f().translate(bx, by, bz).rotateY((float) Math.toRadians(-yaw - 90.0f));
 
                 float wr = 0.58f, wg = 0.38f, wb = 0.22f; // Oak wood plank color
                 float rr = 0.50f, rg = 0.32f, rb = 0.18f; // Oak wood rim color
                 float sr = 0.45f, sg = 0.28f, sb = 0.15f; // Seat bench color
 
-                // 1. Bottom floor
-                addRotatedBox(verts, bx, by, bz, 0, 0, 0, 1.1f, 0.08f, 1.5f, yaw, wr, wg, wb);
-                // 2. Left rim
-                addRotatedBox(verts, bx, by, bz, -0.52f, 0.08f, 0, 0.10f, 0.38f, 1.5f, yaw, rr, rg, rb);
-                // 3. Right rim
-                addRotatedBox(verts, bx, by, bz, 0.52f, 0.08f, 0, 0.10f, 0.38f, 1.5f, yaw, rr, rg, rb);
-                // 4. Back rim
-                addRotatedBox(verts, bx, by, bz, 0, 0.08f, -0.72f, 1.14f, 0.38f, 0.10f, yaw, rr, rg, rb);
-                // 5. Front bow rim
-                addRotatedBox(verts, bx, by, bz, 0, 0.08f, 0.72f, 1.14f, 0.38f, 0.10f, yaw, rr, rg, rb);
-                // 6. Center seat bench
-                addRotatedBox(verts, bx, by, bz, 0, 0.15f, 0, 0.94f, 0.08f, 0.24f, yaw, sr, sg, sb);
-                // 7. Oars
+                // Bottom floor
+                addUntexturedBox(untexturedVerts, boatMat, -0.55f, 0, -0.75f, 1.1f, 0.08f, 1.5f, wr, wg, wb, 1.0f, bLight);
+                // Left & right rim
+                addUntexturedBox(untexturedVerts, boatMat, -0.57f, 0.08f, -0.75f, 0.10f, 0.38f, 1.5f, rr, rg, rb, 1.0f, bLight);
+                addUntexturedBox(untexturedVerts, boatMat, 0.47f, 0.08f, -0.75f, 0.10f, 0.38f, 1.5f, rr, rg, rb, 1.0f, bLight);
+                // Back & front rim
+                addUntexturedBox(untexturedVerts, boatMat, -0.57f, 0.08f, -0.77f, 1.14f, 0.38f, 0.10f, rr, rg, rb, 1.0f, bLight);
+                addUntexturedBox(untexturedVerts, boatMat, -0.57f, 0.08f, 0.67f, 1.14f, 0.38f, 0.10f, rr, rg, rb, 1.0f, bLight);
+                // Center seat bench
+                addUntexturedBox(untexturedVerts, boatMat, -0.47f, 0.15f, -0.12f, 0.94f, 0.08f, 0.24f, sr, sg, sb, 1.0f, bLight);
+
+                // Oars
                 float or = 0.65f, og = 0.48f, ob = 0.28f;
-                addRotatedBox(verts, bx, by, bz, -0.62f, 0.24f, 0.1f, 0.06f, 0.06f, 0.7f, yaw + 25.0f, or, og, ob);
-                addRotatedBox(verts, bx, by, bz, 0.62f, 0.24f, 0.1f, 0.06f, 0.06f, 0.7f, yaw - 25.0f, or, og, ob);
+                Matrix4f leftOar = new Matrix4f(boatMat).translate(-0.62f, 0.24f, 0.1f).rotateY((float) Math.toRadians(25.0f));
+                Matrix4f rightOar = new Matrix4f(boatMat).translate(0.62f, 0.24f, 0.1f).rotateY((float) Math.toRadians(-25.0f));
+                addUntexturedBox(untexturedVerts, leftOar, -0.03f, -0.03f, -0.35f, 0.06f, 0.06f, 0.7f, or, og, ob, 1.0f, bLight);
+                addUntexturedBox(untexturedVerts, rightOar, -0.03f, -0.03f, -0.35f, 0.06f, 0.06f, 0.7f, or, og, ob, 1.0f, bLight);
             }
         }
 
-        // 8. 3D Particles (e.g. Critical Hit sparkles)
-        vertexLight = 1.0f;
+        // 7. Particles
         for (ParticleManager.Particle p : particles) {
             float alpha = Math.max(0.0f, 1.0f - (p.age / p.maxLifetime));
             float s = p.size * (0.6f + alpha * 0.4f);
-            float px = p.pos.x;
-            float py = p.pos.y;
-            float pz = p.pos.z;
-            addBox(verts, px - s * 0.5f, py - s * 0.5f, pz - s * 0.5f, s, s, s, p.r, p.g, p.b);
+            Matrix4f mat = new Matrix4f().translate(p.pos.x, p.pos.y, p.pos.z);
+            addUntexturedBox(untexturedVerts, mat, -s * 0.5f, -s * 0.5f, -s * 0.5f, s, s, s, p.r, p.g, p.b, alpha, 1.0f);
         }
 
-        if (verts.isEmpty()) return;
-
+        // --- RENDER PASSES ---
         shader.bind();
         shader.setUniform("uProjection", projection);
         shader.setUniform("uView", view);
@@ -531,112 +275,539 @@ public class MobRenderer {
         glBindVertexArray(vaoId);
         glBindBuffer(GL_ARRAY_BUFFER, vboId);
 
-        FloatBuffer buffer = BufferUtils.createFloatBuffer(verts.size());
-        for (float f : verts) buffer.put(f);
-        buffer.flip();
-        glBufferData(GL_ARRAY_BUFFER, buffer, GL_DYNAMIC_DRAW);
+        // Draw Textured Mobs
+        shader.setUniform("uUseTexture", 1);
+        for (MobType type : MobType.values()) {
+            List<Float> verts = mobBatches.get(type);
+            if (!verts.isEmpty()) {
+                textureManager.bindTexture(type);
+                uploadAndDraw(verts);
+            }
+        }
+        textureManager.unbind();
 
-        glDrawArrays(GL_TRIANGLES, 0, verts.size() / 8);
+        // Draw Untextured Objects
+        if (!untexturedVerts.isEmpty()) {
+            shader.setUniform("uUseTexture", 0);
+            uploadAndDraw(untexturedVerts);
+        }
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
         shader.unbind();
     }
 
-    private void addRotatedBox(List<Float> v, float cx, float cy, float cz,
-                               float lx, float ly, float lz,
-                               float w, float h, float d,
-                               float yaw, float r, float g, float b) {
-        float rad = (float) Math.toRadians(yaw);
-        float fwdX = (float) Math.cos(rad);
-        float fwdZ = (float) Math.sin(rad);
-        float rightX = -fwdZ;
-        float rightZ = fwdX;
+    private void uploadAndDraw(List<Float> verts) {
+        FloatBuffer buffer = BufferUtils.createFloatBuffer(verts.size());
+        for (float f : verts) buffer.put(f);
+        buffer.flip();
 
-        float x0 = lx - w * 0.5f;
-        float x1 = lx + w * 0.5f;
-        float y0 = cy + ly;
-        float y1 = cy + ly + h;
-        float z0 = lz - d * 0.5f;
-        float z1 = lz + d * 0.5f;
-
-        float p00x = cx + x0 * rightX + z0 * fwdX; float p00z = cz + x0 * rightZ + z0 * fwdZ;
-        float p10x = cx + x1 * rightX + z0 * fwdX; float p10z = cz + x1 * rightZ + z0 * fwdZ;
-        float p11x = cx + x1 * rightX + z1 * fwdX; float p11z = cz + x1 * rightZ + z1 * fwdZ;
-        float p01x = cx + x0 * rightX + z1 * fwdX; float p01z = cz + x0 * rightZ + z1 * fwdZ;
-
-        // Top face
-        float topL = 1.0f;
-        addQuad(v, p01x, y1, p01z, p11x, y1, p11z, p10x, y1, p10z, p00x, y1, p00z, r * topL, g * topL, b * topL);
-        // Bottom face
-        float botL = 0.55f;
-        addQuad(v, p00x, y0, p00z, p10x, y0, p10z, p11x, y0, p11z, p01x, y0, p01z, r * botL, g * botL, b * botL);
-        // North face
-        float nL = 0.75f;
-        addQuad(v, p10x, y0, p10z, p00x, y0, p00z, p00x, y1, p00z, p10x, y1, p10z, r * nL, g * nL, b * nL);
-        // South face
-        float sL = 0.75f;
-        addQuad(v, p01x, y0, p01z, p11x, y0, p11z, p11x, y1, p11z, p01x, y1, p01z, r * sL, g * sL, b * sL);
-        // West face
-        float wL = 0.65f;
-        addQuad(v, p00x, y0, p00z, p01x, y0, p01z, p01x, y1, p01z, p00x, y1, p00z, r * wL, g * wL, b * wL);
-        // East face
-        float eL = 0.65f;
-        addQuad(v, p11x, y0, p11z, p10x, y0, p10z, p10x, y1, p10z, p11x, y1, p11z, r * eL, g * eL, b * eL);
+        glBufferData(GL_ARRAY_BUFFER, buffer, GL_DYNAMIC_DRAW);
+        glDrawArrays(GL_TRIANGLES, 0, verts.size() / 10);
     }
 
-    private void addBox(List<Float> v, float x, float y, float z, float w, float h, float d, float r, float g, float b) {
-        float x1 = x + w;
-        float y1 = y + h;
-        float z1 = z + d;
+    // --- MOB MODELS WITH JAVA EDITION UV MAPPING & ANIMATIONS ---
+
+    private void buildMobModel(List<Float> v, Mob mob, float x, float y, float z, float r, float g, float b, float light) {
+        MobType mt = mob.getType();
+        float yaw = mob.getYaw();
+        float bodyAngleRad = (float) Math.toRadians(-yaw - 90.0f);
+        float walkTime = mob.getWalkTime();
+
+        Vector3f vel = mob.getVelocity();
+        float horizSpeed = (float) Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+        float walkIntensity = (horizSpeed > 0.02f) ? Math.min(1.0f, horizSpeed / 1.5f) : 0.0f;
+
+        Matrix4f rootMat = new Matrix4f().translate(x, y, z).rotateY(bodyAngleRad);
+
+        switch (mt) {
+            case ZOMBIE -> {
+                int tw = 64, th = 64;
+                float legAngle = (float) Math.sin(walkTime * 4.5f) * 0.65f * walkIntensity;
+
+                // 1. Torso
+                Matrix4f torsoMat = new Matrix4f(rootMat).translate(0, 0.72f, 0);
+                addTexturedBox(v, torsoMat, -0.24f, 0, -0.12f, 0.48f, 0.72f, 0.24f, 16, 16, tw, th, 8, 12, 4, r, g, b, 1.0f, light);
+
+                // 2. Head (8x8x8 px)
+                Matrix4f headMat = new Matrix4f(torsoMat).translate(0, 0.72f, 0);
+                addTexturedBox(v, headMat, -0.24f, 0, -0.24f, 0.48f, 0.48f, 0.48f, 0, 0, tw, th, 8, 8, 8, r, g, b, 1.0f, light);
+
+                // 3. Left & Right Arm (Outstretched forward at -90 deg X)
+                float armSwing = (float) Math.sin(walkTime * 4.5f) * 0.15f * walkIntensity;
+                Matrix4f leftArmMat = new Matrix4f(torsoMat).translate(-0.36f, 0.60f, 0).rotateX((float) Math.toRadians(-90.0f) + armSwing);
+                addTexturedBox(v, leftArmMat, -0.12f, -0.72f, -0.12f, 0.24f, 0.72f, 0.24f, 40, 16, tw, th, 4, 12, 4, r, g, b, 1.0f, light);
+
+                Matrix4f rightArmMat = new Matrix4f(torsoMat).translate(0.36f, 0.60f, 0).rotateX((float) Math.toRadians(-90.0f) - armSwing);
+                addTexturedBox(v, rightArmMat, -0.12f, -0.72f, -0.12f, 0.24f, 0.72f, 0.24f, 40, 16, tw, th, 4, 12, 4, r, g, b, 1.0f, light);
+
+                // 4. Left & Right Leg (4x12x4 px)
+                Matrix4f leftLegMat = new Matrix4f(rootMat).translate(-0.12f, 0.72f, 0).rotateX(legAngle);
+                addTexturedBox(v, leftLegMat, -0.12f, -0.72f, -0.12f, 0.24f, 0.72f, 0.24f, 0, 16, tw, th, 4, 12, 4, r, g, b, 1.0f, light);
+
+                Matrix4f rightLegMat = new Matrix4f(rootMat).translate(0.12f, 0.72f, 0).rotateX(-legAngle);
+                addTexturedBox(v, rightLegMat, -0.12f, -0.72f, -0.12f, 0.24f, 0.72f, 0.24f, 0, 16, tw, th, 4, 12, 4, r, g, b, 1.0f, light);
+            }
+            case SKELETON -> {
+                int tw = 64, th = 32;
+                float legAngle = (float) Math.sin(walkTime * 4.5f) * 0.65f * walkIntensity;
+
+                // 1. Torso (8x12x4 px)
+                Matrix4f torsoMat = new Matrix4f(rootMat).translate(0, 0.72f, 0);
+                addTexturedBox(v, torsoMat, -0.24f, 0, -0.12f, 0.48f, 0.72f, 0.24f, 16, 16, tw, th, 8, 12, 4, r, g, b, 1.0f, light);
+
+                // 2. Skull (8x8x8 px)
+                Matrix4f headMat = new Matrix4f(torsoMat).translate(0, 0.72f, 0);
+                addTexturedBox(v, headMat, -0.24f, 0, -0.24f, 0.48f, 0.48f, 0.48f, 0, 0, tw, th, 8, 8, 8, r, g, b, 1.0f, light);
+
+                // 3. Left Arm (Swings) & Right Arm (Aiming Bow)
+                Matrix4f leftArmMat = new Matrix4f(torsoMat).translate(-0.30f, 0.66f, 0).rotateX(-legAngle);
+                addTexturedBox(v, leftArmMat, -0.06f, -0.72f, -0.06f, 0.12f, 0.72f, 0.12f, 40, 16, tw, th, 2, 12, 2, r, g, b, 1.0f, light);
+
+                Matrix4f rightArmMat = new Matrix4f(torsoMat).translate(0.30f, 0.66f, 0)
+                        .rotateX((float) Math.toRadians(-80.0f))
+                        .rotateY((float) Math.toRadians(-20.0f));
+                addTexturedBox(v, rightArmMat, -0.06f, -0.72f, -0.06f, 0.12f, 0.72f, 0.12f, 40, 16, tw, th, 2, 12, 2, r, g, b, 1.0f, light);
+
+                // 4. Left & Right Leg (2x12x2 px)
+                Matrix4f leftLegMat = new Matrix4f(rootMat).translate(-0.12f, 0.72f, 0).rotateX(legAngle);
+                addTexturedBox(v, leftLegMat, -0.06f, -0.72f, -0.06f, 0.12f, 0.72f, 0.12f, 0, 16, tw, th, 2, 12, 2, r, g, b, 1.0f, light);
+
+                Matrix4f rightLegMat = new Matrix4f(rootMat).translate(0.12f, 0.72f, 0).rotateX(-legAngle);
+                addTexturedBox(v, rightLegMat, -0.06f, -0.72f, -0.06f, 0.12f, 0.72f, 0.12f, 0, 16, tw, th, 2, 12, 2, r, g, b, 1.0f, light);
+            }
+            case CREEPER -> {
+                int tw = 64, th = 32;
+                float scale = 1.0f + (mob.isIgnited() ? mob.getFuseRatio() * 0.22f : 0.0f);
+                float legAngle = (float) Math.sin(walkTime * 6.0f) * 0.5f * walkIntensity;
+
+                Matrix4f creeperMat = new Matrix4f(rootMat).scale(scale);
+
+                // 1. Torso (8x12x4 px)
+                Matrix4f torsoMat = new Matrix4f(creeperMat).translate(0, 0.36f, 0);
+                addTexturedBox(v, torsoMat, -0.24f, 0, -0.12f, 0.48f, 0.72f, 0.24f, 16, 16, tw, th, 8, 12, 4, r, g, b, 1.0f, light);
+
+                // 2. Head (8x8x8 px)
+                Matrix4f headMat = new Matrix4f(torsoMat).translate(0, 0.72f, 0);
+                addTexturedBox(v, headMat, -0.24f, 0, -0.24f, 0.48f, 0.48f, 0.48f, 0, 0, tw, th, 8, 8, 8, r, g, b, 1.0f, light);
+
+                // 3. 4 Legs (4x6x4 px each)
+                // Front-Left & Back-Right
+                Matrix4f flLeg = new Matrix4f(creeperMat).translate(-0.12f, 0.36f, -0.18f).rotateX(legAngle);
+                addTexturedBox(v, flLeg, -0.12f, -0.36f, -0.12f, 0.24f, 0.36f, 0.24f, 0, 16, tw, th, 4, 6, 4, r, g, b, 1.0f, light);
+
+                Matrix4f brLeg = new Matrix4f(creeperMat).translate(0.12f, 0.36f, 0.18f).rotateX(legAngle);
+                addTexturedBox(v, brLeg, -0.12f, -0.36f, -0.12f, 0.24f, 0.36f, 0.24f, 0, 16, tw, th, 4, 6, 4, r, g, b, 1.0f, light);
+
+                // Front-Right & Back-Left
+                Matrix4f frLeg = new Matrix4f(creeperMat).translate(0.12f, 0.36f, -0.18f).rotateX(-legAngle);
+                addTexturedBox(v, frLeg, -0.12f, -0.36f, -0.12f, 0.24f, 0.36f, 0.24f, 0, 16, tw, th, 4, 6, 4, r, g, b, 1.0f, light);
+
+                Matrix4f blLeg = new Matrix4f(creeperMat).translate(-0.12f, 0.36f, 0.18f).rotateX(-legAngle);
+                addTexturedBox(v, blLeg, -0.12f, -0.36f, -0.12f, 0.24f, 0.36f, 0.24f, 0, 16, tw, th, 4, 6, 4, r, g, b, 1.0f, light);
+            }
+            case SPIDER -> {
+                int tw = 64, th = 32;
+
+                // 1. Head (8x8x8 px)
+                Matrix4f headMat = new Matrix4f(rootMat).translate(0, 0.24f, -0.30f);
+                addTexturedBox(v, headMat, -0.24f, -0.24f, -0.24f, 0.48f, 0.48f, 0.48f, 32, 4, tw, th, 8, 8, 8, r, g, b, 1.0f, light);
+
+                // 2. Abdomen (12x8x12 px)
+                Matrix4f bodyMat = new Matrix4f(rootMat).translate(0, 0.30f, 0.25f);
+                addTexturedBox(v, bodyMat, -0.36f, -0.24f, -0.36f, 0.72f, 0.48f, 0.72f, 0, 12, tw, th, 12, 8, 12, r, g, b, 1.0f, light);
+
+                // 3. 8 Legs (12x2x2 px)
+                for (int i = 0; i < 4; i++) {
+                    float lz = -0.15f + i * 0.18f;
+                    float swing = (float) Math.sin(walkTime * 7.0f + i) * 0.25f * walkIntensity;
+
+                    // Left legs
+                    Matrix4f lLeg = new Matrix4f(rootMat).translate(-0.20f, 0.24f, lz)
+                            .rotateY((float) Math.toRadians(45.0f - i * 25.0f))
+                            .rotateZ((float) Math.toRadians(-25.0f) + swing);
+                    addTexturedBox(v, lLeg, -0.72f, -0.06f, -0.06f, 0.72f, 0.12f, 0.12f, 18, 0, tw, th, 12, 2, 2, r, g, b, 1.0f, light);
+
+                    // Right legs
+                    Matrix4f rLeg = new Matrix4f(rootMat).translate(0.20f, 0.24f, lz)
+                            .rotateY((float) Math.toRadians(-45.0f + i * 25.0f))
+                            .rotateZ((float) Math.toRadians(25.0f) - swing);
+                    addTexturedBox(v, rLeg, 0, -0.06f, -0.06f, 0.72f, 0.12f, 0.12f, 18, 0, tw, th, 12, 2, 2, r, g, b, 1.0f, light);
+                }
+            }
+            case PIG -> {
+                int tw = 64, th = 32;
+                float legAngle = (float) Math.sin(walkTime * 5.0f) * 0.5f * walkIntensity;
+
+                // 1. Horizontal Body (10x16x8 px)
+                Matrix4f bodyMat = new Matrix4f(rootMat).translate(0, 0.36f, 0);
+                addTexturedBox(v, bodyMat, -0.30f, 0, -0.48f, 0.60f, 0.48f, 0.96f, 28, 8, tw, th, 10, 16, 8, r, g, b, 1.0f, light);
+
+                // 2. Head (8x8x8 px) + Snout (4x3x1 px)
+                Matrix4f headMat = new Matrix4f(bodyMat).translate(0, 0.18f, -0.48f);
+                addTexturedBox(v, headMat, -0.24f, 0, -0.48f, 0.48f, 0.48f, 0.48f, 0, 0, tw, th, 8, 8, 8, r, g, b, 1.0f, light);
+                addTexturedBox(v, headMat, -0.12f, 0.06f, -0.54f, 0.24f, 0.18f, 0.06f, 16, 16, tw, th, 4, 3, 1, r, g, b, 1.0f, light);
+
+                // 3. 4 Legs (4x6x4 px)
+                addTexturedBox(v, new Matrix4f(rootMat).translate(-0.18f, 0.36f, -0.30f).rotateX(legAngle),
+                        -0.12f, -0.36f, -0.12f, 0.24f, 0.36f, 0.24f, 0, 16, tw, th, 4, 6, 4, r, g, b, 1.0f, light);
+                addTexturedBox(v, new Matrix4f(rootMat).translate(0.18f, 0.36f, -0.30f).rotateX(-legAngle),
+                        -0.12f, -0.36f, -0.12f, 0.24f, 0.36f, 0.24f, 0, 16, tw, th, 4, 6, 4, r, g, b, 1.0f, light);
+                addTexturedBox(v, new Matrix4f(rootMat).translate(-0.18f, 0.36f, 0.30f).rotateX(-legAngle),
+                        -0.12f, -0.36f, -0.12f, 0.24f, 0.36f, 0.24f, 0, 16, tw, th, 4, 6, 4, r, g, b, 1.0f, light);
+                addTexturedBox(v, new Matrix4f(rootMat).translate(0.18f, 0.36f, 0.30f).rotateX(legAngle),
+                        -0.12f, -0.36f, -0.12f, 0.24f, 0.36f, 0.24f, 0, 16, tw, th, 4, 6, 4, r, g, b, 1.0f, light);
+            }
+            case COW -> {
+                int tw = 64, th = 32;
+                float legAngle = (float) Math.sin(walkTime * 5.0f) * 0.5f * walkIntensity;
+
+                // 1. Body (12x18x10 px)
+                Matrix4f bodyMat = new Matrix4f(rootMat).translate(0, 0.60f, 0);
+                addTexturedBox(v, bodyMat, -0.36f, 0, -0.54f, 0.72f, 0.60f, 1.08f, 18, 4, tw, th, 12, 18, 10, r, g, b, 1.0f, light);
+
+                // 2. Head (8x8x6 px) + Horns (1x3x1 px)
+                Matrix4f headMat = new Matrix4f(bodyMat).translate(0, 0.24f, -0.54f);
+                addTexturedBox(v, headMat, -0.24f, 0, -0.36f, 0.48f, 0.48f, 0.36f, 0, 0, tw, th, 8, 8, 6, r, g, b, 1.0f, light);
+                addTexturedBox(v, headMat, -0.30f, 0.30f, -0.24f, 0.06f, 0.18f, 0.06f, 22, 0, tw, th, 1, 3, 1, r, g, b, 1.0f, light);
+                addTexturedBox(v, headMat, 0.24f, 0.30f, -0.24f, 0.06f, 0.18f, 0.06f, 22, 0, tw, th, 1, 3, 1, r, g, b, 1.0f, light);
+
+                // 3. 4 Legs (4x12x4 px)
+                addTexturedBox(v, new Matrix4f(rootMat).translate(-0.24f, 0.60f, -0.36f).rotateX(legAngle),
+                        -0.12f, -0.60f, -0.12f, 0.24f, 0.60f, 0.24f, 0, 16, tw, th, 4, 12, 4, r, g, b, 1.0f, light);
+                addTexturedBox(v, new Matrix4f(rootMat).translate(0.24f, 0.60f, -0.36f).rotateX(-legAngle),
+                        -0.12f, -0.60f, -0.12f, 0.24f, 0.60f, 0.24f, 0, 16, tw, th, 4, 12, 4, r, g, b, 1.0f, light);
+                addTexturedBox(v, new Matrix4f(rootMat).translate(-0.24f, 0.60f, 0.36f).rotateX(-legAngle),
+                        -0.12f, -0.60f, -0.12f, 0.24f, 0.60f, 0.24f, 0, 16, tw, th, 4, 12, 4, r, g, b, 1.0f, light);
+                addTexturedBox(v, new Matrix4f(rootMat).translate(0.24f, 0.60f, 0.36f).rotateX(legAngle),
+                        -0.12f, -0.60f, -0.12f, 0.24f, 0.60f, 0.24f, 0, 16, tw, th, 4, 12, 4, r, g, b, 1.0f, light);
+            }
+            case SHEEP -> {
+                int tw = 64, th = 32;
+                float legAngle = (float) Math.sin(walkTime * 5.0f) * 0.5f * walkIntensity;
+
+                // 1. Fleece Body (12x16x10 px)
+                Matrix4f bodyMat = new Matrix4f(rootMat).translate(0, 0.60f, 0);
+                addTexturedBox(v, bodyMat, -0.36f, 0, -0.48f, 0.72f, 0.60f, 0.96f, 28, 8, tw, th, 12, 16, 10, r, g, b, 1.0f, light);
+
+                // 2. Head (6x6x8 px)
+                Matrix4f headMat = new Matrix4f(bodyMat).translate(0, 0.18f, -0.48f);
+                addTexturedBox(v, headMat, -0.18f, 0, -0.48f, 0.36f, 0.36f, 0.48f, 0, 0, tw, th, 6, 6, 8, r, g, b, 1.0f, light);
+
+                // 3. 4 Legs (4x12x4 px)
+                addTexturedBox(v, new Matrix4f(rootMat).translate(-0.20f, 0.60f, -0.30f).rotateX(legAngle),
+                        -0.12f, -0.60f, -0.12f, 0.24f, 0.60f, 0.24f, 0, 16, tw, th, 4, 12, 4, r, g, b, 1.0f, light);
+                addTexturedBox(v, new Matrix4f(rootMat).translate(0.20f, 0.60f, -0.30f).rotateX(-legAngle),
+                        -0.12f, -0.60f, -0.12f, 0.24f, 0.60f, 0.24f, 0, 16, tw, th, 4, 12, 4, r, g, b, 1.0f, light);
+                addTexturedBox(v, new Matrix4f(rootMat).translate(-0.20f, 0.60f, 0.30f).rotateX(-legAngle),
+                        -0.12f, -0.60f, -0.12f, 0.24f, 0.60f, 0.24f, 0, 16, tw, th, 4, 12, 4, r, g, b, 1.0f, light);
+                addTexturedBox(v, new Matrix4f(rootMat).translate(0.20f, 0.60f, 0.30f).rotateX(legAngle),
+                        -0.12f, -0.60f, -0.12f, 0.24f, 0.60f, 0.24f, 0, 16, tw, th, 4, 12, 4, r, g, b, 1.0f, light);
+            }
+            case CHICKEN -> {
+                int tw = 64, th = 32;
+                float legAngle = (float) Math.sin(walkTime * 6.0f) * 0.6f * walkIntensity;
+
+                // 1. Body (6x8x6 px)
+                Matrix4f bodyMat = new Matrix4f(rootMat).translate(0, 0.25f, 0);
+                addTexturedBox(v, bodyMat, -0.18f, 0, -0.24f, 0.36f, 0.36f, 0.48f, 0, 9, tw, th, 6, 8, 6, r, g, b, 1.0f, light);
+
+                // 2. Head (4x6x3 px) + Beak (4x2x2 px) + Wattle (2x2x2 px)
+                Matrix4f headMat = new Matrix4f(bodyMat).translate(0, 0.20f, -0.24f);
+                addTexturedBox(v, headMat, -0.12f, 0, -0.18f, 0.24f, 0.36f, 0.18f, 0, 0, tw, th, 4, 6, 3, r, g, b, 1.0f, light);
+                addTexturedBox(v, headMat, -0.12f, 0.12f, -0.30f, 0.24f, 0.12f, 0.12f, 14, 0, tw, th, 4, 2, 2, r, g, b, 1.0f, light);
+                addTexturedBox(v, headMat, -0.06f, 0.04f, -0.24f, 0.12f, 0.12f, 0.12f, 14, 4, tw, th, 2, 2, 2, r, g, b, 1.0f, light);
+
+                // 3. Wings (1x4x6 px)
+                addTexturedBox(v, new Matrix4f(bodyMat).translate(-0.20f, 0.08f, 0),
+                        -0.03f, 0, -0.18f, 0.06f, 0.24f, 0.36f, 24, 13, tw, th, 1, 4, 6, r, g, b, 1.0f, light);
+                addTexturedBox(v, new Matrix4f(bodyMat).translate(0.20f, 0.08f, 0),
+                        -0.03f, 0, -0.18f, 0.06f, 0.24f, 0.36f, 24, 13, tw, th, 1, 4, 6, r, g, b, 1.0f, light);
+
+                // 4. 2 Legs (3x5x3 px)
+                addTexturedBox(v, new Matrix4f(rootMat).translate(-0.08f, 0.25f, 0).rotateX(legAngle),
+                        -0.09f, -0.25f, -0.09f, 0.18f, 0.25f, 0.18f, 26, 0, tw, th, 3, 5, 3, r, g, b, 1.0f, light);
+                addTexturedBox(v, new Matrix4f(rootMat).translate(0.08f, 0.25f, 0).rotateX(-legAngle),
+                        -0.09f, -0.25f, -0.09f, 0.18f, 0.25f, 0.18f, 26, 0, tw, th, 3, 5, 3, r, g, b, 1.0f, light);
+            }
+            case ENDERMAN -> {
+                int tw = 64, th = 32;
+                float legAngle = (float) Math.sin(walkTime * 4.5f) * 0.5f * walkIntensity;
+                boolean aggro = mob.isAggressive();
+                float shake = aggro ? (float) Math.sin(System.currentTimeMillis() * 0.05) * 0.02f : 0.0f;
+
+                // 1. Torso (8x12x4 px)
+                Matrix4f torsoMat = new Matrix4f(rootMat).translate(0, 1.50f, 0);
+                addTexturedBox(v, torsoMat, -0.24f, 0, -0.12f, 0.48f, 0.72f, 0.24f, 32, 16, tw, th, 8, 12, 4, r, g, b, 1.0f, light);
+
+                // 2. Head (8x8x8 px)
+                Matrix4f headMat = new Matrix4f(torsoMat).translate(shake, 0.72f, 0);
+                addTexturedBox(v, headMat, -0.24f, 0, -0.24f, 0.48f, 0.48f, 0.48f, 0, 0, tw, th, 8, 8, 8, r, g, b, 1.0f, light);
+                if (aggro) {
+                    // Open Jaw (8x4x8 px)
+                    Matrix4f jawMat = new Matrix4f(torsoMat).translate(shake, 0.60f, 0);
+                    addTexturedBox(v, jawMat, -0.24f, 0, -0.24f, 0.48f, 0.24f, 0.48f, 0, 16, tw, th, 8, 4, 8, r, g, b, 1.0f, light);
+                }
+
+                // 3. Slender Arms (2x30x2 px)
+                Matrix4f leftArmMat = new Matrix4f(torsoMat).translate(-0.30f, 0.66f, 0).rotateX(-legAngle);
+                addTexturedBox(v, leftArmMat, -0.06f, -1.80f, -0.06f, 0.12f, 1.80f, 0.12f, 56, 0, tw, th, 2, 30, 2, r, g, b, 1.0f, light);
+
+                Matrix4f rightArmMat = new Matrix4f(torsoMat).translate(0.30f, 0.66f, 0).rotateX(legAngle);
+                addTexturedBox(v, rightArmMat, -0.06f, -1.80f, -0.06f, 0.12f, 1.80f, 0.12f, 56, 0, tw, th, 2, 30, 2, r, g, b, 1.0f, light);
+
+                // 4. Slender Legs (2x30x2 px)
+                Matrix4f leftLegMat = new Matrix4f(rootMat).translate(-0.12f, 1.50f, 0).rotateX(legAngle);
+                addTexturedBox(v, leftLegMat, -0.06f, -1.50f, -0.06f, 0.12f, 1.50f, 0.12f, 56, 0, tw, th, 2, 30, 2, r, g, b, 1.0f, light);
+
+                Matrix4f rightLegMat = new Matrix4f(rootMat).translate(0.12f, 1.50f, 0).rotateX(-legAngle);
+                addTexturedBox(v, rightLegMat, -0.06f, -1.50f, -0.06f, 0.12f, 1.50f, 0.12f, 56, 0, tw, th, 2, 30, 2, r, g, b, 1.0f, light);
+            }
+            case BLAZE -> {
+                int tw = 64, th = 32;
+
+                // 1. Head (8x8x8 px)
+                Matrix4f headMat = new Matrix4f(rootMat).translate(0, 1.25f, 0);
+                addTexturedBox(v, headMat, -0.24f, -0.24f, -0.24f, 0.48f, 0.48f, 0.48f, 0, 0, tw, th, 8, 8, 8, r, g, b, 1.0f, light);
+
+                // 2. Orbiting Blaze Rods (12 rods: 3 layers of 4)
+                float rodW = 0.12f, rodH = 0.48f;
+                // Layer 1
+                for (int i = 0; i < 4; i++) {
+                    double angle = (System.currentTimeMillis() * 0.003) + (i * Math.PI / 2.0);
+                    float rx = (float) Math.cos(angle) * 0.38f;
+                    float rz = (float) Math.sin(angle) * 0.38f;
+                    Matrix4f rodMat = new Matrix4f(rootMat).translate(rx, 0.85f, rz);
+                    addTexturedBox(v, rodMat, -rodW / 2, 0, -rodW / 2, rodW, rodH, rodW, 0, 16, tw, th, 2, 8, 2, r, g, b, 1.0f, 1.0f);
+                }
+                // Layer 2
+                for (int i = 0; i < 4; i++) {
+                    double angle = -(System.currentTimeMillis() * 0.003) + (i * Math.PI / 2.0) + (Math.PI / 4.0);
+                    float rx = (float) Math.cos(angle) * 0.46f;
+                    float rz = (float) Math.sin(angle) * 0.46f;
+                    Matrix4f rodMat = new Matrix4f(rootMat).translate(rx, 0.45f, rz);
+                    addTexturedBox(v, rodMat, -rodW / 2, 0, -rodW / 2, rodW, rodH, rodW, 0, 16, tw, th, 2, 8, 2, r, g, b, 1.0f, 1.0f);
+                }
+                // Layer 3
+                for (int i = 0; i < 4; i++) {
+                    double angle = (System.currentTimeMillis() * 0.0035) + (i * Math.PI / 2.0);
+                    float rx = (float) Math.cos(angle) * 0.30f;
+                    float rz = (float) Math.sin(angle) * 0.30f;
+                    Matrix4f rodMat = new Matrix4f(rootMat).translate(rx, 0.08f, rz);
+                    addTexturedBox(v, rodMat, -rodW / 2, 0, -rodW / 2, rodW, rodH, rodW, 0, 16, tw, th, 2, 8, 2, r, g, b, 1.0f, 1.0f);
+                }
+            }
+            case ENDER_DRAGON -> {
+                int tw = 256, th = 256;
+                float wingFlap = (float) Math.sin(System.currentTimeMillis() * 0.008f) * 0.45f;
+
+                // 1. Dragon Body (16x16x24 px)
+                Matrix4f bodyMat = new Matrix4f(rootMat).translate(0, 0.8f, 0);
+                addTexturedBox(v, bodyMat, -0.65f, -0.45f, -1.2f, 1.3f, 0.9f, 2.4f, 0, 0, tw, th, 16, 16, 24, r, g, b, 1.0f, light);
+
+                // 2. Neck & Head
+                Matrix4f neckMat = new Matrix4f(bodyMat).translate(0, 0.2f, -1.6f);
+                addTexturedBox(v, neckMat, -0.35f, -0.35f, -0.45f, 0.7f, 0.7f, 0.9f, 0, 40, tw, th, 10, 10, 10, r, g, b, 1.0f, light);
+
+                Matrix4f headMat = new Matrix4f(neckMat).translate(0, 0.2f, -0.7f);
+                addTexturedBox(v, headMat, -0.30f, -0.28f, -0.35f, 0.6f, 0.55f, 0.7f, 176, 44, tw, th, 12, 10, 16, r, g, b, 1.0f, light);
+
+                // 3. Tail Segments
+                for (int i = 0; i < 3; i++) {
+                    float tz = 1.6f + i * 0.8f;
+                    float segScale = 0.5f - i * 0.1f;
+                    Matrix4f tailMat = new Matrix4f(bodyMat).translate(0, 0, tz);
+                    addTexturedBox(v, tailMat, -segScale / 2, -segScale / 2, -0.45f, segScale, segScale, 0.9f, 192, 104, tw, th, 8, 8, 12, r, g, b, 1.0f, light);
+                }
+
+                // 4. Flapping Wings (Left & Right)
+                Matrix4f leftWing = new Matrix4f(bodyMat).translate(-0.65f, 0.3f, -0.2f).rotateZ(-wingFlap);
+                addTexturedBox(v, leftWing, -2.2f, -0.04f, -0.9f, 2.2f, 0.08f, 1.8f, 112, 88, tw, th, 28, 4, 20, r, g, b, 1.0f, light);
+
+                Matrix4f rightWing = new Matrix4f(bodyMat).translate(0.65f, 0.3f, -0.2f).rotateZ(wingFlap);
+                addTexturedBox(v, rightWing, 0, -0.04f, -0.9f, 2.2f, 0.08f, 1.8f, 112, 88, tw, th, 28, 4, 20, r, g, b, 1.0f, light);
+            }
+            case END_CRYSTAL -> {
+                int tw = 64, th = 32;
+                float time = (System.currentTimeMillis() % 100000) * 0.001f;
+
+                // 1. Obsidian base
+                Matrix4f baseMat = new Matrix4f(rootMat);
+                addTexturedBox(v, baseMat, -0.45f, 0, -0.45f, 0.9f, 0.2f, 0.9f, 0, 16, tw, th, 14, 4, 14, r, g, b, 1.0f, light);
+
+                // 2. Outer rotating glass cube
+                Matrix4f outerCube = new Matrix4f(rootMat).translate(0, 0.6f, 0).rotateY(time * 2.0f).rotateX((float) Math.sin(time * 3.0f) * 0.3f);
+                addTexturedBox(v, outerCube, -0.35f, -0.35f, -0.35f, 0.7f, 0.7f, 0.7f, 0, 0, tw, th, 8, 8, 8, r, g, b, 0.8f, 1.0f);
+
+                // 3. Inner counter-rotating core
+                Matrix4f innerCube = new Matrix4f(rootMat).translate(0, 0.6f, 0).rotateY(-time * 3.0f).rotateZ((float) Math.cos(time * 3.0f) * 0.3f);
+                addTexturedBox(v, innerCube, -0.20f, -0.20f, -0.20f, 0.4f, 0.4f, 0.4f, 32, 0, tw, th, 6, 6, 6, r, g, b, 1.0f, 1.0f);
+            }
+        }
+    }
+
+    // --- STANDARD MINECRAFT 1.16.1 BOX UV MAPPING UTILITY ---
+
+    public static void addTexturedBox(
+            List<Float> v, Matrix4f mat,
+            float minX, float minY, float minZ,
+            float sizeX, float sizeY, float sizeZ,
+            int u, int vPixel, int texW, int texH,
+            int pw, int ph, int pd,
+            float r, float g, float b, float a, float light
+    ) {
+        float maxX = minX + sizeX;
+        float maxY = minY + sizeY;
+        float maxZ = minZ + sizeZ;
+
+        // UV coordinate bounds (Normalized [0..1])
+        float uTop0 = (float) (u + pd) / texW;
+        float vTop0 = (float) (vPixel) / texH;
+        float uTop1 = (float) (u + pd + pw) / texW;
+        float vTop1 = (float) (vPixel + pd) / texH;
+
+        float uBot0 = (float) (u + pd + pw) / texW;
+        float vBot0 = (float) (vPixel) / texH;
+        float uBot1 = (float) (u + pd + 2 * pw) / texW;
+        float vBot1 = (float) (vPixel + pd) / texH;
+
+        float uRight0 = (float) (u) / texW;
+        float vRight0 = (float) (vPixel + pd) / texH;
+        float uRight1 = (float) (u + pd) / texW;
+        float vRight1 = (float) (vPixel + pd + ph) / texH;
+
+        float uFront0 = (float) (u + pd) / texW;
+        float vFront0 = (float) (vPixel + pd) / texH;
+        float uFront1 = (float) (u + pd + pw) / texW;
+        float vFront1 = (float) (vPixel + pd + ph) / texH;
+
+        float uLeft0 = (float) (u + pd + pw) / texW;
+        float vLeft0 = (float) (vPixel + pd) / texH;
+        float uLeft1 = (float) (u + 2 * pd + pw) / texW;
+        float vLeft1 = (float) (vPixel + pd + ph) / texH;
+
+        float uBack0 = (float) (u + 2 * pd + pw) / texW;
+        float vBack0 = (float) (vPixel + pd) / texH;
+        float uBack1 = (float) (u + 2 * pd + 2 * pw) / texW;
+        float vBack1 = (float) (vPixel + pd + ph) / texH;
+
+        // Top face (+Y)
+        float tL = 1.0f;
+        addQuad(v, mat, minX, maxY, minZ, uTop0, vTop0,
+                maxX, maxY, minZ, uTop1, vTop0,
+                maxX, maxY, maxZ, uTop1, vTop1,
+                minX, maxY, maxZ, uTop0, vTop1,
+                r * tL, g * tL, b * tL, a, light);
+
+        // Bottom face (-Y)
+        float bL = 0.55f;
+        addQuad(v, mat, minX, minY, maxZ, uBot0, vBot1,
+                maxX, minY, maxZ, uBot1, vBot1,
+                maxX, minY, minZ, uBot1, vBot0,
+                minX, minY, minZ, uBot0, vBot0,
+                r * bL, g * bL, b * bL, a, light);
+
+        // Front face (-Z, facing forward)
+        float fL = 0.80f;
+        addQuad(v, mat, maxX, minY, minZ, uFront1, vFront1,
+                minX, minY, minZ, uFront0, vFront1,
+                minX, maxY, minZ, uFront0, vFront0,
+                maxX, maxY, minZ, uFront1, vFront0,
+                r * fL, g * fL, b * fL, a, light);
+
+        // Back face (+Z, towards back)
+        float kL = 0.65f;
+        addQuad(v, mat, minX, minY, maxZ, uBack1, vBack1,
+                maxX, minY, maxZ, uBack0, vBack1,
+                maxX, maxY, maxZ, uBack0, vBack0,
+                minX, maxY, maxZ, uBack1, vBack0,
+                r * kL, g * kL, b * kL, a, light);
+
+        // Left face (-X)
+        float lL = 0.70f;
+        addQuad(v, mat, minX, minY, minZ, uLeft0, vLeft1,
+                minX, minY, maxZ, uLeft1, vLeft1,
+                minX, maxY, maxZ, uLeft1, vLeft0,
+                minX, maxY, minZ, uLeft0, vLeft0,
+                r * lL, g * lL, b * lL, a, light);
+
+        // Right face (+X)
+        float rL = 0.85f;
+        addQuad(v, mat, maxX, minY, maxZ, uRight0, vRight1,
+                maxX, minY, minZ, uRight1, vRight1,
+                maxX, maxY, minZ, uRight1, vRight0,
+                maxX, maxY, maxZ, uRight0, vRight0,
+                r * rL, g * rL, b * rL, a, light);
+    }
+
+    private static void addUntexturedBox(List<Float> v, Matrix4f mat, float minX, float minY, float minZ,
+                                         float sizeX, float sizeY, float sizeZ,
+                                         float r, float g, float b, float a, float light) {
+        float maxX = minX + sizeX;
+        float maxY = minY + sizeY;
+        float maxZ = minZ + sizeZ;
 
         // Top face
-        float topL = 1.0f;
-        addQuad(v, x, y1, z1, x1, y1, z1, x1, y1, z, x, y1, z, r * topL, g * topL, b * topL);
+        addQuad(v, mat, minX, maxY, minZ, 0, 0, maxX, maxY, minZ, 0, 0, maxX, maxY, maxZ, 0, 0, minX, maxY, maxZ, 0, 0, r, g, b, a, light);
         // Bottom face
-        float botL = 0.55f;
-        addQuad(v, x, y, z, x1, y, z, x1, y, z1, x, y, z1, r * botL, g * botL, b * botL);
+        addQuad(v, mat, minX, minY, maxZ, 0, 0, maxX, minY, maxZ, 0, 0, maxX, minY, minZ, 0, 0, minX, minY, minZ, 0, 0, r * 0.55f, g * 0.55f, b * 0.55f, a, light);
         // North face (-Z)
-        float nL = 0.75f;
-        addQuad(v, x1, y, z, x, y, z, x, y1, z, x1, y1, z, r * nL, g * nL, b * nL);
+        addQuad(v, mat, maxX, minY, minZ, 0, 0, minX, minY, minZ, 0, 0, minX, maxY, minZ, 0, 0, maxX, maxY, minZ, 0, 0, r * 0.80f, g * 0.80f, b * 0.80f, a, light);
         // South face (+Z)
-        float sL = 0.75f;
-        addQuad(v, x, y, z1, x1, y, z1, x1, y1, z1, x, y1, z1, r * sL, g * sL, b * sL);
+        addQuad(v, mat, minX, minY, maxZ, 0, 0, maxX, minY, maxZ, 0, 0, maxX, maxY, maxZ, 0, 0, minX, maxY, maxZ, 0, 0, r * 0.65f, g * 0.65f, b * 0.65f, a, light);
         // West face (-X)
-        float wL = 0.65f;
-        addQuad(v, x, y, z, x, y, z1, x, y1, z1, x, y1, z, r * wL, g * wL, b * wL);
+        addQuad(v, mat, minX, minY, minZ, 0, 0, minX, minY, maxZ, 0, 0, minX, maxY, maxZ, 0, 0, minX, maxY, minZ, 0, 0, r * 0.70f, g * 0.70f, b * 0.70f, a, light);
         // East face (+X)
-        float eL = 0.65f;
-        addQuad(v, x1, y, z1, x1, y, z, x1, y1, z, x1, y1, z1, r * eL, g * eL, b * eL);
+        addQuad(v, mat, maxX, minY, maxZ, 0, 0, maxX, minY, minZ, 0, 0, maxX, maxY, minZ, 0, 0, maxX, maxY, maxZ, 0, 0, r * 0.85f, g * 0.85f, b * 0.85f, a, light);
     }
 
-    private void addQuad(List<Float> v, float x1, float y1, float z1, float x2, float y2, float z2,
-                         float x3, float y3, float z3, float x4, float y4, float z4, float r, float g, float b) {
-        addVertex(v, x1, y1, z1, r, g, b, 1.0f);
-        addVertex(v, x2, y2, z2, r, g, b, 1.0f);
-        addVertex(v, x3, y3, z3, r, g, b, 1.0f);
+    private static void addQuad(List<Float> v, Matrix4f mat,
+                                float x0, float y0, float z0, float u0, float v0,
+                                float x1, float y1, float z1, float u1, float v1,
+                                float x2, float y2, float z2, float u2, float v2,
+                                float x3, float y3, float z3, float u3, float v3,
+                                float r, float g, float b, float a, float light) {
+        Vector4f p0 = transform(mat, x0, y0, z0);
+        Vector4f p1 = transform(mat, x1, y1, z1);
+        Vector4f p2 = transform(mat, x2, y2, z2);
+        Vector4f p3 = transform(mat, x3, y3, z3);
 
-        addVertex(v, x1, y1, z1, r, g, b, 1.0f);
-        addVertex(v, x3, y3, z3, r, g, b, 1.0f);
-        addVertex(v, x4, y4, z4, r, g, b, 1.0f);
+        // Triangle 1: 0 -> 1 -> 2
+        addVertex(v, p0.x, p0.y, p0.z, u0, v0, r, g, b, a, light);
+        addVertex(v, p1.x, p1.y, p1.z, u1, v1, r, g, b, a, light);
+        addVertex(v, p2.x, p2.y, p2.z, u2, v2, r, g, b, a, light);
+
+        // Triangle 2: 0 -> 2 -> 3
+        addVertex(v, p0.x, p0.y, p0.z, u0, v0, r, g, b, a, light);
+        addVertex(v, p2.x, p2.y, p2.z, u2, v2, r, g, b, a, light);
+        addVertex(v, p3.x, p3.y, p3.z, u3, v3, r, g, b, a, light);
     }
 
-    private void addVertex(List<Float> v, float x, float y, float z, float r, float g, float b, float a) {
+    private static Vector4f transform(Matrix4f mat, float x, float y, float z) {
+        Vector4f res = new Vector4f(x, y, z, 1.0f);
+        mat.transform(res);
+        return res;
+    }
+
+    private static void addVertex(List<Float> v, float x, float y, float z, float u, float vCoord,
+                                  float r, float g, float b, float a, float light) {
         v.add(x); v.add(y); v.add(z);
+        v.add(u); v.add(vCoord);
         v.add(r); v.add(g); v.add(b); v.add(a);
-        v.add(vertexLight);
+        v.add(light);
     }
-
-    private float vertexLight = 1.0f;
 
     /** Light factor for an entity: sky-lit when exposed to the sky, dim constant inside caves. */
     private static float entityLight(World world, float x, float y, float z, float sunLight) {
-        boolean exposed = world.isSkyExposed((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
-        if (exposed) return 0.25f + 0.75f * sunLight;
-        return 0.15f;
+        float sky = world.getSkyLight((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+        float ambient = 0.15f;
+        return ambient + (0.10f + 0.75f * sunLight) * sky;
     }
 
     public void cleanup() {
+        if (textureManager != null) {
+            textureManager.cleanup();
+        }
         shader.cleanup();
         glDeleteBuffers(vboId);
         glDeleteVertexArrays(vaoId);

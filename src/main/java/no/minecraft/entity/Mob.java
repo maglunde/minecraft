@@ -700,5 +700,8 @@ public class Mob {
     public boolean isAggressive() { return aggressive; }
     public Boat getRidingBoat() { return ridingBoat; }
     public void setRidingBoat(Boat boat) { this.ridingBoat = boat; }
+    public void setIgnited(boolean ignited) { this.ignited = ignited; }
+    public void setFuseTime(float fuseTime) { this.fuseTime = fuseTime; }
     public float getWalkTime() { return walkTime; }
+    public void setWalkTime(float walkTime) { this.walkTime = walkTime; }
 }
