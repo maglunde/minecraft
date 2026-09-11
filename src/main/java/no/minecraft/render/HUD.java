@@ -627,6 +627,15 @@ public class HUD {
                 }
             }
         } else if (inventoryOpen) {
+            // Armor Slots (4 vertical slots on left: 0=Helmet, 1=Chestplate, 2=Leggings, 3=Boots)
+            float armorX = ix + 8.0f * scale;
+            for (int i = 0; i < 4; i++) {
+                float armorY = iy + (8.0f + i * 18.0f) * scale;
+                if (mx >= armorX && mx <= armorX + 18.0f * scale && my >= armorY && my <= armorY + 18.0f * scale) {
+                    return player != null ? player.getArmorSlot(i) : null;
+                }
+            }
+
             // Shield / Offhand slot
             float shieldX = ix + 77.0f * scale;
             float shieldY = iy + 62.0f * scale;
@@ -1454,6 +1463,16 @@ public class HUD {
             }
         }
 
+        // Armor Slots (4 vertical slots on left: 0=Helmet, 1=Chestplate, 2=Leggings, 3=Boots)
+        float armorX = ix + 8.0f * scale;
+        for (int i = 0; i < 4; i++) {
+            float armorY = iy + (8.0f + i * 18.0f) * scale;
+            if (mx >= armorX && mx <= armorX + 18.0f * scale && my >= armorY && my <= armorY + 18.0f * scale) {
+                handleArmorSlotClick(i, button, isShiftDown, player);
+                return true;
+            }
+        }
+
         // Shield / Offhand slot
         float shieldX = ix + 77.0f * scale;
         float shieldY = iy + 62.0f * scale;
@@ -1529,7 +1548,7 @@ public class HUD {
                 float sx = mainInvX + col * 18.0f * scale;
                 float sy = mainInvY + row * 18.0f * scale;
                 if (mx >= sx && mx <= sx + 18.0f * scale && my >= sy && my <= sy + 18.0f * scale) {
-                    onSlotClicked(player.getInventory().getSlot(slotIndex), button, player);
+                    handleInventorySlotClick(player.getInventory().getSlot(slotIndex), button, isShiftDown, player);
                     return true;
                 }
             }
@@ -1540,12 +1559,80 @@ public class HUD {
         for (int col = 0; col < 9; col++) {
             float sx = mainInvX + col * 18.0f * scale;
             if (mx >= sx && mx <= sx + 18.0f * scale && my >= hotbarInvY && my <= hotbarInvY + 18.0f * scale) {
-                onSlotClicked(player.getInventory().getSlot(col), button, player);
+                handleInventorySlotClick(player.getInventory().getSlot(col), button, isShiftDown, player);
                 return true;
             }
         }
 
         return true;
+    }
+
+    private void handleInventorySlotClick(ItemStack slot, int button, boolean isShiftDown, Player player) {
+        if (isShiftDown && slot != null && !slot.isEmpty() && slot.getType().isArmor()) {
+            int targetArmorSlot = slot.getType().getArmorSlot().getIndex();
+            ItemStack armorSlot = player.getArmorSlot(targetArmorSlot);
+            if (armorSlot.isEmpty()) {
+                armorSlot.setType(slot.getType());
+                armorSlot.setCount(1);
+                armorSlot.setDamage(slot.getDamage());
+                if (slot.getCount() > 1) {
+                    slot.add(-1);
+                } else {
+                    slot.clear();
+                }
+                no.minecraft.sound.SoundManager.getInstance().play("click", 0.9f);
+                return;
+            }
+        }
+        onSlotClicked(slot, button, player);
+    }
+
+    private void handleArmorSlotClick(int armorIndex, int button, boolean isShiftDown, Player player) {
+        ItemStack slot = player.getArmorSlot(armorIndex);
+        if (slot == null) return;
+
+        if (isShiftDown) {
+            if (!slot.isEmpty()) {
+                if (player.getInventory().hasSpaceFor(slot.getType(), slot.getCount())) {
+                    player.getInventory().addItem(slot.getType(), slot.getCount(), slot.getDamage());
+                    slot.clear();
+                    no.minecraft.sound.SoundManager.getInstance().play("click", 0.9f);
+                }
+            }
+            return;
+        }
+
+        if (carriedItem.isEmpty()) {
+            if (!slot.isEmpty()) {
+                carriedItem.setType(slot.getType());
+                carriedItem.setCount(slot.getCount());
+                carriedItem.setDamage(slot.getDamage());
+                slot.clear();
+                no.minecraft.sound.SoundManager.getInstance().play("click", 0.8f);
+            }
+        } else {
+            if (carriedItem.getType().isArmor() && carriedItem.getType().getArmorSlot().getIndex() == armorIndex) {
+                BlockType tempType = slot.getType();
+                int tempCount = slot.getCount();
+                int tempDamage = slot.getDamage();
+
+                slot.setType(carriedItem.getType());
+                slot.setCount(1);
+                slot.setDamage(carriedItem.getDamage());
+
+                if (carriedItem.getCount() > 1) {
+                    carriedItem.add(-1);
+                    if (tempType != BlockType.AIR && tempCount > 0) {
+                        player.getInventory().addItem(tempType, tempCount, tempDamage);
+                    }
+                } else {
+                    carriedItem.setType(tempType);
+                    carriedItem.setCount(tempCount);
+                    carriedItem.setDamage(tempDamage);
+                }
+                no.minecraft.sound.SoundManager.getInstance().play("click", 0.8f);
+            }
+        }
     }
 
     public boolean handleInventoryKeyPress(int key, double mx, double my, Player player, int windowWidth, int windowHeight) {
@@ -1988,6 +2075,17 @@ public class HUD {
                 drawPixelHeart(geom, heartX, heartY, pScale, state);
             }
 
+            // --- A2. Armor Bar (10 Armor icons directly above health bar when totalArmor > 0) ---
+            int totalArmor = player.getTotalArmor();
+            if (totalArmor > 0) {
+                float armorY = heartY - 10.0f * pScale;
+                for (int i = 0; i < 10; i++) {
+                    float armorX = hx + i * (8.0f * pScale);
+                    int state = getArmorState(totalArmor, i);
+                    drawPixelArmor(geom, armorX, armorY, pScale, state);
+                }
+            }
+
             // --- B. Hunger Bar (10 Drumsticks on right, empties from left to right) ---
             float hungerY = hy - 18.0f * pScale;
             int hungerVal = player.getHunger();
@@ -2198,6 +2296,60 @@ public class HUD {
             return 1; // Half
         } else {
             return 0; // Empty
+        }
+    }
+
+    public static int getArmorState(int totalArmor, int index) {
+        int threshold = (index + 1) * 2;
+        if (totalArmor >= threshold) {
+            return 2; // Full
+        } else if (totalArmor == threshold - 1) {
+            return 1; // Half
+        } else {
+            return 0; // Empty
+        }
+    }
+
+    private void drawPixelArmor(List<Float> g, float x, float y, float p, int state) {
+        // 9x9 Pixel Armor Chestplate icon matching Minecraft Java Edition GUI icons
+        int[][] pat = {
+                {0,1,1,0,0,0,1,1,0},
+                {1,2,2,1,0,1,2,2,1},
+                {1,3,2,2,1,2,2,4,1},
+                {1,3,2,2,2,2,4,4,1},
+                {0,1,2,2,2,2,4,1,0},
+                {0,1,2,2,2,2,4,1,0},
+                {0,0,1,2,2,4,1,0,0},
+                {0,0,1,2,2,4,1,0,0},
+                {0,0,0,1,1,1,0,0,0}
+        };
+
+        for (int py = 0; py < pat.length; py++) {
+            for (int px = 0; px < pat[py].length; px++) {
+                int c = pat[py][px];
+                if (c == 0) continue;
+
+                float rx = x + px * p;
+                float ry = y + py * p;
+
+                if (c == 1) {
+                    addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.08f, 0.08f, 0.08f, 1.0f); // Dark outline
+                } else {
+                    if (state == 0 || (state == 1 && px >= 5)) {
+                        // Empty: dark translucent background
+                        addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.22f, 0.22f, 0.22f, 0.4f);
+                    } else if (c == 3) {
+                        // Highlight
+                        addRect(g, rx, ry, p, p, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 1.0f);
+                    } else if (c == 4) {
+                        // Shading
+                        addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.60f, 0.60f, 0.65f, 1.0f);
+                    } else {
+                        // Metal base
+                        addRect(g, rx, ry, p, p, 0, 0, 0, 0, 0.88f, 0.88f, 0.92f, 1.0f);
+                    }
+                }
+            }
         }
     }
 

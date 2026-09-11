@@ -209,7 +209,7 @@ public class CraftingRecipe {
 
     // Pattern material chars:
     // W=WOOD P=PLANKS S=STICK C=COBBLESTONE O=COAL I=IRON_INGOT D=DIAMOND
-    // G=STRING R=BLAZE_ROD B=BLAZE_POWDER E=ENDER_PEARL F=GUNPOWDER N=STONE H=FEATHER
+    // G=STRING R=BLAZE_ROD B=BLAZE_POWDER E=ENDER_PEARL F=GUNPOWDER N=STONE H=FEATHER L=LEATHER
 
     private static List<CraftingRecipe> buildDefaultRecipes() {
         List<CraftingRecipe> list = new ArrayList<>();
@@ -393,19 +393,70 @@ public class CraftingRecipe {
                 key('D', BlockType.DIAMOND, 'S', BlockType.STICK),
                 new String[]{" D ", " S ", " S "}, new String[]{"D  ", "S  ", "S  "}, new String[]{"  D", "  S", "  S"}));
 
-        // 41. Smelting: Jernsmelting (1 Jernmalm + 1 Kull -> 1 Jernbarre)
+        // --- Lærrustning (Leather Armor) ---
+        // 41. Lærhjelm: 5 Lær -> 1 Lærhjelm
+        list.add(shaped("recipe.leather_helmet", Map.of(BlockType.LEATHER, 5), new ItemStack(BlockType.LEATHER_HELMET, 1),
+                key('L', BlockType.LEATHER), new String[]{"LLL", "L L"}));
+
+        // 42. Lærbrystplate: 8 Lær -> 1 Lærbrystplate
+        list.add(shaped("recipe.leather_chestplate", Map.of(BlockType.LEATHER, 8), new ItemStack(BlockType.LEATHER_CHESTPLATE, 1),
+                key('L', BlockType.LEATHER), new String[]{"L L", "LLL", "LLL"}));
+
+        // 43. Lærbukser: 7 Lær -> 1 Lærbukser
+        list.add(shaped("recipe.leather_leggings", Map.of(BlockType.LEATHER, 7), new ItemStack(BlockType.LEATHER_LEGGINGS, 1),
+                key('L', BlockType.LEATHER), new String[]{"LLL", "L L", "L L"}));
+
+        // 44. Lærstøvler: 4 Lær -> 1 Lærstøvler
+        list.add(shaped("recipe.leather_boots", Map.of(BlockType.LEATHER, 4), new ItemStack(BlockType.LEATHER_BOOTS, 1),
+                key('L', BlockType.LEATHER), new String[]{"L L", "L L"}));
+
+        // --- Jernrustning (Iron Armor) ---
+        // 45. Jernhjelm: 5 Jernbarrer -> 1 Jernhjelm
+        list.add(shaped("recipe.iron_helmet", Map.of(BlockType.IRON_INGOT, 5), new ItemStack(BlockType.IRON_HELMET, 1),
+                key('I', BlockType.IRON_INGOT), new String[]{"III", "I I"}));
+
+        // 46. Jernbrystplate: 8 Jernbarrer -> 1 Jernbrystplate
+        list.add(shaped("recipe.iron_chestplate", Map.of(BlockType.IRON_INGOT, 8), new ItemStack(BlockType.IRON_CHESTPLATE, 1),
+                key('I', BlockType.IRON_INGOT), new String[]{"I I", "III", "III"}));
+
+        // 47. Jernbukser: 7 Jernbarrer -> 1 Jernbukser
+        list.add(shaped("recipe.iron_leggings", Map.of(BlockType.IRON_INGOT, 7), new ItemStack(BlockType.IRON_LEGGINGS, 1),
+                key('I', BlockType.IRON_INGOT), new String[]{"III", "I I", "I I"}));
+
+        // 48. Jernstøvler: 4 Jernbarrer -> 1 Jernstøvler
+        list.add(shaped("recipe.iron_boots", Map.of(BlockType.IRON_INGOT, 4), new ItemStack(BlockType.IRON_BOOTS, 1),
+                key('I', BlockType.IRON_INGOT), new String[]{"I I", "I I"}));
+
+        // --- Diamantrustning (Diamond Armor) ---
+        // 49. Diamanthjelm: 5 Diamanter -> 1 Diamanthjelm
+        list.add(shaped("recipe.diamond_helmet", Map.of(BlockType.DIAMOND, 5), new ItemStack(BlockType.DIAMOND_HELMET, 1),
+                key('D', BlockType.DIAMOND), new String[]{"DDD", "D D"}));
+
+        // 50. Diamantbrystplate: 8 Diamanter -> 1 Diamantbrystplate
+        list.add(shaped("recipe.diamond_chestplate", Map.of(BlockType.DIAMOND, 8), new ItemStack(BlockType.DIAMOND_CHESTPLATE, 1),
+                key('D', BlockType.DIAMOND), new String[]{"D D", "DDD", "DDD"}));
+
+        // 51. Diamantbukser: 7 Diamanter -> 1 Diamantbukser
+        list.add(shaped("recipe.diamond_leggings", Map.of(BlockType.DIAMOND, 7), new ItemStack(BlockType.DIAMOND_LEGGINGS, 1),
+                key('D', BlockType.DIAMOND), new String[]{"DDD", "D D", "D D"}));
+
+        // 52. Diamantstøvler: 4 Diamanter -> 1 Diamantstøvler
+        list.add(shaped("recipe.diamond_boots", Map.of(BlockType.DIAMOND, 4), new ItemStack(BlockType.DIAMOND_BOOTS, 1),
+                key('D', BlockType.DIAMOND), new String[]{"D D", "D D"}));
+
+        // 53. Smelting: Jernsmelting (1 Jernmalm + 1 Kull -> 1 Jernbarre)
         list.add(new CraftingRecipe("recipe.iron_ingot", Map.of(BlockType.IRON_ORE, 1, BlockType.COAL, 1), new ItemStack(BlockType.IRON_INGOT, 1)));
 
-        // 42. Smelting: Gullsmelting (1 Gullmalm + 1 Kull -> 1 Gullbarre)
+        // 54. Smelting: Gullsmelting (1 Gullmalm + 1 Kull -> 1 Gullbarre)
         list.add(new CraftingRecipe("recipe.gold_ingot", Map.of(BlockType.GOLD_ORE, 1, BlockType.COAL, 1), new ItemStack(BlockType.GOLD_INGOT, 1)));
 
-        // 43. Steking: Biff (1 Rått Storfekjøtt + 1 Kull -> 1 Stekt Biff)
+        // 55. Steking: Biff (1 Rått Storfekjøtt + 1 Kull -> 1 Stekt Biff)
         list.add(new CraftingRecipe("recipe.cooked_beef", Map.of(BlockType.BEEF, 1, BlockType.COAL, 1), new ItemStack(BlockType.COOKED_BEEF, 1)));
 
-        // 44. Steking: Svinekjøtt (1 Rått Svinekjøtt + 1 Kull -> 1 Stekt Svinekjøtt)
+        // 56. Steking: Svinekjøtt (1 Rått Svinekjøtt + 1 Kull -> 1 Stekt Svinekjøtt)
         list.add(new CraftingRecipe("recipe.cooked_porkchop", Map.of(BlockType.PORKCHOP, 1, BlockType.COAL, 1), new ItemStack(BlockType.COOKED_PORKCHOP, 1)));
 
-        // 45. Steking: Kylling (1 Rå Kylling + 1 Kull -> 1 Stekt Kylling)
+        // 57. Steking: Kylling (1 Rå Kylling + 1 Kull -> 1 Stekt Kylling)
         list.add(new CraftingRecipe("recipe.cooked_chicken", Map.of(BlockType.CHICKEN_MEAT, 1, BlockType.COAL, 1), new ItemStack(BlockType.COOKED_CHICKEN, 1)));
 
         return list;

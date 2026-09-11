@@ -120,6 +120,12 @@ abstract class AbstractContainerScreen implements GuiScreen {
             colors.add(new float[]{0.35f, 0.85f, 0.35f});
         }
 
+        // Armor defense
+        if (bt.isArmor()) {
+            lines.add("+" + I18n.format("tooltip.armor", bt.getArmorDefense()));
+            colors.add(new float[]{0.35f, 0.70f, 1.0f});
+        }
+
         // Durability
         if (bt.isDamageable()) {
             int maxDur = bt.getMaxDurability();

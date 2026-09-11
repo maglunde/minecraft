@@ -98,7 +98,36 @@ public enum BlockType {
     APPLE((byte) 90, false, true, 107, 107, 107),
     BREAD((byte) 91, false, true, 108, 108, 108),
     LEATHER((byte) 92, false, true, 109, 109, 109),
-    FEATHER((byte) 93, false, true, 110, 110, 110);
+    FEATHER((byte) 93, false, true, 110, 110, 110),
+    LEATHER_HELMET((byte) 94, false, true, 117, 117, 117),
+    LEATHER_CHESTPLATE((byte) 95, false, true, 118, 118, 118),
+    LEATHER_LEGGINGS((byte) 96, false, true, 119, 119, 119),
+    LEATHER_BOOTS((byte) 97, false, true, 120, 120, 120),
+    IRON_HELMET((byte) 98, false, true, 121, 121, 121),
+    IRON_CHESTPLATE((byte) 99, false, true, 122, 122, 122),
+    IRON_LEGGINGS((byte) 100, false, true, 123, 123, 123),
+    IRON_BOOTS((byte) 101, false, true, 124, 124, 124),
+    DIAMOND_HELMET((byte) 102, false, true, 125, 125, 125),
+    DIAMOND_CHESTPLATE((byte) 103, false, true, 126, 126, 126),
+    DIAMOND_LEGGINGS((byte) 104, false, true, 127, 127, 127),
+    DIAMOND_BOOTS((byte) 105, false, true, 128, 128, 128);
+
+    public enum ArmorSlot {
+        HELMET(0),
+        CHESTPLATE(1),
+        LEGGINGS(2),
+        BOOTS(3);
+
+        private final int index;
+
+        ArmorSlot(int index) {
+            this.index = index;
+        }
+
+        public int getIndex() {
+            return index;
+        }
+    }
 
     public enum ToolType {
         NONE, PICKAXE, AXE, SHOVEL, SWORD
@@ -215,6 +244,44 @@ public enum BlockType {
             case IRON_PICKAXE, IRON_AXE, IRON_SHOVEL, IRON_SWORD -> 250;
             case STONE_PICKAXE, STONE_AXE, STONE_SHOVEL, STONE_SWORD -> 131;
             case WOODEN_PICKAXE, WOODEN_AXE, WOODEN_SHOVEL, WOODEN_SWORD, WOODEN_HOE -> 59;
+            case DIAMOND_HELMET -> 363;
+            case DIAMOND_CHESTPLATE -> 528;
+            case DIAMOND_LEGGINGS -> 495;
+            case DIAMOND_BOOTS -> 429;
+            case IRON_HELMET -> 165;
+            case IRON_CHESTPLATE -> 240;
+            case IRON_LEGGINGS -> 225;
+            case IRON_BOOTS -> 195;
+            case LEATHER_HELMET -> 55;
+            case LEATHER_CHESTPLATE -> 80;
+            case LEATHER_LEGGINGS -> 75;
+            case LEATHER_BOOTS -> 65;
+            default -> 0;
+        };
+    }
+
+    public boolean isArmor() {
+        return getArmorSlot() != null;
+    }
+
+    public ArmorSlot getArmorSlot() {
+        return switch (this) {
+            case LEATHER_HELMET, IRON_HELMET, DIAMOND_HELMET -> ArmorSlot.HELMET;
+            case LEATHER_CHESTPLATE, IRON_CHESTPLATE, DIAMOND_CHESTPLATE -> ArmorSlot.CHESTPLATE;
+            case LEATHER_LEGGINGS, IRON_LEGGINGS, DIAMOND_LEGGINGS -> ArmorSlot.LEGGINGS;
+            case LEATHER_BOOTS, IRON_BOOTS, DIAMOND_BOOTS -> ArmorSlot.BOOTS;
+            default -> null;
+        };
+    }
+
+    public int getArmorDefense() {
+        return switch (this) {
+            case LEATHER_HELMET, LEATHER_BOOTS -> 1;
+            case LEATHER_LEGGINGS, IRON_HELMET, IRON_BOOTS -> 2;
+            case LEATHER_CHESTPLATE, DIAMOND_HELMET, DIAMOND_BOOTS -> 3;
+            case IRON_LEGGINGS -> 5;
+            case IRON_CHESTPLATE, DIAMOND_LEGGINGS -> 6;
+            case DIAMOND_CHESTPLATE -> 8;
             default -> 0;
         };
     }
@@ -303,7 +370,10 @@ public enum BlockType {
                  STONE_PICKAXE, STONE_AXE, STONE_SHOVEL, STONE_SWORD,
                  IRON_PICKAXE, IRON_AXE, IRON_SHOVEL, IRON_SWORD,
                  DIAMOND_PICKAXE, DIAMOND_AXE, DIAMOND_SHOVEL, DIAMOND_SWORD,
-                 BOW, ARROW, FLINT_AND_STEEL -> false;
+                 BOW, ARROW, FLINT_AND_STEEL,
+                 LEATHER_HELMET, LEATHER_CHESTPLATE, LEATHER_LEGGINGS, LEATHER_BOOTS,
+                 IRON_HELMET, IRON_CHESTPLATE, IRON_LEGGINGS, IRON_BOOTS,
+                 DIAMOND_HELMET, DIAMOND_CHESTPLATE, DIAMOND_LEGGINGS, DIAMOND_BOOTS -> false;
             case STICK, BOWL, ROTTEN_FLESH, GUNPOWDER, STRING, BONE,
                  BLAZE_ROD, BLAZE_POWDER, ENDER_PEARL, EYE_OF_ENDER,
                  COAL, IRON_INGOT, GOLD_INGOT, DIAMOND, LEATHER, FEATHER -> false;

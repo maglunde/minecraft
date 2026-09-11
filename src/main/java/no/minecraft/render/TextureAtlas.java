@@ -946,11 +946,97 @@ public class TextureAtlas {
             return rgba(v, v, v, 255);
         });
 
+        // --- 117-128: Armor Items (Leather, Iron, Diamond) ---
+        int[] leatherBase = rgba(150, 90, 50, 255);
+        int[] leatherDark = rgba(95, 50, 25, 255);
+        int[] leatherLight = rgba(190, 120, 70, 255);
+
+        int[] ironBase = rgba(195, 195, 200, 255);
+        int[] ironDark = rgba(130, 130, 135, 255);
+        int[] ironLight = rgba(240, 240, 248, 255);
+
+        int[] diamondBase = rgba(70, 220, 210, 255);
+        int[] diamondDark = rgba(35, 150, 145, 255);
+        int[] diamondLight = rgba(180, 255, 248, 255);
+
+        // 117: Leather Helmet
+        loadOrPaint(pixelData, 117, "leather_helmet.png", (x, y, rand) -> paintHelmet(x, y, rand, leatherBase, leatherDark, leatherLight));
+        // 118: Leather Chestplate
+        loadOrPaint(pixelData, 118, "leather_chestplate.png", (x, y, rand) -> paintChestplate(x, y, rand, leatherBase, leatherDark, leatherLight));
+        // 119: Leather Leggings
+        loadOrPaint(pixelData, 119, "leather_leggings.png", (x, y, rand) -> paintLeggings(x, y, rand, leatherBase, leatherDark, leatherLight));
+        // 120: Leather Boots
+        loadOrPaint(pixelData, 120, "leather_boots.png", (x, y, rand) -> paintBoots(x, y, rand, leatherBase, leatherDark, leatherLight));
+
+        // 121: Iron Helmet
+        loadOrPaint(pixelData, 121, "iron_helmet.png", (x, y, rand) -> paintHelmet(x, y, rand, ironBase, ironDark, ironLight));
+        // 122: Iron Chestplate
+        loadOrPaint(pixelData, 122, "iron_chestplate.png", (x, y, rand) -> paintChestplate(x, y, rand, ironBase, ironDark, ironLight));
+        // 123: Iron Leggings
+        loadOrPaint(pixelData, 123, "iron_leggings.png", (x, y, rand) -> paintLeggings(x, y, rand, ironBase, ironDark, ironLight));
+        // 124: Iron Boots
+        loadOrPaint(pixelData, 124, "iron_boots.png", (x, y, rand) -> paintBoots(x, y, rand, ironBase, ironDark, ironLight));
+
+        // 125: Diamond Helmet
+        loadOrPaint(pixelData, 125, "diamond_helmet.png", (x, y, rand) -> paintHelmet(x, y, rand, diamondBase, diamondDark, diamondLight));
+        // 126: Diamond Chestplate
+        loadOrPaint(pixelData, 126, "diamond_chestplate.png", (x, y, rand) -> paintChestplate(x, y, rand, diamondBase, diamondDark, diamondLight));
+        // 127: Diamond Leggings
+        loadOrPaint(pixelData, 127, "diamond_leggings.png", (x, y, rand) -> paintLeggings(x, y, rand, diamondBase, diamondDark, diamondLight));
+        // 128: Diamond Boots
+        loadOrPaint(pixelData, 128, "diamond_boots.png", (x, y, rand) -> paintBoots(x, y, rand, diamondBase, diamondDark, diamondLight));
+
         for (int y = 0; y < ATLAS_SIZE; y++) {
             buffer.put(pixelData[y]);
         }
         buffer.flip();
         return buffer;
+    }
+
+    private static int[] paintHelmet(int x, int y, Random rand, int[] baseCol, int[] darkCol, int[] lightCol) {
+        boolean inside = (y == 3 && x >= 4 && x <= 11) ||
+                         (y >= 4 && y <= 6 && x >= 3 && x <= 12) ||
+                         (y >= 7 && y <= 9 && (x >= 3 && x <= 5 || x >= 10 && x <= 12 || (y == 7 && (x == 7 || x == 8)))) ||
+                         (y == 10 && (x >= 3 && x <= 4 || x >= 11 && x <= 12));
+        if (!inside) return rgba(0, 0, 0, 0);
+        boolean border = (y == 3) || (x == 3 || x == 12) || (y == 10) ||
+                         (y == 6 && x >= 6 && x <= 9) || (y == 7 && (x == 6 || x == 9)) || (y >= 8 && (x == 5 || x == 10));
+        if (border) return darkCol;
+        if (x <= 5 || y <= 4) return lightCol;
+        return baseCol;
+    }
+
+    private static int[] paintChestplate(int x, int y, Random rand, int[] baseCol, int[] darkCol, int[] lightCol) {
+        boolean inside = (y == 3 && ((x >= 3 && x <= 5) || (x >= 10 && x <= 12))) ||
+                         (y >= 4 && y <= 5 && ((x >= 2 && x <= 6) || (x >= 9 && x <= 13))) ||
+                         (y >= 6 && y <= 11 && x >= 3 && x <= 12) ||
+                         (y >= 12 && y <= 13 && x >= 4 && x <= 11);
+        if (!inside) return rgba(0, 0, 0, 0);
+        boolean border = (y == 3) || (x == 2 || x == 13) || (y == 13) ||
+                         (y <= 5 && (x == 6 || x == 9)) || (y == 5 && (x == 7 || x == 8));
+        if (border) return darkCol;
+        if (x <= 5 || (y <= 5 && x <= 4)) return lightCol;
+        return baseCol;
+    }
+
+    private static int[] paintLeggings(int x, int y, Random rand, int[] baseCol, int[] darkCol, int[] lightCol) {
+        boolean inside = (y >= 3 && y <= 6 && x >= 3 && x <= 12) ||
+                         (y >= 7 && y <= 13 && ((x >= 3 && x <= 6) || (x >= 9 && x <= 12)));
+        if (!inside) return rgba(0, 0, 0, 0);
+        boolean border = (y == 3 || y == 13 || x == 3 || x == 12 || (y >= 6 && (x == 7 || x == 8)) || (y >= 7 && (x == 6 || x == 9)));
+        if (border) return darkCol;
+        if (x <= 5) return lightCol;
+        return baseCol;
+    }
+
+    private static int[] paintBoots(int x, int y, Random rand, int[] baseCol, int[] darkCol, int[] lightCol) {
+        boolean inside = (y >= 7 && y <= 11 && ((x >= 3 && x <= 6) || (x >= 9 && x <= 12))) ||
+                         (y >= 12 && y <= 13 && ((x >= 2 && x <= 6) || (x >= 9 && x <= 13)));
+        if (!inside) return rgba(0, 0, 0, 0);
+        boolean border = (y == 7 || y == 13 || x == 2 || x == 13 || (y <= 11 && (x == 3 || x == 12)) || x == 6 || x == 9);
+        if (border) return darkCol;
+        if (x <= 4 || (y == 8 && x <= 5)) return lightCol;
+        return baseCol;
     }
 
     private void loadOrPaint(byte[][] data, int tileIndex, String filename, TilePainter fallback) {

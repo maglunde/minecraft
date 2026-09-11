@@ -802,6 +802,22 @@ public class Main {
             }
         }
 
+        // 0.5 Equip armor on right click
+        if (held != null && held.isArmor()) {
+            Raycast.HitResult hit = Raycast.raycast(world, player.getEyePosition(), player.getCamera().getForward(), 5.5f);
+            boolean isSneaking = player.isSneaking() || keyPressed[GLFW_KEY_LEFT_SHIFT] || keyPressed[GLFW_KEY_RIGHT_SHIFT];
+            if (hit != null && !isSneaking) {
+                BlockType clickedBlock = world.getBlock(hit.hitX, hit.hitY, hit.hitZ);
+                if (clickedBlock == BlockType.CRAFTING_TABLE || clickedBlock == BlockType.FURNACE || clickedBlock == BlockType.CHEST) {
+                    return tryPlaceBlock();
+                }
+            }
+
+            if (player.equipArmorFromInventory(player.getSelectedSlot())) {
+                return true;
+            }
+        }
+
         // 1. Bow shooting (fires Arrow entity if player has arrows or is in Creative)
         if (held == BlockType.BOW) {
             boolean hasArrow = player.getGameMode() == GameMode.CREATIVE || player.getInventory().getItemCount(BlockType.ARROW) > 0;

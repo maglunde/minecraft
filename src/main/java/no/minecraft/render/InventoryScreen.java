@@ -44,7 +44,16 @@ public class InventoryScreen extends AbstractContainerScreen {
         for (int i = 0; i < 4; i++) {
             float armorY = iy + (8.0f + i * 18.0f) * p;
             drawPixelSlot(geom, armorX, armorY, 18.0f * p, p);
-            drawArmorSilhouette(geom, armorX + 2.0f * p, armorY + 2.0f * p, i, p);
+            ItemStack armorItem = player.getArmorSlot(i);
+            if (armorItem == null || armorItem.isEmpty()) {
+                drawArmorSilhouette(geom, armorX + 2.0f * p, armorY + 2.0f * p, i, p);
+            } else {
+                if (hud.mouseX >= armorX && hud.mouseX <= armorX + 18.0f * p
+                        && hud.mouseY >= armorY && hud.mouseY <= armorY + 18.0f * p) {
+                    hoveredStack = armorItem;
+                }
+                renderSlotItem(tex, overlayGeom, armorItem, armorX, armorY, p);
+            }
         }
 
         // 4. Player Preview Box (Black box with 2D Steve character)

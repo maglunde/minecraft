@@ -60,7 +60,22 @@ public class Inventory {
     }
 
     public boolean addItem(BlockType type, int amount) {
+        return addItem(type, amount, 0);
+    }
+
+    public boolean addItem(BlockType type, int amount, int damage) {
         if (type == BlockType.AIR || amount <= 0) return false;
+        if (type.isDamageable()) {
+            for (ItemStack slot : slots) {
+                if (slot.isEmpty()) {
+                    slot.setType(type);
+                    slot.setCount(1);
+                    slot.setDamage(damage);
+                    return true;
+                }
+            }
+            return false;
+        }
         int remaining = amount;
 
         // 1. Fill existing matching stacks first (up to MAX_STACK_SIZE)
@@ -80,6 +95,7 @@ public class Inventory {
                 int add = Math.min(remaining, MAX_STACK_SIZE);
                 slot.setType(type);
                 slot.setCount(add);
+                slot.setDamage(damage);
                 remaining -= add;
                 if (remaining <= 0) return true;
             }

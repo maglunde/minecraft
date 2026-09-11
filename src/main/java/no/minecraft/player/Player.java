@@ -31,6 +31,12 @@ public class Player {
     private GameMode gameMode = GameMode.SURVIVAL;
     private final Inventory inventory = new Inventory();
     private final ItemStack offhandItem = new ItemStack(BlockType.AIR, 0);
+    private final ItemStack[] armorSlots = new ItemStack[] {
+            new ItemStack(BlockType.AIR, 0), // 0: Helmet
+            new ItemStack(BlockType.AIR, 0), // 1: Chestplate
+            new ItemStack(BlockType.AIR, 0), // 2: Leggings
+            new ItemStack(BlockType.AIR, 0)  // 3: Boots
+    };
     private int health = MAX_HEALTH;
     private float lastAirVerticalSpeed = 0.0f;
 
@@ -336,8 +342,23 @@ public class Player {
     }
 
     public void damage(int amount) {
-        if (gameMode == GameMode.CREATIVE) return;
-        health = Math.max(0, health - amount);
+        if (gameMode == GameMode.CREATIVE || amount <= 0) return;
+
+        int totalArmor = getTotalArmor();
+        int effectiveDamage = amount;
+        if (totalArmor > 0) {
+            float reduction = Math.min(0.80f, totalArmor * 0.04f);
+            effectiveDamage = Math.max(1, Math.round(amount * (1.0f - reduction)));
+
+            // Apply durability damage to equipped armor
+            for (ItemStack slot : armorSlots) {
+                if (slot != null && !slot.isEmpty() && slot.getType().isArmor()) {
+                    slot.damageTool(1);
+                }
+            }
+        }
+
+        health = Math.max(0, health - effectiveDamage);
         deathFlashTimer = 0.6f;
         exhaustion += 0.1f;
         no.minecraft.sound.SoundManager.getInstance().play("hurt", 1.0f);
@@ -350,6 +371,9 @@ public class Player {
         if (gameMode == GameMode.HARDCORE) {
             // Hardcore death: Drop everything and game over
             inventory.clear();
+            for (ItemStack slot : armorSlots) {
+                slot.clear();
+            }
             setGameMode(GameMode.CREATIVE);
             setFlying(true);
             deathFlashTimer = 3.0f;
@@ -443,6 +467,60 @@ public class Player {
 
     public Inventory getInventory() {
         return inventory;
+    }
+
+    public ItemStack getArmorSlot(int index) {
+        if (index >= 0 && index < armorSlots.length) {
+            return armorSlots[index];
+        }
+        return null;
+    }
+
+    public ItemStack[] getArmorSlots() {
+        return armorSlots;
+    }
+
+    public int getTotalArmor() {
+        int total = 0;
+        for (ItemStack slot : armorSlots) {
+            if (slot != null && !slot.isEmpty() && slot.getType().isArmor()) {
+                total += slot.getType().getArmorDefense();
+            }
+        }
+        return total;
+    }
+
+    public boolean equipArmorFromInventory(int slotIndex) {
+        ItemStack held = inventory.getSlot(slotIndex);
+        if (held == null || held.isEmpty() || !held.getType().isArmor()) {
+            return false;
+        }
+        BlockType.ArmorSlot armorSlot = held.getType().getArmorSlot();
+        if (armorSlot == null) return false;
+        int armorIndex = armorSlot.getIndex();
+        ItemStack equipped = armorSlots[armorIndex];
+
+        BlockType prevType = equipped.getType();
+        int prevCount = equipped.getCount();
+        int prevDamage = equipped.getDamage();
+
+        equipped.setType(held.getType());
+        equipped.setCount(1);
+        equipped.setDamage(held.getDamage());
+
+        if (held.getCount() > 1) {
+            held.add(-1);
+            if (prevType != BlockType.AIR && prevCount > 0) {
+                inventory.addItem(prevType, prevCount);
+            }
+        } else {
+            held.setType(prevType);
+            held.setCount(prevCount);
+            held.setDamage(prevDamage);
+        }
+
+        no.minecraft.sound.SoundManager.getInstance().play("click", 1.0f);
+        return true;
     }
 
     public int getHealth() {
@@ -565,6 +643,9 @@ public class Player {
         this.camera.updatePosition(world, x, y + getEyeHeight(), z);
         this.camera.updateVectors();
         this.inventory.clear();
+        for (ItemStack slot : armorSlots) {
+            slot.clear();
+        }
         this.selectedSlot = 0;
         ensureGroundedOnSolidBlock();
     }
