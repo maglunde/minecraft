@@ -48,6 +48,12 @@ public class FurnaceDataTest {
     public void testFurnaceTextureIsFrontFacing() {
         assertEquals(33, BlockType.FURNACE.getItemTexture());
         assertNotEquals(BlockType.COBBLESTONE.getItemTexture(), BlockType.FURNACE.getItemTexture());
+        assertEquals(114, BlockType.FURNACE.getTexture(BlockType.Face.TOP));
+        assertEquals(114, BlockType.FURNACE.getTexture(BlockType.Face.BOTTOM));
+        assertEquals(33, BlockType.FURNACE.getTexture(BlockType.Face.NORTH));
+        assertEquals(115, BlockType.FURNACE.getTexture(BlockType.Face.SOUTH));
+        assertEquals(115, BlockType.FURNACE.getTexture(BlockType.Face.EAST));
+        assertEquals(115, BlockType.FURNACE.getTexture(BlockType.Face.WEST));
     }
 
     @Test

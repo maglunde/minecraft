@@ -78,13 +78,13 @@ public class Main {
             #version 330 core
             layout (location = 0) in vec3 aPos;
             layout (location = 1) in vec2 aTexCoord;
-            layout (location = 2) in float aLight;
+            layout (location = 2) in vec2 aLight;
 
             uniform mat4 uProjection;
             uniform mat4 uView;
 
             out vec2 vTexCoord;
-            out float vLight;
+            out vec2 vLight;
             out float vDist;
 
             void main() {
@@ -99,7 +99,7 @@ public class Main {
     private static final String WORLD_FRAG = """
             #version 330 core
             in vec2 vTexCoord;
-            in float vLight;
+            in vec2 vLight;
             in float vDist;
 
             uniform sampler2D uTexture;
@@ -116,10 +116,16 @@ public class Main {
                     discard;
                 }
 
-                // Modulate block light with dynamic sun light (with 0.15 minimum ambient light)
-                float ambient = 0.15;
-                float dynamicLight = vLight * (ambient + (1.0 - ambient) * uSunLight);
-                vec3 shadedColor = texColor.rgb * dynamicLight;
+                // Modulate sky light with dynamic sun light (0.12 ambient) and directional factor
+                float ambient = 0.12;
+                float skyLight = vLight.x * (ambient + (1.0 - ambient) * uSunLight);
+
+                // Torch light provides bright illumination independent of time of day
+                float faceFactor = 0.8 + 0.2 * vLight.x;
+                float torchLight = vLight.y * faceFactor;
+
+                float totalLight = clamp(max(skyLight, torchLight), 0.0, 1.0);
+                vec3 shadedColor = texColor.rgb * totalLight;
                 float fogFactor = clamp((vDist - uFogStart) / (uFogEnd - uFogStart), 0.0, 1.0);
                 vec3 finalColor = mix(shadedColor, uSkyColor, fogFactor);
 

@@ -25,15 +25,15 @@ public class ItemRenderer {
         glBindVertexArray(vaoId);
         glBindBuffer(GL_ARRAY_BUFFER, vboId);
 
-        // Position (3 floats), UV (2 floats), Light (1 float) = 6 floats
-        int stride = 6 * Float.BYTES;
+        // Position (3 floats), UV (2 floats), Light (2 floats) = 7 floats
+        int stride = 7 * Float.BYTES;
         glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0);
         glEnableVertexAttribArray(0);
 
         glVertexAttribPointer(1, 2, GL_FLOAT, false, stride, 3 * Float.BYTES);
         glEnableVertexAttribArray(1);
 
-        glVertexAttribPointer(2, 1, GL_FLOAT, false, stride, 5 * Float.BYTES);
+        glVertexAttribPointer(2, 2, GL_FLOAT, false, stride, 5 * Float.BYTES);
         glEnableVertexAttribArray(2);
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -82,7 +82,7 @@ public class ItemRenderer {
         buffer.flip();
 
         glBufferData(GL_ARRAY_BUFFER, buffer, GL_DYNAMIC_DRAW);
-        glDrawArrays(GL_TRIANGLES, 0, vertices.size() / 6);
+        glDrawArrays(GL_TRIANGLES, 0, vertices.size() / 7);
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
@@ -109,11 +109,12 @@ public class ItemRenderer {
         }
 
         float[] uv = TextureAtlas.getUVs(item.getItemTexture());
+        float torchLight = (item == BlockType.TORCH) ? 1.0f : 0.0f;
 
         // Front Face
-        addFaceWithUV(v, p[0], p[1], p[2], p[3], uv[0], uv[1], uv[2], uv[3], 0.95f);
+        addFaceWithUV(v, p[0], p[1], p[2], p[3], uv[0], uv[1], uv[2], uv[3], 0.95f, torchLight);
         // Back Face (reverse winding order so visible from behind)
-        addFaceWithUV(v, p[1], p[0], p[3], p[2], uv[0], uv[1], uv[2], uv[3], 0.85f);
+        addFaceWithUV(v, p[1], p[0], p[3], p[2], uv[0], uv[1], uv[2], uv[3], 0.85f, torchLight);
     }
 
     private void addRotatedCube(List<Float> v, float cx, float cy, float cz, float h, float rotY, BlockType block) {
@@ -142,6 +143,8 @@ public class ItemRenderer {
             p[i][2] = cz + (lx * sin + lz * cos);
         }
 
+        float torchLight = (block == BlockType.TORCH) ? 1.0f : 0.0f;
+
         if (block == BlockType.CACTUS) {
             int topTexId = block.getTexture(BlockType.Face.TOP);
             float[] uvTop = TextureAtlas.getUVs(topTexId);
@@ -161,58 +164,59 @@ public class ItemRenderer {
             float vSide1 = uvSide[3];
 
             // Top Face
-            addFaceWithUV(v, p[3], p[2], p[6], p[7], uTop0, vTop0, uTop1, vTop1, 1.0f);
+            addFaceWithUV(v, p[3], p[2], p[6], p[7], uTop0, vTop0, uTop1, vTop1, 1.0f, torchLight);
             // Bottom Face
-            addFaceWithUV(v, p[4], p[5], p[1], p[0], uTop0, vTop0, uTop1, vTop1, 0.5f);
+            addFaceWithUV(v, p[4], p[5], p[1], p[0], uTop0, vTop0, uTop1, vTop1, 0.5f, torchLight);
             // North Face
-            addFaceWithUV(v, p[0], p[1], p[2], p[3], uSide0, vSide0, uSide1, vSide1, 0.75f);
+            addFaceWithUV(v, p[0], p[1], p[2], p[3], uSide0, vSide0, uSide1, vSide1, 0.75f, torchLight);
             // South Face
-            addFaceWithUV(v, p[5], p[4], p[7], p[6], uSide0, vSide0, uSide1, vSide1, 0.75f);
+            addFaceWithUV(v, p[5], p[4], p[7], p[6], uSide0, vSide0, uSide1, vSide1, 0.75f, torchLight);
             // West Face
-            addFaceWithUV(v, p[4], p[0], p[3], p[7], uSide0, vSide0, uSide1, vSide1, 0.85f);
+            addFaceWithUV(v, p[4], p[0], p[3], p[7], uSide0, vSide0, uSide1, vSide1, 0.85f, torchLight);
             // East Face
-            addFaceWithUV(v, p[1], p[5], p[6], p[2], uSide0, vSide0, uSide1, vSide1, 0.85f);
+            addFaceWithUV(v, p[1], p[5], p[6], p[2], uSide0, vSide0, uSide1, vSide1, 0.85f, torchLight);
         } else {
             // Top Face
-            addFace(v, p[3], p[2], p[6], p[7], block.getTexture(BlockType.Face.TOP), 1.0f);
+            addFace(v, p[3], p[2], p[6], p[7], block.getTexture(BlockType.Face.TOP), 1.0f, torchLight);
             // Bottom Face
-            addFace(v, p[4], p[5], p[1], p[0], block.getTexture(BlockType.Face.BOTTOM), 0.5f);
+            addFace(v, p[4], p[5], p[1], p[0], block.getTexture(BlockType.Face.BOTTOM), 0.5f, torchLight);
             // North Face
-            addFace(v, p[0], p[1], p[2], p[3], block.getTexture(BlockType.Face.NORTH), 0.75f);
+            addFace(v, p[0], p[1], p[2], p[3], block.getTexture(BlockType.Face.NORTH), 0.75f, torchLight);
             // South Face
-            addFace(v, p[5], p[4], p[7], p[6], block.getTexture(BlockType.Face.SOUTH), 0.75f);
+            addFace(v, p[5], p[4], p[7], p[6], block.getTexture(BlockType.Face.SOUTH), 0.75f, torchLight);
             // West Face
-            addFace(v, p[4], p[0], p[3], p[7], block.getTexture(BlockType.Face.WEST), 0.85f);
+            addFace(v, p[4], p[0], p[3], p[7], block.getTexture(BlockType.Face.WEST), 0.85f, torchLight);
             // East Face
-            addFace(v, p[1], p[5], p[6], p[2], block.getTexture(BlockType.Face.EAST), 0.85f);
+            addFace(v, p[1], p[5], p[6], p[2], block.getTexture(BlockType.Face.EAST), 0.85f, torchLight);
         }
     }
 
-    private void addFace(List<Float> v, float[] p0, float[] p1, float[] p2, float[] p3, int tileId, float light) {
+    private void addFace(List<Float> v, float[] p0, float[] p1, float[] p2, float[] p3, int tileId, float light, float torchLight) {
         float[] uv = TextureAtlas.getUVs(tileId);
-        addFaceWithUV(v, p0, p1, p2, p3, uv[0], uv[1], uv[2], uv[3], light);
+        addFaceWithUV(v, p0, p1, p2, p3, uv[0], uv[1], uv[2], uv[3], light, torchLight);
     }
 
     private void addFaceWithUV(List<Float> v, float[] p0, float[] p1, float[] p2, float[] p3,
-                               float u0, float v0, float u1, float v1, float light) {
+                               float u0, float v0, float u1, float v1, float light, float torchLight) {
         // Triangle 1: p0, p1, p2
-        addVertex(v, p0[0], p0[1], p0[2], u0, v1, light);
-        addVertex(v, p1[0], p1[1], p1[2], u1, v1, light);
-        addVertex(v, p2[0], p2[1], p2[2], u1, v0, light);
+        addVertex(v, p0[0], p0[1], p0[2], u0, v1, light, torchLight);
+        addVertex(v, p1[0], p1[1], p1[2], u1, v1, light, torchLight);
+        addVertex(v, p2[0], p2[1], p2[2], u1, v0, light, torchLight);
 
         // Triangle 2: p0, p2, p3
-        addVertex(v, p0[0], p0[1], p0[2], u0, v1, light);
-        addVertex(v, p2[0], p2[1], p2[2], u1, v0, light);
-        addVertex(v, p3[0], p3[1], p3[2], u0, v0, light);
+        addVertex(v, p0[0], p0[1], p0[2], u0, v1, light, torchLight);
+        addVertex(v, p2[0], p2[1], p2[2], u1, v0, light, torchLight);
+        addVertex(v, p3[0], p3[1], p3[2], u0, v0, light, torchLight);
     }
 
-    private void addVertex(List<Float> v, float x, float y, float z, float u, float valV, float light) {
+    private void addVertex(List<Float> v, float x, float y, float z, float u, float valV, float light, float torchLight) {
         v.add(x);
         v.add(y);
         v.add(z);
         v.add(u);
         v.add(valV);
         v.add(light);
+        v.add(torchLight);
     }
 
     public void cleanup() {

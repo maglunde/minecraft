@@ -36,7 +36,7 @@ public enum BlockType {
     WOODEN_PRESSURE_PLATE((byte) 28, false, true, 8, 8, 8),
     WOODEN_BUTTON((byte) 29, false, true, 8, 8, 8),
     BOWL((byte) 30, false, true, 32, 32, 32),
-    FURNACE((byte) 31, true, false, 4, 4, 33),
+    FURNACE((byte) 31, true, false, 114, 114, 33),
     STONE_PICKAXE((byte) 32, false, true, 34, 34, 34),
     STONE_AXE((byte) 33, false, true, 35, 35, 35),
     STONE_SHOVEL((byte) 34, false, true, 36, 36, 36),
@@ -276,8 +276,9 @@ public enum BlockType {
         }
         if (this == FURNACE) {
             return switch (face) {
-                case TOP, BOTTOM, SOUTH, EAST, WEST -> 4;
+                case TOP, BOTTOM -> 114;
                 case NORTH -> 33;
+                case SOUTH, EAST, WEST -> 115;
             };
         }
         return switch (face) {

@@ -63,14 +63,26 @@ public class Chunk {
 
     public void setBlock(int x, int y, int z, BlockType type) {
         if (x >= 0 && x < SIZE_X && y >= 0 && y < SIZE_Y && z >= 0 && z < SIZE_Z) {
+            BlockType oldType = getBlock(x, y, z);
             blocks[getIndex(x, y, z)] = type.getId();
             setDirty(true);
             needsSave = true;
-            // Mark neighboring chunks dirty if on border
-            if (x == 0) world.markChunkDirty(chunkX - 1, chunkZ);
-            if (x == SIZE_X - 1) world.markChunkDirty(chunkX + 1, chunkZ);
-            if (z == 0) world.markChunkDirty(chunkX, chunkZ - 1);
-            if (z == SIZE_Z - 1) world.markChunkDirty(chunkX, chunkZ + 1);
+            // When placing or breaking a torch, dirty neighbor chunks so lighting updates across borders
+            if (type == BlockType.TORCH || oldType == BlockType.TORCH) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        if (dx != 0 || dz != 0) {
+                            world.markChunkDirty(chunkX + dx, chunkZ + dz);
+                        }
+                    }
+                }
+            } else {
+                // Mark neighboring chunks dirty if on border
+                if (x == 0) world.markChunkDirty(chunkX - 1, chunkZ);
+                if (x == SIZE_X - 1) world.markChunkDirty(chunkX + 1, chunkZ);
+                if (z == 0) world.markChunkDirty(chunkX, chunkZ - 1);
+                if (z == SIZE_Z - 1) world.markChunkDirty(chunkX, chunkZ + 1);
+            }
         }
     }
 
@@ -97,16 +109,30 @@ public class Chunk {
         }
     }
 
+    public void collectTorches(List<int[]> out) {
+        int startX = getWorldStartX();
+        int startZ = getWorldStartZ();
+        byte torchId = BlockType.TORCH.getId();
+        for (int y = 0; y < SIZE_Y; y++) {
+            for (int z = 0; z < SIZE_Z; z++) {
+                for (int x = 0; x < SIZE_X; x++) {
+                    if (blocks[getIndex(x, y, z)] == torchId) {
+                        out.add(new int[]{startX + x, y, startZ + z});
+                    }
+                }
+            }
+        }
+    }
+
     public void rebuildMesh() {
         List<Float> vertices = new ArrayList<>();
 
         List<int[]> torches = new ArrayList<>();
-        for (int y = 0; y < SIZE_Y; y++) {
-            for (int z = 0; z < SIZE_Z; z++) {
-                for (int x = 0; x < SIZE_X; x++) {
-                    if (getBlock(x, y, z) == BlockType.TORCH) {
-                        torches.add(new int[]{x, y, z});
-                    }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                Chunk neighbor = (dx == 0 && dz == 0) ? this : world.getChunk(chunkX + dx, chunkZ + dz);
+                if (neighbor != null) {
+                    neighbor.collectTorches(torches);
                 }
             }
         }
@@ -125,48 +151,47 @@ public class Chunk {
                         addTorch(vertices, wx, wy, wz, x, y, z);
                         continue;
                     }
+
+                    float torchLight = getTorchLight(torches, (int) wx, (int) wy, (int) wz);
+
                     if (type == BlockType.CACTUS) {
-                        float boost = getTorchLightBoost(torches, x, y, z);
-                        addCactus(vertices, wx, wy, wz, x, y, z, boost);
+                        addCactus(vertices, wx, wy, wz, x, y, z, torchLight);
                         continue;
                     }
                     if (type == BlockType.CHEST) {
-                        float boost = getTorchLightBoost(torches, x, y, z);
-                        addChest(vertices, wx, wy, wz, x, y, z, boost);
+                        addChest(vertices, wx, wy, wz, x, y, z, torchLight);
                         continue;
                     }
 
-                    float boost = getTorchLightBoost(torches, x, y, z);
-
                     // Top (+Y)
                     if (shouldRenderFace(x, y + 1, z, type)) {
-                        addFace(vertices, wx, wy, wz, BlockType.Face.TOP, type, Math.min(1.0f, 1.0f + boost));
+                        addFace(vertices, wx, wy, wz, BlockType.Face.TOP, type, 1.0f, torchLight);
                     }
                     // Bottom (-Y)
                     if (shouldRenderFace(x, y - 1, z, type)) {
-                        addFace(vertices, wx, wy, wz, BlockType.Face.BOTTOM, type, Math.min(1.0f, 0.5f + boost));
+                        addFace(vertices, wx, wy, wz, BlockType.Face.BOTTOM, type, 0.5f, torchLight);
                     }
                     // North (-Z)
                     if (shouldRenderFace(x, y, z - 1, type)) {
-                        addFace(vertices, wx, wy, wz, BlockType.Face.NORTH, type, Math.min(1.0f, 0.7f + boost));
+                        addFace(vertices, wx, wy, wz, BlockType.Face.NORTH, type, 0.7f, torchLight);
                     }
                     // South (+Z)
                     if (shouldRenderFace(x, y, z + 1, type)) {
-                        addFace(vertices, wx, wy, wz, BlockType.Face.SOUTH, type, Math.min(1.0f, 0.7f + boost));
+                        addFace(vertices, wx, wy, wz, BlockType.Face.SOUTH, type, 0.7f, torchLight);
                     }
                     // West (-X)
                     if (shouldRenderFace(x - 1, y, z, type)) {
-                        addFace(vertices, wx, wy, wz, BlockType.Face.WEST, type, Math.min(1.0f, 0.8f + boost));
+                        addFace(vertices, wx, wy, wz, BlockType.Face.WEST, type, 0.8f, torchLight);
                     }
                     // East (+X)
                     if (shouldRenderFace(x + 1, y, z, type)) {
-                        addFace(vertices, wx, wy, wz, BlockType.Face.EAST, type, Math.min(1.0f, 0.8f + boost));
+                        addFace(vertices, wx, wy, wz, BlockType.Face.EAST, type, 0.8f, torchLight);
                     }
                 }
             }
         }
 
-        vertexCount = vertices.size() / 6; // 6 floats per vertex: (x, y, z, u, v, light)
+        vertexCount = vertices.size() / 7; // 7 floats per vertex: (x, y, z, u, v, faceLight, torchLight)
 
         if (vaoId == 0) {
             vaoId = glGenVertexArrays();
@@ -185,15 +210,15 @@ public class Chunk {
         glBufferData(GL_ARRAY_BUFFER, buffer, GL_STATIC_DRAW);
 
         // Position: 3 floats
-        glVertexAttribPointer(0, 3, GL_FLOAT, false, 6 * Float.BYTES, 0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, false, 7 * Float.BYTES, 0);
         glEnableVertexAttribArray(0);
 
         // UV: 2 floats
-        glVertexAttribPointer(1, 2, GL_FLOAT, false, 6 * Float.BYTES, 3 * Float.BYTES);
+        glVertexAttribPointer(1, 2, GL_FLOAT, false, 7 * Float.BYTES, 3 * Float.BYTES);
         glEnableVertexAttribArray(1);
 
-        // Light: 1 float
-        glVertexAttribPointer(2, 1, GL_FLOAT, false, 6 * Float.BYTES, 5 * Float.BYTES);
+        // Light: 2 floats (faceLight, torchLight)
+        glVertexAttribPointer(2, 2, GL_FLOAT, false, 7 * Float.BYTES, 5 * Float.BYTES);
         glEnableVertexAttribArray(2);
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -209,7 +234,7 @@ public class Chunk {
         return false;
     }
 
-    private void addFace(List<Float> v, float x, float y, float z, BlockType.Face face, BlockType block, float light) {
+    private void addFace(List<Float> v, float x, float y, float z, BlockType.Face face, BlockType block, float faceLight, float torchLight) {
         int textureId = block.getTexture(face);
         float[] uv = TextureAtlas.getUVs(textureId);
         float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
@@ -217,78 +242,78 @@ public class Chunk {
         switch (face) {
             case TOP -> {
                 // (x, y+1, z) to (x+1, y+1, z+1)
-                addVertex(v, x, y + 1, z, u0, v0, light);
-                addVertex(v, x, y + 1, z + 1, u0, v1, light);
-                addVertex(v, x + 1, y + 1, z + 1, u1, v1, light);
+                addVertex(v, x, y + 1, z, u0, v0, faceLight, torchLight);
+                addVertex(v, x, y + 1, z + 1, u0, v1, faceLight, torchLight);
+                addVertex(v, x + 1, y + 1, z + 1, u1, v1, faceLight, torchLight);
 
-                addVertex(v, x, y + 1, z, u0, v0, light);
-                addVertex(v, x + 1, y + 1, z + 1, u1, v1, light);
-                addVertex(v, x + 1, y + 1, z, u1, v0, light);
+                addVertex(v, x, y + 1, z, u0, v0, faceLight, torchLight);
+                addVertex(v, x + 1, y + 1, z + 1, u1, v1, faceLight, torchLight);
+                addVertex(v, x + 1, y + 1, z, u1, v0, faceLight, torchLight);
             }
             case BOTTOM -> {
-                addVertex(v, x, y, z, u0, v0, light);
-                addVertex(v, x + 1, y, z, u1, v0, light);
-                addVertex(v, x + 1, y, z + 1, u1, v1, light);
+                addVertex(v, x, y, z, u0, v0, faceLight, torchLight);
+                addVertex(v, x + 1, y, z, u1, v0, faceLight, torchLight);
+                addVertex(v, x + 1, y, z + 1, u1, v1, faceLight, torchLight);
 
-                addVertex(v, x, y, z, u0, v0, light);
-                addVertex(v, x + 1, y, z + 1, u1, v1, light);
-                addVertex(v, x, y, z + 1, u0, v1, light);
+                addVertex(v, x, y, z, u0, v0, faceLight, torchLight);
+                addVertex(v, x + 1, y, z + 1, u1, v1, faceLight, torchLight);
+                addVertex(v, x, y, z + 1, u0, v1, faceLight, torchLight);
             }
             case NORTH -> { // -Z face
-                addVertex(v, x, y, z, u1, v1, light);
-                addVertex(v, x, y + 1, z, u1, v0, light);
-                addVertex(v, x + 1, y + 1, z, u0, v0, light);
+                addVertex(v, x, y, z, u1, v1, faceLight, torchLight);
+                addVertex(v, x, y + 1, z, u1, v0, faceLight, torchLight);
+                addVertex(v, x + 1, y + 1, z, u0, v0, faceLight, torchLight);
 
-                addVertex(v, x, y, z, u1, v1, light);
-                addVertex(v, x + 1, y + 1, z, u0, v0, light);
-                addVertex(v, x + 1, y, z, u0, v1, light);
+                addVertex(v, x, y, z, u1, v1, faceLight, torchLight);
+                addVertex(v, x + 1, y + 1, z, u0, v0, faceLight, torchLight);
+                addVertex(v, x + 1, y, z, u0, v1, faceLight, torchLight);
             }
             case SOUTH -> { // +Z face
-                addVertex(v, x, y, z + 1, u0, v1, light);
-                addVertex(v, x + 1, y, z + 1, u1, v1, light);
-                addVertex(v, x + 1, y + 1, z + 1, u1, v0, light);
+                addVertex(v, x, y, z + 1, u0, v1, faceLight, torchLight);
+                addVertex(v, x + 1, y, z + 1, u1, v1, faceLight, torchLight);
+                addVertex(v, x + 1, y + 1, z + 1, u1, v0, faceLight, torchLight);
 
-                addVertex(v, x, y, z + 1, u0, v1, light);
-                addVertex(v, x + 1, y + 1, z + 1, u1, v0, light);
-                addVertex(v, x, y + 1, z + 1, u0, v0, light);
+                addVertex(v, x, y, z + 1, u0, v1, faceLight, torchLight);
+                addVertex(v, x + 1, y + 1, z + 1, u1, v0, faceLight, torchLight);
+                addVertex(v, x, y + 1, z + 1, u0, v0, faceLight, torchLight);
             }
             case WEST -> { // -X face
-                addVertex(v, x, y, z + 1, u1, v1, light);
-                addVertex(v, x, y + 1, z + 1, u1, v0, light);
-                addVertex(v, x, y + 1, z, u0, v0, light);
+                addVertex(v, x, y, z + 1, u1, v1, faceLight, torchLight);
+                addVertex(v, x, y + 1, z + 1, u1, v0, faceLight, torchLight);
+                addVertex(v, x, y + 1, z, u0, v0, faceLight, torchLight);
 
-                addVertex(v, x, y, z + 1, u1, v1, light);
-                addVertex(v, x, y + 1, z, u0, v0, light);
-                addVertex(v, x, y, z, u0, v1, light);
+                addVertex(v, x, y, z + 1, u1, v1, faceLight, torchLight);
+                addVertex(v, x, y + 1, z, u0, v0, faceLight, torchLight);
+                addVertex(v, x, y, z, u0, v1, faceLight, torchLight);
             }
             case EAST -> { // +X face
-                addVertex(v, x + 1, y, z, u1, v1, light);
-                addVertex(v, x + 1, y + 1, z, u1, v0, light);
-                addVertex(v, x + 1, y + 1, z + 1, u0, v0, light);
+                addVertex(v, x + 1, y, z, u1, v1, faceLight, torchLight);
+                addVertex(v, x + 1, y + 1, z, u1, v0, faceLight, torchLight);
+                addVertex(v, x + 1, y + 1, z + 1, u0, v0, faceLight, torchLight);
 
-                addVertex(v, x + 1, y, z, u1, v1, light);
-                addVertex(v, x + 1, y + 1, z + 1, u0, v0, light);
-                addVertex(v, x + 1, y, z + 1, u0, v1, light);
+                addVertex(v, x + 1, y, z, u1, v1, faceLight, torchLight);
+                addVertex(v, x + 1, y + 1, z + 1, u0, v0, faceLight, torchLight);
+                addVertex(v, x + 1, y, z + 1, u0, v1, faceLight, torchLight);
             }
         }
     }
 
-    private float getTorchLightBoost(List<int[]> torches, int x, int y, int z) {
-        float maxBoost = 0.0f;
+    private float getTorchLight(List<int[]> torches, int wx, int wy, int wz) {
+        float maxLight = 0.0f;
         for (int[] t : torches) {
-            int dx = x - t[0];
-            int dy = y - t[1];
-            int dz = z - t[2];
+            int dx = wx - t[0];
+            int dy = wy - t[1];
+            int dz = wz - t[2];
             int distSq = dx * dx + dy * dy + dz * dz;
-            if (distSq <= 49) {
+            if (distSq <= 196) { // 14^2
                 float dist = (float) Math.sqrt(distSq);
-                float boost = (1.0f - dist / 7.0f) * 0.6f;
-                if (boost > maxBoost) {
-                    maxBoost = boost;
+                float light = 1.0f - (dist / 14.0f);
+                if (light > maxLight) {
+                    maxLight = light;
                 }
             }
         }
-        return maxBoost;
+        return maxLight;
     }
 
     private boolean isSolidBlock(int x, int y, int z) {
@@ -298,7 +323,7 @@ public class Chunk {
         return b != null && b.isSolid();
     }
 
-    private void addCactus(List<Float> v, float wx, float wy, float wz, int x, int y, int z, float boost) {
+    private void addCactus(List<Float> v, float wx, float wy, float wz, int x, int y, int z, float torchLight) {
         float x0 = wx + 0.0625f; // 1/16
         float x1 = wx + 0.9375f; // 15/16
         float y0 = wy;
@@ -329,70 +354,64 @@ public class Chunk {
 
         // Top face (+Y)
         if (getBlock(x, y + 1, z) != BlockType.CACTUS) {
-            float light = Math.min(1.0f, 1.0f + boost);
-            addVertex(v, x0, y1, z0, uTop0, vTop0, light);
-            addVertex(v, x0, y1, z1, uTop0, vTop1, light);
-            addVertex(v, x1, y1, z1, uTop1, vTop1, light);
+            addVertex(v, x0, y1, z0, uTop0, vTop0, 1.0f, torchLight);
+            addVertex(v, x0, y1, z1, uTop0, vTop1, 1.0f, torchLight);
+            addVertex(v, x1, y1, z1, uTop1, vTop1, 1.0f, torchLight);
 
-            addVertex(v, x0, y1, z0, uTop0, vTop0, light);
-            addVertex(v, x1, y1, z1, uTop1, vTop1, light);
-            addVertex(v, x1, y1, z0, uTop1, vTop0, light);
+            addVertex(v, x0, y1, z0, uTop0, vTop0, 1.0f, torchLight);
+            addVertex(v, x1, y1, z1, uTop1, vTop1, 1.0f, torchLight);
+            addVertex(v, x1, y1, z0, uTop1, vTop0, 1.0f, torchLight);
         }
 
         // Bottom face (-Y)
         if (getBlock(x, y - 1, z) != BlockType.CACTUS) {
-            float light = Math.min(1.0f, 0.5f + boost);
-            addVertex(v, x0, y0, z0, uTop0, vTop0, light);
-            addVertex(v, x1, y0, z0, uTop1, vTop0, light);
-            addVertex(v, x1, y0, z1, uTop1, vTop1, light);
+            addVertex(v, x0, y0, z0, uTop0, vTop0, 0.5f, torchLight);
+            addVertex(v, x1, y0, z0, uTop1, vTop0, 0.5f, torchLight);
+            addVertex(v, x1, y0, z1, uTop1, vTop1, 0.5f, torchLight);
 
-            addVertex(v, x0, y0, z0, uTop0, vTop0, light);
-            addVertex(v, x1, y0, z1, uTop1, vTop1, light);
-            addVertex(v, x0, y0, z1, uTop0, vTop1, light);
+            addVertex(v, x0, y0, z0, uTop0, vTop0, 0.5f, torchLight);
+            addVertex(v, x1, y0, z1, uTop1, vTop1, 0.5f, torchLight);
+            addVertex(v, x0, y0, z1, uTop0, vTop1, 0.5f, torchLight);
         }
 
         // North face (-Z, plane at z = z0)
-        float lightN = Math.min(1.0f, 0.7f + boost);
-        addVertex(v, x0, y0, z0, uSide1, vSide1, lightN);
-        addVertex(v, x0, y1, z0, uSide1, vSide0, lightN);
-        addVertex(v, x1, y1, z0, uSide0, vSide0, lightN);
+        addVertex(v, x0, y0, z0, uSide1, vSide1, 0.7f, torchLight);
+        addVertex(v, x0, y1, z0, uSide1, vSide0, 0.7f, torchLight);
+        addVertex(v, x1, y1, z0, uSide0, vSide0, 0.7f, torchLight);
 
-        addVertex(v, x0, y0, z0, uSide1, vSide1, lightN);
-        addVertex(v, x1, y1, z0, uSide0, vSide0, lightN);
-        addVertex(v, x1, y0, z0, uSide0, vSide1, lightN);
+        addVertex(v, x0, y0, z0, uSide1, vSide1, 0.7f, torchLight);
+        addVertex(v, x1, y1, z0, uSide0, vSide0, 0.7f, torchLight);
+        addVertex(v, x1, y0, z0, uSide0, vSide1, 0.7f, torchLight);
 
         // South face (+Z, plane at z = z1)
-        float lightS = Math.min(1.0f, 0.7f + boost);
-        addVertex(v, x0, y0, z1, uSide0, vSide1, lightS);
-        addVertex(v, x1, y0, z1, uSide1, vSide1, lightS);
-        addVertex(v, x1, y1, z1, uSide1, vSide0, lightS);
+        addVertex(v, x0, y0, z1, uSide0, vSide1, 0.7f, torchLight);
+        addVertex(v, x1, y0, z1, uSide1, vSide1, 0.7f, torchLight);
+        addVertex(v, x1, y1, z1, uSide1, vSide0, 0.7f, torchLight);
 
-        addVertex(v, x0, y0, z1, uSide0, vSide1, lightS);
-        addVertex(v, x1, y1, z1, uSide1, vSide0, lightS);
-        addVertex(v, x0, y1, z1, uSide0, vSide0, lightS);
+        addVertex(v, x0, y0, z1, uSide0, vSide1, 0.7f, torchLight);
+        addVertex(v, x1, y1, z1, uSide1, vSide0, 0.7f, torchLight);
+        addVertex(v, x0, y1, z1, uSide0, vSide0, 0.7f, torchLight);
 
         // West face (-X, plane at x = x0)
-        float lightW = Math.min(1.0f, 0.8f + boost);
-        addVertex(v, x0, y0, z1, uSide1, vSide1, lightW);
-        addVertex(v, x0, y1, z1, uSide1, vSide0, lightW);
-        addVertex(v, x0, y1, z0, uSide0, vSide0, lightW);
+        addVertex(v, x0, y0, z1, uSide1, vSide1, 0.8f, torchLight);
+        addVertex(v, x0, y1, z1, uSide1, vSide0, 0.8f, torchLight);
+        addVertex(v, x0, y1, z0, uSide0, vSide0, 0.8f, torchLight);
 
-        addVertex(v, x0, y0, z1, uSide1, vSide1, lightW);
-        addVertex(v, x0, y1, z0, uSide0, vSide0, lightW);
-        addVertex(v, x0, y0, z0, uSide0, vSide1, lightW);
+        addVertex(v, x0, y0, z1, uSide1, vSide1, 0.8f, torchLight);
+        addVertex(v, x0, y1, z0, uSide0, vSide0, 0.8f, torchLight);
+        addVertex(v, x0, y0, z0, uSide0, vSide1, 0.8f, torchLight);
 
         // East face (+X, plane at x = x1)
-        float lightE = Math.min(1.0f, 0.8f + boost);
-        addVertex(v, x1, y0, z0, uSide1, vSide1, lightE);
-        addVertex(v, x1, y1, z0, uSide1, vSide0, lightE);
-        addVertex(v, x1, y1, z1, uSide0, vSide0, lightE);
+        addVertex(v, x1, y0, z0, uSide1, vSide1, 0.8f, torchLight);
+        addVertex(v, x1, y1, z0, uSide1, vSide0, 0.8f, torchLight);
+        addVertex(v, x1, y1, z1, uSide0, vSide0, 0.8f, torchLight);
 
-        addVertex(v, x1, y0, z0, uSide1, vSide1, lightE);
-        addVertex(v, x1, y1, z1, uSide0, vSide0, lightE);
-        addVertex(v, x1, y0, z1, uSide0, vSide1, lightE);
+        addVertex(v, x1, y0, z0, uSide1, vSide1, 0.8f, torchLight);
+        addVertex(v, x1, y1, z1, uSide0, vSide0, 0.8f, torchLight);
+        addVertex(v, x1, y0, z1, uSide0, vSide1, 0.8f, torchLight);
     }
 
-    private void addChest(List<Float> v, float wx, float wy, float wz, int x, int y, int z, float boost) {
+    private void addChest(List<Float> v, float wx, float wy, float wz, int x, int y, int z, float torchLight) {
         float x0 = wx + 0.0625f; // 1/16
         float x1 = wx + 0.9375f; // 15/16
         float y0 = wy;
@@ -406,64 +425,58 @@ public class Chunk {
         float[] uvSide = TextureAtlas.getUVs(BlockType.CHEST.getTexture(BlockType.Face.SOUTH));
 
         // Top face (+Y, plane at y = y1)
-        float lightTop = Math.min(1.0f, 1.0f + boost);
-        addVertex(v, x0, y1, z0, uvTop[0], uvTop[1], lightTop);
-        addVertex(v, x0, y1, z1, uvTop[0], uvTop[3], lightTop);
-        addVertex(v, x1, y1, z1, uvTop[2], uvTop[3], lightTop);
+        addVertex(v, x0, y1, z0, uvTop[0], uvTop[1], 1.0f, torchLight);
+        addVertex(v, x0, y1, z1, uvTop[0], uvTop[3], 1.0f, torchLight);
+        addVertex(v, x1, y1, z1, uvTop[2], uvTop[3], 1.0f, torchLight);
 
-        addVertex(v, x0, y1, z0, uvTop[0], uvTop[1], lightTop);
-        addVertex(v, x1, y1, z1, uvTop[2], uvTop[3], lightTop);
-        addVertex(v, x1, y1, z0, uvTop[2], uvTop[1], lightTop);
+        addVertex(v, x0, y1, z0, uvTop[0], uvTop[1], 1.0f, torchLight);
+        addVertex(v, x1, y1, z1, uvTop[2], uvTop[3], 1.0f, torchLight);
+        addVertex(v, x1, y1, z0, uvTop[2], uvTop[1], 1.0f, torchLight);
 
         // Bottom face (-Y, plane at y = y0)
-        float lightBot = Math.min(1.0f, 0.5f + boost);
-        addVertex(v, x0, y0, z0, uvBot[0], uvBot[1], lightBot);
-        addVertex(v, x1, y0, z0, uvBot[2], uvBot[1], lightBot);
-        addVertex(v, x1, y0, z1, uvBot[2], uvBot[3], lightBot);
+        addVertex(v, x0, y0, z0, uvBot[0], uvBot[1], 0.5f, torchLight);
+        addVertex(v, x1, y0, z0, uvBot[2], uvBot[1], 0.5f, torchLight);
+        addVertex(v, x1, y0, z1, uvBot[2], uvBot[3], 0.5f, torchLight);
 
-        addVertex(v, x0, y0, z0, uvBot[0], uvBot[1], lightBot);
-        addVertex(v, x1, y0, z1, uvBot[2], uvBot[3], lightBot);
-        addVertex(v, x0, y0, z1, uvBot[0], uvBot[3], lightBot);
+        addVertex(v, x0, y0, z0, uvBot[0], uvBot[1], 0.5f, torchLight);
+        addVertex(v, x1, y0, z1, uvBot[2], uvBot[3], 0.5f, torchLight);
+        addVertex(v, x0, y0, z1, uvBot[0], uvBot[3], 0.5f, torchLight);
 
         // North face (-Z, plane at z = z0, FRONT)
-        float lightN = Math.min(1.0f, 0.7f + boost);
-        addVertex(v, x0, y0, z0, uvFront[2], uvFront[3], lightN);
-        addVertex(v, x0, y1, z0, uvFront[2], uvFront[1], lightN);
-        addVertex(v, x1, y1, z0, uvFront[0], uvFront[1], lightN);
+        addVertex(v, x0, y0, z0, uvFront[2], uvFront[3], 0.7f, torchLight);
+        addVertex(v, x0, y1, z0, uvFront[2], uvFront[1], 0.7f, torchLight);
+        addVertex(v, x1, y1, z0, uvFront[0], uvFront[1], 0.7f, torchLight);
 
-        addVertex(v, x0, y0, z0, uvFront[2], uvFront[3], lightN);
-        addVertex(v, x1, y1, z0, uvFront[0], uvFront[1], lightN);
-        addVertex(v, x1, y0, z0, uvFront[0], uvFront[3], lightN);
+        addVertex(v, x0, y0, z0, uvFront[2], uvFront[3], 0.7f, torchLight);
+        addVertex(v, x1, y1, z0, uvFront[0], uvFront[1], 0.7f, torchLight);
+        addVertex(v, x1, y0, z0, uvFront[0], uvFront[3], 0.7f, torchLight);
 
         // South face (+Z, plane at z = z1, BACK)
-        float lightS = Math.min(1.0f, 0.7f + boost);
-        addVertex(v, x0, y0, z1, uvSide[0], uvSide[3], lightS);
-        addVertex(v, x1, y0, z1, uvSide[2], uvSide[3], lightS);
-        addVertex(v, x1, y1, z1, uvSide[2], uvSide[1], lightS);
+        addVertex(v, x0, y0, z1, uvSide[0], uvSide[3], 0.7f, torchLight);
+        addVertex(v, x1, y0, z1, uvSide[2], uvSide[3], 0.7f, torchLight);
+        addVertex(v, x1, y1, z1, uvSide[2], uvSide[1], 0.7f, torchLight);
 
-        addVertex(v, x0, y0, z1, uvSide[0], uvSide[3], lightS);
-        addVertex(v, x1, y1, z1, uvSide[2], uvSide[1], lightS);
-        addVertex(v, x0, y1, z1, uvSide[0], uvSide[1], lightS);
+        addVertex(v, x0, y0, z1, uvSide[0], uvSide[3], 0.7f, torchLight);
+        addVertex(v, x1, y1, z1, uvSide[2], uvSide[1], 0.7f, torchLight);
+        addVertex(v, x0, y1, z1, uvSide[0], uvSide[1], 0.7f, torchLight);
 
         // West face (-X, plane at x = x0, LEFT)
-        float lightW = Math.min(1.0f, 0.8f + boost);
-        addVertex(v, x0, y0, z1, uvSide[2], uvSide[3], lightW);
-        addVertex(v, x0, y1, z1, uvSide[2], uvSide[1], lightW);
-        addVertex(v, x0, y1, z0, uvSide[0], uvSide[1], lightW);
+        addVertex(v, x0, y0, z1, uvSide[2], uvSide[3], 0.8f, torchLight);
+        addVertex(v, x0, y1, z1, uvSide[2], uvSide[1], 0.8f, torchLight);
+        addVertex(v, x0, y1, z0, uvSide[0], uvSide[1], 0.8f, torchLight);
 
-        addVertex(v, x0, y0, z1, uvSide[2], uvSide[3], lightW);
-        addVertex(v, x0, y1, z0, uvSide[0], uvSide[1], lightW);
-        addVertex(v, x0, y0, z0, uvSide[0], uvSide[3], lightW);
+        addVertex(v, x0, y0, z1, uvSide[2], uvSide[3], 0.8f, torchLight);
+        addVertex(v, x0, y1, z0, uvSide[0], uvSide[1], 0.8f, torchLight);
+        addVertex(v, x0, y0, z0, uvSide[0], uvSide[3], 0.8f, torchLight);
 
         // East face (+X, plane at x = x1, RIGHT)
-        float lightE = Math.min(1.0f, 0.8f + boost);
-        addVertex(v, x1, y0, z0, uvSide[2], uvSide[3], lightE);
-        addVertex(v, x1, y1, z0, uvSide[2], uvSide[1], lightE);
-        addVertex(v, x1, y1, z1, uvSide[0], uvSide[1], lightE);
+        addVertex(v, x1, y0, z0, uvSide[2], uvSide[3], 0.8f, torchLight);
+        addVertex(v, x1, y1, z0, uvSide[2], uvSide[1], 0.8f, torchLight);
+        addVertex(v, x1, y1, z1, uvSide[0], uvSide[1], 0.8f, torchLight);
 
-        addVertex(v, x1, y0, z0, uvSide[2], uvSide[3], lightE);
-        addVertex(v, x1, y1, z1, uvSide[0], uvSide[1], lightE);
-        addVertex(v, x1, y0, z1, uvSide[0], uvSide[3], lightE);
+        addVertex(v, x1, y0, z0, uvSide[2], uvSide[3], 0.8f, torchLight);
+        addVertex(v, x1, y1, z1, uvSide[0], uvSide[1], 0.8f, torchLight);
+        addVertex(v, x1, y0, z1, uvSide[0], uvSide[3], 0.8f, torchLight);
     }
 
     private void addTorch(List<Float> v, float wx, float wy, float wz, int x, int y, int z) {
@@ -529,64 +542,66 @@ public class Chunk {
         float vBotMin = v0 + 13.0f * py;
         float vBotMax = v0 + 15.0f * py;
 
-        float light = 1.0f;
+        float faceLight = 1.0f;
+        float torchLight = 1.0f;
 
         // Top face (+Y)
-        addVertex(v, t00x, t00y, t00z, uMin, vTopMin, light);
-        addVertex(v, t01x, t01y, t01z, uMin, vTopMax, light);
-        addVertex(v, t11x, t11y, t11z, uMax, vTopMax, light);
-        addVertex(v, t00x, t00y, t00z, uMin, vTopMin, light);
-        addVertex(v, t11x, t11y, t11z, uMax, vTopMax, light);
-        addVertex(v, t10x, t10y, t10z, uMax, vTopMin, light);
+        addVertex(v, t00x, t00y, t00z, uMin, vTopMin, faceLight, torchLight);
+        addVertex(v, t01x, t01y, t01z, uMin, vTopMax, faceLight, torchLight);
+        addVertex(v, t11x, t11y, t11z, uMax, vTopMax, faceLight, torchLight);
+        addVertex(v, t00x, t00y, t00z, uMin, vTopMin, faceLight, torchLight);
+        addVertex(v, t11x, t11y, t11z, uMax, vTopMax, faceLight, torchLight);
+        addVertex(v, t10x, t10y, t10z, uMax, vTopMin, faceLight, torchLight);
 
         // Bottom face (-Y)
-        addVertex(v, b00x, b00y, b00z, uMin, vBotMin, light);
-        addVertex(v, b10x, b10y, b10z, uMax, vBotMin, light);
-        addVertex(v, b11x, b11y, b11z, uMax, vBotMax, light);
-        addVertex(v, b00x, b00y, b00z, uMin, vBotMin, light);
-        addVertex(v, b11x, b11y, b11z, uMax, vBotMax, light);
-        addVertex(v, b01x, b01y, b01z, uMin, vBotMax, light);
+        addVertex(v, b00x, b00y, b00z, uMin, vBotMin, faceLight, torchLight);
+        addVertex(v, b10x, b10y, b10z, uMax, vBotMin, faceLight, torchLight);
+        addVertex(v, b11x, b11y, b11z, uMax, vBotMax, faceLight, torchLight);
+        addVertex(v, b00x, b00y, b00z, uMin, vBotMin, faceLight, torchLight);
+        addVertex(v, b11x, b11y, b11z, uMax, vBotMax, faceLight, torchLight);
+        addVertex(v, b01x, b01y, b01z, uMin, vBotMax, faceLight, torchLight);
 
         // North face (-Z)
-        addVertex(v, b00x, b00y, b00z, uMax, vMax, light);
-        addVertex(v, t00x, t00y, t00z, uMax, vMin, light);
-        addVertex(v, t10x, t10y, t10z, uMin, vMin, light);
-        addVertex(v, b00x, b00y, b00z, uMax, vMax, light);
-        addVertex(v, t10x, t10y, t10z, uMin, vMin, light);
-        addVertex(v, b10x, b10y, b10z, uMin, vMax, light);
+        addVertex(v, b00x, b00y, b00z, uMax, vMax, faceLight, torchLight);
+        addVertex(v, t00x, t00y, t00z, uMax, vMin, faceLight, torchLight);
+        addVertex(v, t10x, t10y, t10z, uMin, vMin, faceLight, torchLight);
+        addVertex(v, b00x, b00y, b00z, uMax, vMax, faceLight, torchLight);
+        addVertex(v, t10x, t10y, t10z, uMin, vMin, faceLight, torchLight);
+        addVertex(v, b10x, b10y, b10z, uMin, vMax, faceLight, torchLight);
 
         // South face (+Z)
-        addVertex(v, b01x, b01y, b01z, uMin, vMax, light);
-        addVertex(v, b11x, b11y, b11z, uMax, vMax, light);
-        addVertex(v, t11x, t11y, t11z, uMax, vMin, light);
-        addVertex(v, b01x, b01y, b01z, uMin, vMax, light);
-        addVertex(v, t11x, t11y, t11z, uMax, vMin, light);
-        addVertex(v, t01x, t01y, t01z, uMin, vMin, light);
+        addVertex(v, b01x, b01y, b01z, uMin, vMax, faceLight, torchLight);
+        addVertex(v, b11x, b11y, b11z, uMax, vMax, faceLight, torchLight);
+        addVertex(v, t11x, t11y, t11z, uMax, vMin, faceLight, torchLight);
+        addVertex(v, b01x, b01y, b01z, uMin, vMax, faceLight, torchLight);
+        addVertex(v, t11x, t11y, t11z, uMax, vMin, faceLight, torchLight);
+        addVertex(v, t01x, t01y, t01z, uMin, vMin, faceLight, torchLight);
 
         // West face (-X)
-        addVertex(v, b01x, b01y, b01z, uMax, vMax, light);
-        addVertex(v, t01x, t01y, t01z, uMax, vMin, light);
-        addVertex(v, t00x, t00y, t00z, uMin, vMin, light);
-        addVertex(v, b01x, b01y, b01z, uMax, vMax, light);
-        addVertex(v, t00x, t00y, t00z, uMin, vMin, light);
-        addVertex(v, b00x, b00y, b00z, uMin, vMax, light);
+        addVertex(v, b01x, b01y, b01z, uMax, vMax, faceLight, torchLight);
+        addVertex(v, t01x, t01y, t01z, uMax, vMin, faceLight, torchLight);
+        addVertex(v, t00x, t00y, t00z, uMin, vMin, faceLight, torchLight);
+        addVertex(v, b01x, b01y, b01z, uMax, vMax, faceLight, torchLight);
+        addVertex(v, t00x, t00y, t00z, uMin, vMin, faceLight, torchLight);
+        addVertex(v, b00x, b00y, b00z, uMin, vMax, faceLight, torchLight);
 
         // East face (+X)
-        addVertex(v, b10x, b10y, b10z, uMax, vMax, light);
-        addVertex(v, t10x, t10y, t10z, uMax, vMin, light);
-        addVertex(v, t11x, t11y, t11z, uMin, vMin, light);
-        addVertex(v, b10x, b10y, b10z, uMax, vMax, light);
-        addVertex(v, t11x, t11y, t11z, uMin, vMin, light);
-        addVertex(v, b11x, b11y, b11z, uMin, vMax, light);
+        addVertex(v, b10x, b10y, b10z, uMax, vMax, faceLight, torchLight);
+        addVertex(v, t10x, t10y, t10z, uMax, vMin, faceLight, torchLight);
+        addVertex(v, t11x, t11y, t11z, uMin, vMin, faceLight, torchLight);
+        addVertex(v, b10x, b10y, b10z, uMax, vMax, faceLight, torchLight);
+        addVertex(v, t11x, t11y, t11z, uMin, vMin, faceLight, torchLight);
+        addVertex(v, b11x, b11y, b11z, uMin, vMax, faceLight, torchLight);
     }
 
-    private void addVertex(List<Float> v, float x, float y, float z, float u, float valV, float light) {
+    private void addVertex(List<Float> v, float x, float y, float z, float u, float valV, float faceLight, float torchLight) {
         v.add(x);
         v.add(y);
         v.add(z);
         v.add(u);
         v.add(valV);
-        v.add(light);
+        v.add(faceLight);
+        v.add(torchLight);
     }
 
     public void render() {

@@ -907,6 +907,45 @@ public class TextureAtlas {
             return rgba((int)(base * 1.15f), (int)(base * 0.75f), (int)(base * 0.35f), 255);
         });
 
+        // 114: Furnace Top / Bottom (Smooth stone with double frame bevel)
+        loadOrPaint(pixelData, 114, "furnace_top.png", (x, y, rand) -> {
+            boolean outer = (x == 0 || x == 15 || y == 0 || y == 15);
+            if (outer) return rgba(60, 60, 60, 255);
+            boolean inner = (x == 1 || x == 14 || y == 1 || y == 14);
+            if (inner) return rgba(85, 85, 85, 255);
+            int v = 120 + rand.nextInt(20);
+            return rgba(v, v, v, 255);
+        });
+
+        // 115: Furnace Side / Back (Stone panel with dark outer frame)
+        loadOrPaint(pixelData, 115, "furnace_side.png", (x, y, rand) -> {
+            boolean outer = (x == 0 || x == 15 || y == 0 || y == 15);
+            if (outer) return rgba(65, 65, 65, 255);
+            int v = 118 + rand.nextInt(22);
+            return rgba(v, v, v, 255);
+        });
+
+        // 116: Furnace Front Lit (Burning fire in opening)
+        loadOrPaint(pixelData, 116, "furnace_front_on.png", (x, y, rand) -> {
+            boolean border = (x == 0 || x == 15 || y == 0 || y == 15);
+            if (border) return rgba(65, 65, 65, 255);
+            if (y >= 2 && y <= 4 && x >= 3 && x <= 12) {
+                if (y == 3) return rgba(40, 40, 40, 255);
+            }
+            if (y >= 7 && y <= 13 && x >= 3 && x <= 12) {
+                boolean arch = (y == 7 && (x == 3 || x == 12));
+                if (!arch) {
+                    if (y >= 10) {
+                        return rgba(255, 130 + rand.nextInt(50), 25, 255);
+                    } else {
+                        return rgba(220, 70 + rand.nextInt(40), 10, 255);
+                    }
+                }
+            }
+            int v = 115 + rand.nextInt(25);
+            return rgba(v, v, v, 255);
+        });
+
         for (int y = 0; y < ATLAS_SIZE; y++) {
             buffer.put(pixelData[y]);
         }
