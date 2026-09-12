@@ -227,4 +227,46 @@ public class ToolAndUtilityCraftingTest {
         assertNotNull(res3);
         assertEquals(BlockType.FLINT_AND_STEEL, res3.getType());
     }
+
+    @Test
+    public void testAllWoodLogsCraftIntoPlanks() {
+        ItemStack[] craftSlots = hud.getCraftSlots();
+        BlockType[] logs = { BlockType.WOOD, BlockType.BIRCH_LOG, BlockType.ACACIA_LOG, BlockType.DARK_OAK_LOG };
+
+        for (BlockType log : logs) {
+            for (ItemStack s : craftSlots) s.clear();
+            craftSlots[0].setType(log);
+            craftSlots[0].setCount(1);
+
+            ItemStack result = hud.getCraftingResult();
+            assertNotNull(result, "Crafting result should not be null for log " + log);
+            assertEquals(BlockType.PLANKS, result.getType(), "Log " + log + " should craft into PLANKS");
+            assertEquals(4, result.getCount(), "1 log of " + log + " should produce 4 planks");
+        }
+    }
+
+    @Test
+    public void testSandstoneAndWoolCrafting() {
+        ItemStack[] craftSlots = hud.getCraftSlots();
+
+        // 4 Sand -> 1 Sandstone
+        for (int i = 0; i < 4; i++) {
+            craftSlots[i].setType(BlockType.SAND);
+            craftSlots[i].setCount(1);
+        }
+        ItemStack sandstoneRes = hud.getCraftingResult();
+        assertNotNull(sandstoneRes);
+        assertEquals(BlockType.SANDSTONE, sandstoneRes.getType());
+        assertEquals(1, sandstoneRes.getCount());
+
+        // 4 String -> 1 Wool
+        for (int i = 0; i < 4; i++) {
+            craftSlots[i].setType(BlockType.STRING);
+            craftSlots[i].setCount(1);
+        }
+        ItemStack woolRes = hud.getCraftingResult();
+        assertNotNull(woolRes);
+        assertEquals(BlockType.WOOL, woolRes.getType());
+        assertEquals(1, woolRes.getCount());
+    }
 }

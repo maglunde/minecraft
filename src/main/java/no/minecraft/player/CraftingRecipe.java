@@ -218,6 +218,18 @@ public class CraftingRecipe {
         list.add(gridShapeless("recipe.planks", Map.of(BlockType.WOOD, 1), new ItemStack(BlockType.PLANKS, 4),
                 key('W', BlockType.WOOD), new String[]{" W "}));
 
+        // 1b. Bjørkeplanker: 1 Bjørkestamme -> 4 Treplanker
+        list.add(gridShapeless("recipe.birch_planks", Map.of(BlockType.BIRCH_LOG, 1), new ItemStack(BlockType.PLANKS, 4),
+                key('W', BlockType.BIRCH_LOG), new String[]{" W "}));
+
+        // 1c. Akasieplanker: 1 Akasiestamme -> 4 Treplanker
+        list.add(gridShapeless("recipe.acacia_planks", Map.of(BlockType.ACACIA_LOG, 1), new ItemStack(BlockType.PLANKS, 4),
+                key('W', BlockType.ACACIA_LOG), new String[]{" W "}));
+
+        // 1d. Mørkeikplanker: 1 Mørkeikstamme -> 4 Treplanker
+        list.add(gridShapeless("recipe.dark_oak_planks", Map.of(BlockType.DARK_OAK_LOG, 1), new ItemStack(BlockType.PLANKS, 4),
+                key('W', BlockType.DARK_OAK_LOG), new String[]{" W "}));
+
         // 2. Arbeidsbenk: 4 Treplanker -> 1 Arbeidsbenk
         list.add(shaped("recipe.crafting_table", Map.of(BlockType.PLANKS, 4), new ItemStack(BlockType.CRAFTING_TABLE, 1),
                 key('P', BlockType.PLANKS), new String[]{"PP", "PP"}));
@@ -346,6 +358,14 @@ public class CraftingRecipe {
         // 30. Obsidian: 4 Stein + 4 Brostein -> 2 Obsidian
         list.add(gridShapeless("recipe.obsidian", Map.of(BlockType.STONE, 4, BlockType.COBBLESTONE, 4), new ItemStack(BlockType.OBSIDIAN, 2),
                 key('N', BlockType.STONE, 'C', BlockType.COBBLESTONE), new String[]{"NCN", "C C", "NCN"}));
+
+        // 30b. Sandstein: 4 Sand -> 1 Sandstein
+        list.add(shaped("recipe.sandstone", Map.of(BlockType.SAND, 4), new ItemStack(BlockType.SANDSTONE, 1),
+                key('A', BlockType.SAND), new String[]{"AA", "AA"}));
+
+        // 30c. Ull: 4 Tråd -> 1 Ull
+        list.add(shaped("recipe.wool", Map.of(BlockType.STRING, 4), new ItemStack(BlockType.WOOL, 1),
+                key('G', BlockType.STRING), new String[]{"GG", "GG"}));
 
         // 31. Ildstål: 1 Jernbarre + 1 Krutt -> 1 Ildstål
         list.add(gridShapeless("recipe.flint_and_steel", Map.of(BlockType.IRON_INGOT, 1, BlockType.GUNPOWDER, 1), new ItemStack(BlockType.FLINT_AND_STEEL, 1),

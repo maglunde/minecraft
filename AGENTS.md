@@ -91,6 +91,23 @@ I et voxelspill i 60–144 FPS er **Garbage Collection (GC) pauses den største 
   - Tilstand som retning (`facing`), brenntid, inventarslots og smelting skal lagres via `WorldSaveManager` i henhold til versjonsformatet.
 - **Plassering og Orientering:**
   - Blokker med retning (ovn, kiste, trapper) skal orienteres i forhold til spillerens kamera/blikkretning ved plassering (fronten vendt mot spilleren).
+- **Sjekkliste ved implementasjon av nye blokker og gjenstander:**
+  Når en ny blokk eller gjenstand legges til, skal den aldri bare eksistere som en isolert ID/tekstur, men integreres helhetlig i henhold til Java 1.16.1:
+  1. **Crafting & Oppskrifter:**
+     - Registrer oppskrift for å tilvirke blokken (hvis aktuelt).
+     - Registrer oppskrifter *med* blokken som ingrediens (f.eks. om det lages en ny tresort/stamme, må den kunne craftes til tilhørende treplanker, pinner, båt osv.; ny malm må kunne smeltes til barre/ingot).
+     - Registrer drivstoffverdi (`fuelTicks`) hvis blokken/gjenstanden er brennbar (stokker, planker, kull osv.).
+     - Registrer eventuelle smelteoppskrifter (f.eks. stamme $\rightarrow$ trekull, cobble $\rightarrow$ stone).
+  2. **Drops og Verktøykrav:**
+     - Definer verktøykrav (øks, hakke, spade, saks osv.), verktøynivå (tre, stein, jern, diamant) og blokkhardhet.
+     - Definer nøyaktige drops ved knusing (dropper seg selv, et annet element, erfaring, eller ingenting uten riktig verktøy/Silk Touch).
+  3. **Lyd, Fysikk og Lys:**
+     - Tilknytt korrekt lydtype (steg-, plasser- og knuselyder for tre, stein, sand, gress osv.).
+     - Sett korrekte lys- og gjennomsiktighetsflagg for culling og lysutbredelse.
+  4. **Navn og Lokalisering (`I18n`):**
+     - Registrer oversettelsesnøkkel i ressursfilene slik at visningsnavnet vises riktig i UI, inventar og verktøytips fremfor en rå enum/ID.
+  5. **Enhetstester:**
+     - Verifiser crafting, drops og mekanikker med automatiserte, headless enhetstester under `src/test/java/`.
 
 ---
 

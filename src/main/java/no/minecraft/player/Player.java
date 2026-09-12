@@ -79,8 +79,8 @@ public class Player {
     private float eatTimer = 0.0f;
     private float eatSoundTimer = 0.0f;
 
-    // Bow Drawing System (opp til 2 sekunder stramming)
-    public static final float MAX_BOW_CHARGE = 2.0f;
+    // Bow Drawing System (opp til 1.2 sekunder / 1200 ms stramming)
+    public static final float MAX_BOW_CHARGE = 1.2f;
     private boolean isDrawingBow = false;
     private float bowChargeTimer = 0.0f;
 

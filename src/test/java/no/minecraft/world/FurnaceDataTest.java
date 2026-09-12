@@ -133,4 +133,40 @@ public class FurnaceDataTest {
         furnace.setFacing(BlockType.Face.WEST);
         assertEquals(BlockType.Face.WEST, furnace.getFacing());
     }
+
+    @Test
+    public void testAllWoodLogsSmeltingAndFuel() {
+        BlockType[] logs = { BlockType.WOOD, BlockType.BIRCH_LOG, BlockType.ACACIA_LOG, BlockType.DARK_OAK_LOG };
+
+        for (BlockType log : logs) {
+            // Smelting to charcoal (COAL)
+            assertEquals(BlockType.COAL, FurnaceData.getSmeltingResult(log), "Log " + log + " should smelt to charcoal (COAL)");
+            // Fuel burn time (12.0f, smelts 2 items)
+            assertEquals(12.0f, FurnaceData.getFuelBurnTime(log), "Log " + log + " should burn for 12.0 seconds");
+            assertTrue(FurnaceData.isFuel(log), "Log " + log + " should be considered fuel");
+
+            // Functional test in furnace
+            FurnaceData furnace = new FurnaceData(0, 0, 0);
+            furnace.getInput().setType(log);
+            furnace.getInput().setCount(1);
+            furnace.getFuel().setType(BlockType.COAL);
+            furnace.getFuel().setCount(1);
+            furnace.update(10.1f);
+            assertEquals(BlockType.COAL, furnace.getOutput().getType());
+            assertEquals(1, furnace.getOutput().getCount());
+        }
+    }
+
+    @Test
+    public void testRedSandSmelting() {
+        assertEquals(BlockType.GLASS, FurnaceData.getSmeltingResult(BlockType.RED_SAND));
+
+        FurnaceData furnace = new FurnaceData(0, 0, 0);
+        furnace.getInput().setType(BlockType.RED_SAND);
+        furnace.getInput().setCount(1);
+        furnace.getFuel().setType(BlockType.COAL);
+        furnace.getFuel().setCount(1);
+        furnace.update(10.1f);
+        assertEquals(BlockType.GLASS, furnace.getOutput().getType());
+    }
 }

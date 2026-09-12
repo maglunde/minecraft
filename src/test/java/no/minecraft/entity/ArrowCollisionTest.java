@@ -164,11 +164,11 @@ public class ArrowCollisionTest {
         player.startDrawingBow();
         assertTrue(player.isDrawingBow());
 
-        player.updateDrawingBow(1.0f);
-        assertEquals(0.5f, player.getBowChargeProgress(), 0.01f, "1.0s oppdatering skal gi 50% stramming (maks 2.0s)");
+        player.updateDrawingBow(0.6f);
+        assertEquals(0.5f, player.getBowChargeProgress(), 0.01f, "0.6s oppdatering skal gi 50% stramming (maks 1.2s)");
 
-        player.updateDrawingBow(1.5f);
-        assertEquals(1.0f, player.getBowChargeProgress(), 0.01f, "Over 2.0s skal begrenses til 100% stramming");
+        player.updateDrawingBow(1.0f);
+        assertEquals(1.0f, player.getBowChargeProgress(), 0.01f, "Over 1.2s skal begrenses til 100% stramming");
 
         player.stopDrawingBow();
         assertFalse(player.isDrawingBow());

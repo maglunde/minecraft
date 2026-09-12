@@ -53,9 +53,9 @@ public class FurnaceData {
             case IRON_ORE -> BlockType.IRON_INGOT;
             case GOLD_ORE -> BlockType.GOLD_INGOT;
             case COBBLESTONE -> BlockType.STONE;
-            case SAND -> BlockType.GLASS;
+            case SAND, RED_SAND -> BlockType.GLASS;
             case NETHERRACK -> BlockType.NETHER_BRICKS;
-            case WOOD -> BlockType.COAL; // Charcoal
+            case WOOD, BIRCH_LOG, ACACIA_LOG, DARK_OAK_LOG -> BlockType.COAL; // Charcoal
             default -> null;
         };
     }
@@ -64,7 +64,7 @@ public class FurnaceData {
         if (f == null) return 0.0f;
         return switch (f) {
             case COAL -> 48.0f; // Smelts 8 items
-            case WOOD, PLANKS, CRAFTING_TABLE -> 12.0f; // Smelts 2 items
+            case WOOD, BIRCH_LOG, ACACIA_LOG, DARK_OAK_LOG, PLANKS, CRAFTING_TABLE -> 12.0f; // Smelts 2 items
             case FENCE, FENCE_GATE, TRAPDOOR, WOODEN_DOOR, WOODEN_SLAB, WOODEN_STAIRS,
                  WOODEN_BUTTON, WOODEN_PRESSURE_PLATE, BOWL, CHEST -> 9.0f; // Smelts 1.5 items
             case STICK -> 3.0f; // Smelts 0.5 items

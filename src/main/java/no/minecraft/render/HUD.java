@@ -1380,11 +1380,15 @@ public class HUD {
                     CraftingRecipe r = activeRecipes.get(i);
                     // 2x2 recipes: populate the 2x2 grid from inventory
                     if (r.getOutput().getType() == BlockType.PLANKS) {
-                        if (player.getInventory().getItemCount(BlockType.WOOD) >= 1) {
-                            returnCraftSlotsToInventory(player);
-                            player.getInventory().removeItem(BlockType.WOOD, 1);
-                            craftSlots[0].setType(BlockType.WOOD);
-                            craftSlots[0].setCount(1);
+                        for (Map.Entry<BlockType, Integer> entry : r.getInputs().entrySet()) {
+                            BlockType logType = entry.getKey();
+                            if (player.getInventory().getItemCount(logType) >= 1) {
+                                returnCraftSlotsToInventory(player);
+                                player.getInventory().removeItem(logType, 1);
+                                craftSlots[0].setType(logType);
+                                craftSlots[0].setCount(1);
+                                break;
+                            }
                         }
                     } else if (r.getOutput().getType() == BlockType.CRAFTING_TABLE) {
                         if (player.getInventory().getItemCount(BlockType.PLANKS) >= 4) {
@@ -1419,6 +1423,24 @@ public class HUD {
                             player.getInventory().removeItem(BlockType.PLANKS, 1);
                             craftSlots[0].setType(BlockType.PLANKS);
                             craftSlots[0].setCount(1);
+                        }
+                    } else if (r.getOutput().getType() == BlockType.SANDSTONE) {
+                        if (player.getInventory().getItemCount(BlockType.SAND) >= 4) {
+                            returnCraftSlotsToInventory(player);
+                            player.getInventory().removeItem(BlockType.SAND, 4);
+                            for (int k = 0; k < 4; k++) {
+                                craftSlots[k].setType(BlockType.SAND);
+                                craftSlots[k].setCount(1);
+                            }
+                        }
+                    } else if (r.getOutput().getType() == BlockType.WOOL) {
+                        if (player.getInventory().getItemCount(BlockType.STRING) >= 4) {
+                            returnCraftSlotsToInventory(player);
+                            player.getInventory().removeItem(BlockType.STRING, 4);
+                            for (int k = 0; k < 4; k++) {
+                                craftSlots[k].setType(BlockType.STRING);
+                                craftSlots[k].setCount(1);
+                            }
                         }
                     } else if (r.getOutput().getType() == BlockType.TORCH) {
                         if (player.getInventory().getItemCount(BlockType.COAL) >= 1 && player.getInventory().getItemCount(BlockType.STICK) >= 1) {
