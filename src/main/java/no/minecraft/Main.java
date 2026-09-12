@@ -1421,8 +1421,8 @@ public class Main {
                     }
 
                     float ratio = Math.min(1.0f, charge / Player.MAX_BOW_CHARGE);
-                    // Speed: 8.0 m/s up to 32.0 m/s
-                    float speed = 8.0f + ratio * 24.0f;
+                    // Speed: 16.0 m/s up to 64.0 m/s (doblet rekkevidde)
+                    float speed = 16.0f + ratio * 48.0f;
                     // Damage: 2 up to 10 (or 12 if crit)
                     int baseDamage = (int) Math.round(2 + ratio * 8);
                     boolean isCrit = (ratio >= 0.85f);
