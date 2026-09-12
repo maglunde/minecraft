@@ -14,12 +14,16 @@ public class FurnaceData {
     private float cookTime = 0.0f;
     private float burnTime = 0.0f;
     private float maxBurnTime = 0.0f;
+    private BlockType.Face facing = BlockType.Face.NORTH;
 
     public FurnaceData(int x, int y, int z) {
         this.x = x;
         this.y = y;
         this.z = z;
     }
+
+    public BlockType.Face getFacing() { return facing != null ? facing : BlockType.Face.NORTH; }
+    public void setFacing(BlockType.Face facing) { this.facing = (facing != null) ? facing : BlockType.Face.NORTH; }
 
     public int getX() { return x; }
     public int getY() { return y; }

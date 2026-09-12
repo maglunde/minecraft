@@ -6,7 +6,9 @@ import no.minecraft.player.Player;
 import no.minecraft.player.Raycast;
 import no.minecraft.render.*;
 import no.minecraft.world.BlockType;
+import no.minecraft.world.ChestData;
 import no.minecraft.world.Chunk;
+import no.minecraft.world.FurnaceData;
 import no.minecraft.world.World;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -999,6 +1001,27 @@ public class Main {
                     }
                     if (roomAvailable) {
                         world.setBlock(hit.placeX, hit.placeY, hit.placeZ, toPlace);
+                        if (toPlace == BlockType.FURNACE) {
+                            FurnaceData fd = world.getOrCreateFurnace(hit.placeX, hit.placeY, hit.placeZ);
+                            Vector3f fwd = player.getCamera().getForward();
+                            BlockType.Face facing;
+                            if (Math.abs(fwd.x) > Math.abs(fwd.z)) {
+                                facing = (fwd.x > 0) ? BlockType.Face.WEST : BlockType.Face.EAST;
+                            } else {
+                                facing = (fwd.z > 0) ? BlockType.Face.NORTH : BlockType.Face.SOUTH;
+                            }
+                            fd.setFacing(facing);
+                        } else if (toPlace == BlockType.CHEST) {
+                            ChestData cd = world.getOrCreateChest(hit.placeX, hit.placeY, hit.placeZ);
+                            Vector3f fwd = player.getCamera().getForward();
+                            BlockType.Face facing;
+                            if (Math.abs(fwd.x) > Math.abs(fwd.z)) {
+                                facing = (fwd.x > 0) ? BlockType.Face.WEST : BlockType.Face.EAST;
+                            } else {
+                                facing = (fwd.z > 0) ? BlockType.Face.NORTH : BlockType.Face.SOUTH;
+                            }
+                            cd.setFacing(facing);
+                        }
                         no.minecraft.sound.SoundManager.getInstance().play(toPlace.getDigSound(), 0.8f);
                         player.useSelectedBlock();
                         return true;

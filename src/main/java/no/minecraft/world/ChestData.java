@@ -8,6 +8,7 @@ public class ChestData {
 
     private final int x, y, z;
     private final ItemStack[] items;
+    private BlockType.Face facing = BlockType.Face.NORTH;
 
     public ChestData(int x, int y, int z) {
         this.x = x;
@@ -18,6 +19,9 @@ public class ChestData {
             this.items[i] = new ItemStack(BlockType.AIR, 0);
         }
     }
+
+    public BlockType.Face getFacing() { return facing != null ? facing : BlockType.Face.NORTH; }
+    public void setFacing(BlockType.Face facing) { this.facing = (facing != null) ? facing : BlockType.Face.NORTH; }
 
     public int getX() { return x; }
     public int getY() { return y; }

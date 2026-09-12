@@ -118,4 +118,19 @@ public class FurnaceDataTest {
         f2.update(10.1f);
         assertEquals(BlockType.COOKED_CHICKEN, f2.getOutput().getType());
     }
+
+    @Test
+    public void testFurnaceFacingOrientation() {
+        FurnaceData furnace = new FurnaceData(10, 64, 10);
+        assertEquals(BlockType.Face.NORTH, furnace.getFacing());
+
+        furnace.setFacing(BlockType.Face.SOUTH);
+        assertEquals(BlockType.Face.SOUTH, furnace.getFacing());
+
+        furnace.setFacing(BlockType.Face.EAST);
+        assertEquals(BlockType.Face.EAST, furnace.getFacing());
+
+        furnace.setFacing(BlockType.Face.WEST);
+        assertEquals(BlockType.Face.WEST, furnace.getFacing());
+    }
 }

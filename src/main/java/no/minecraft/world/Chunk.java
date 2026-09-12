@@ -376,6 +376,10 @@ public class Chunk {
                         addChest(vertices, wx, wy, wz, x, y, z, torchLight);
                         continue;
                     }
+                    if (type == BlockType.FURNACE) {
+                        addFurnace(vertices, wx, wy, wz, x, y, z, torchLight);
+                        continue;
+                    }
 
                     // Top (+Y)
                     if (shouldRenderFace(x, y + 1, z, type)) {
@@ -465,8 +469,11 @@ public class Chunk {
     }
 
     private void addFace(List<Float> v, float x, float y, float z, BlockType.Face face, BlockType block, float faceLight, float torchLight) {
+        addFaceWithTexture(v, x, y, z, face, block.getTexture(face), faceLight, torchLight);
+    }
+
+    private void addFaceWithTexture(List<Float> v, float x, float y, float z, BlockType.Face face, int textureId, float faceLight, float torchLight) {
         faceLight *= skyExposure((int) x, (int) y, (int) z, face);
-        int textureId = block.getTexture(face);
         float[] uv = TextureAtlas.getUVs(textureId);
         float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
 
@@ -526,6 +533,43 @@ public class Chunk {
                 addVertex(v, x + 1, y + 1, z + 1, u0, v0, faceLight, torchLight);
                 addVertex(v, x + 1, y, z + 1, u0, v1, faceLight, torchLight);
             }
+        }
+    }
+
+    private void addFurnace(List<Float> v, float wx, float wy, float wz, int x, int y, int z, float torchLight) {
+        FurnaceData fd = world.getFurnace((int) wx, (int) wy, (int) wz);
+        BlockType.Face facing = (fd != null && fd.getFacing() != null) ? fd.getFacing() : BlockType.Face.NORTH;
+        int frontTex = (fd != null && fd.isBurning()) ? 116 : 33;
+        int topTex = 114;
+        int sideTex = 115;
+
+        // Top (+Y)
+        if (shouldRenderFace(x, y + 1, z, BlockType.FURNACE)) {
+            addFaceWithTexture(v, wx, wy, wz, BlockType.Face.TOP, topTex, 1.0f, torchLight);
+        }
+        // Bottom (-Y)
+        if (shouldRenderFace(x, y - 1, z, BlockType.FURNACE)) {
+            addFaceWithTexture(v, wx, wy, wz, BlockType.Face.BOTTOM, topTex, 0.5f, torchLight);
+        }
+        // North (-Z)
+        if (shouldRenderFace(x, y, z - 1, BlockType.FURNACE)) {
+            int tex = (facing == BlockType.Face.NORTH) ? frontTex : sideTex;
+            addFaceWithTexture(v, wx, wy, wz, BlockType.Face.NORTH, tex, 0.7f, torchLight);
+        }
+        // South (+Z)
+        if (shouldRenderFace(x, y, z + 1, BlockType.FURNACE)) {
+            int tex = (facing == BlockType.Face.SOUTH) ? frontTex : sideTex;
+            addFaceWithTexture(v, wx, wy, wz, BlockType.Face.SOUTH, tex, 0.7f, torchLight);
+        }
+        // West (-X)
+        if (shouldRenderFace(x - 1, y, z, BlockType.FURNACE)) {
+            int tex = (facing == BlockType.Face.WEST) ? frontTex : sideTex;
+            addFaceWithTexture(v, wx, wy, wz, BlockType.Face.WEST, tex, 0.8f, torchLight);
+        }
+        // East (+X)
+        if (shouldRenderFace(x + 1, y, z, BlockType.FURNACE)) {
+            int tex = (facing == BlockType.Face.EAST) ? frontTex : sideTex;
+            addFaceWithTexture(v, wx, wy, wz, BlockType.Face.EAST, tex, 0.8f, torchLight);
         }
     }
 
@@ -652,10 +696,13 @@ public class Chunk {
         float z0 = wz + 0.0625f; // 1/16
         float z1 = wz + 0.9375f; // 15/16
 
+        ChestData cd = world.getChest((int) wx, (int) wy, (int) wz);
+        BlockType.Face facing = (cd != null && cd.getFacing() != null) ? cd.getFacing() : BlockType.Face.NORTH;
+
         float[] uvTop = TextureAtlas.getUVs(BlockType.CHEST.getTexture(BlockType.Face.TOP));
         float[] uvBot = TextureAtlas.getUVs(BlockType.CHEST.getTexture(BlockType.Face.BOTTOM));
-        float[] uvFront = TextureAtlas.getUVs(BlockType.CHEST.getTexture(BlockType.Face.NORTH));
-        float[] uvSide = TextureAtlas.getUVs(BlockType.CHEST.getTexture(BlockType.Face.SOUTH));
+        float[] uvFront = TextureAtlas.getUVs(22); // Front with latch
+        float[] uvSide = TextureAtlas.getUVs(111); // Side/back
 
         // Top face (+Y, plane at y = y1)
         addVertex(v, x0, y1, z0, uvTop[0], uvTop[1], 1.0f, torchLight);
@@ -675,41 +722,45 @@ public class Chunk {
         addVertex(v, x1, y0, z1, uvBot[2], uvBot[3], 0.5f, torchLight);
         addVertex(v, x0, y0, z1, uvBot[0], uvBot[3], 0.5f, torchLight);
 
-        // North face (-Z, plane at z = z0, FRONT)
-        addVertex(v, x0, y0, z0, uvFront[2], uvFront[3], 0.7f, torchLight);
-        addVertex(v, x0, y1, z0, uvFront[2], uvFront[1], 0.7f, torchLight);
-        addVertex(v, x1, y1, z0, uvFront[0], uvFront[1], 0.7f, torchLight);
+        // North face (-Z, plane at z = z0)
+        float[] uvN = (facing == BlockType.Face.NORTH) ? uvFront : uvSide;
+        addVertex(v, x0, y0, z0, uvN[2], uvN[3], 0.7f, torchLight);
+        addVertex(v, x0, y1, z0, uvN[2], uvN[1], 0.7f, torchLight);
+        addVertex(v, x1, y1, z0, uvN[0], uvN[1], 0.7f, torchLight);
 
-        addVertex(v, x0, y0, z0, uvFront[2], uvFront[3], 0.7f, torchLight);
-        addVertex(v, x1, y1, z0, uvFront[0], uvFront[1], 0.7f, torchLight);
-        addVertex(v, x1, y0, z0, uvFront[0], uvFront[3], 0.7f, torchLight);
+        addVertex(v, x0, y0, z0, uvN[2], uvN[3], 0.7f, torchLight);
+        addVertex(v, x1, y1, z0, uvN[0], uvN[1], 0.7f, torchLight);
+        addVertex(v, x1, y0, z0, uvN[0], uvN[3], 0.7f, torchLight);
 
-        // South face (+Z, plane at z = z1, BACK)
-        addVertex(v, x0, y0, z1, uvSide[0], uvSide[3], 0.7f, torchLight);
-        addVertex(v, x1, y0, z1, uvSide[2], uvSide[3], 0.7f, torchLight);
-        addVertex(v, x1, y1, z1, uvSide[2], uvSide[1], 0.7f, torchLight);
+        // South face (+Z, plane at z = z1)
+        float[] uvS = (facing == BlockType.Face.SOUTH) ? uvFront : uvSide;
+        addVertex(v, x0, y0, z1, uvS[0], uvS[3], 0.7f, torchLight);
+        addVertex(v, x1, y0, z1, uvS[2], uvS[3], 0.7f, torchLight);
+        addVertex(v, x1, y1, z1, uvS[2], uvS[1], 0.7f, torchLight);
 
-        addVertex(v, x0, y0, z1, uvSide[0], uvSide[3], 0.7f, torchLight);
-        addVertex(v, x1, y1, z1, uvSide[2], uvSide[1], 0.7f, torchLight);
-        addVertex(v, x0, y1, z1, uvSide[0], uvSide[1], 0.7f, torchLight);
+        addVertex(v, x0, y0, z1, uvS[0], uvS[3], 0.7f, torchLight);
+        addVertex(v, x1, y1, z1, uvS[2], uvS[1], 0.7f, torchLight);
+        addVertex(v, x0, y1, z1, uvS[0], uvS[1], 0.7f, torchLight);
 
-        // West face (-X, plane at x = x0, LEFT)
-        addVertex(v, x0, y0, z1, uvSide[2], uvSide[3], 0.8f, torchLight);
-        addVertex(v, x0, y1, z1, uvSide[2], uvSide[1], 0.8f, torchLight);
-        addVertex(v, x0, y1, z0, uvSide[0], uvSide[1], 0.8f, torchLight);
+        // West face (-X, plane at x = x0)
+        float[] uvW = (facing == BlockType.Face.WEST) ? uvFront : uvSide;
+        addVertex(v, x0, y0, z1, uvW[2], uvW[3], 0.8f, torchLight);
+        addVertex(v, x0, y1, z1, uvW[2], uvW[1], 0.8f, torchLight);
+        addVertex(v, x0, y1, z0, uvW[0], uvW[1], 0.8f, torchLight);
 
-        addVertex(v, x0, y0, z1, uvSide[2], uvSide[3], 0.8f, torchLight);
-        addVertex(v, x0, y1, z0, uvSide[0], uvSide[1], 0.8f, torchLight);
-        addVertex(v, x0, y0, z0, uvSide[0], uvSide[3], 0.8f, torchLight);
+        addVertex(v, x0, y0, z1, uvW[2], uvW[3], 0.8f, torchLight);
+        addVertex(v, x0, y1, z0, uvW[0], uvW[1], 0.8f, torchLight);
+        addVertex(v, x0, y0, z0, uvW[0], uvW[3], 0.8f, torchLight);
 
-        // East face (+X, plane at x = x1, RIGHT)
-        addVertex(v, x1, y0, z0, uvSide[2], uvSide[3], 0.8f, torchLight);
-        addVertex(v, x1, y1, z0, uvSide[2], uvSide[1], 0.8f, torchLight);
-        addVertex(v, x1, y1, z1, uvSide[0], uvSide[1], 0.8f, torchLight);
+        // East face (+X, plane at x = x1)
+        float[] uvE = (facing == BlockType.Face.EAST) ? uvFront : uvSide;
+        addVertex(v, x1, y0, z0, uvE[2], uvE[3], 0.8f, torchLight);
+        addVertex(v, x1, y1, z0, uvE[2], uvE[1], 0.8f, torchLight);
+        addVertex(v, x1, y1, z1, uvE[0], uvE[1], 0.8f, torchLight);
 
-        addVertex(v, x1, y0, z0, uvSide[2], uvSide[3], 0.8f, torchLight);
-        addVertex(v, x1, y1, z1, uvSide[0], uvSide[1], 0.8f, torchLight);
-        addVertex(v, x1, y0, z1, uvSide[0], uvSide[3], 0.8f, torchLight);
+        addVertex(v, x1, y0, z0, uvE[2], uvE[3], 0.8f, torchLight);
+        addVertex(v, x1, y1, z1, uvE[0], uvE[1], 0.8f, torchLight);
+        addVertex(v, x1, y0, z1, uvE[0], uvE[3], 0.8f, torchLight);
     }
 
     private void addTorch(List<Float> v, float wx, float wy, float wz, int x, int y, int z) {

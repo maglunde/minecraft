@@ -319,6 +319,7 @@ public class WorldSaveManager {
                     out.writeFloat(fd.getCookTime());
                     out.writeFloat(fd.getBurnTime());
                     out.writeFloat(fd.getMaxBurnTime());
+                    out.writeByte((byte) fd.getFacing().ordinal());
                 }
 
                 // Chests
@@ -328,6 +329,7 @@ public class WorldSaveManager {
                     out.writeInt(cd.getX());
                     out.writeInt(cd.getY());
                     out.writeInt(cd.getZ());
+                    out.writeByte((byte) cd.getFacing().ordinal());
                     out.writeInt(ChestData.CHEST_SIZE);
                     for (int s = 0; s < ChestData.CHEST_SIZE; s++) {
                         ItemStack slot = cd.getSlot(s);
@@ -516,6 +518,11 @@ public class WorldSaveManager {
                     fd.setCookTime(in.readFloat());
                     fd.setBurnTime(in.readFloat());
                     fd.setMaxBurnTime(in.readFloat());
+                    if (version >= 3) {
+                        byte facingOrd = in.readByte();
+                        BlockType.Face[] fValues = BlockType.Face.values();
+                        fd.setFacing((facingOrd >= 0 && facingOrd < fValues.length) ? fValues[facingOrd] : BlockType.Face.NORTH);
+                    }
                     furnaceList.add(fd);
                 }
 
@@ -526,6 +533,11 @@ public class WorldSaveManager {
                         int cy = in.readInt();
                         int cz = in.readInt();
                         ChestData cd = new ChestData(cx, cy, cz);
+                        if (version >= 3) {
+                            byte facingOrd = in.readByte();
+                            BlockType.Face[] fValues = BlockType.Face.values();
+                            cd.setFacing((facingOrd >= 0 && facingOrd < fValues.length) ? fValues[facingOrd] : BlockType.Face.NORTH);
+                        }
                         int slotCount = in.readInt();
                         for (int s = 0; s < slotCount; s++) {
                             byte typeId = in.readByte();
