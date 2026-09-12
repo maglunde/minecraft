@@ -22,7 +22,7 @@ public class ArrowCollisionTest {
         Arrow arrow = new Arrow(0.5f, 20.5f, 0.5f, 100.0f, 0.0f, 0.0f);
         arrow.update(0.05f, world, player);
 
-        assertTrue(arrow.isDead(), "Pilen må treffe veggen midt i segmentet, ikke tunneler gjennom");
+        assertTrue(arrow.isDead() || arrow.isInGround(), "Pilen må treffe veggen midt i segmentet, ikke tunneler gjennom");
     }
 
     @Test
@@ -90,7 +90,7 @@ public class ArrowCollisionTest {
         }
 
         assertEquals(20, player.getHealth(), "Egen pil skal aldri skade spilleren");
-        assertTrue(arrow.isDead(), "Pilen skal ha dødd mot bakken/vegg, ikke spilleren");
+        assertTrue(arrow.isDead() || arrow.isInGround(), "Pilen skal ha truffet bakken/vegg, ikke spilleren");
     }
 
     @Test
@@ -181,5 +181,53 @@ public class ArrowCollisionTest {
                 world.setBlock(x, y, 0, BlockType.AIR);
             }
         }
+    }
+
+    @Test
+    public void testPlayerPicksUpArrowFromGround() {
+        World world = new World(12345L);
+        Player player = new Player(world, 0, 20, 0);
+        clearFlightPath(world, 0, 5);
+        world.setBlock(3, 20, 0, BlockType.STONE);
+
+        int arrowCountBefore = player.getInventory().getItemCount(BlockType.ARROW);
+
+        // Player fires arrow into stone wall 3 blocks away
+        Arrow arrow = new Arrow(0.5f, 20.5f, 0.0f, 60.0f, 0.0f, 0.0f, player, false);
+        arrow.update(0.05f, world, player);
+
+        assertTrue(arrow.isInGround(), "Pilen skal sitte fast i veggen/blokken");
+        assertFalse(arrow.isDead(), "Pilen skal ikke være død ennå, men ligge/sitte i bakken");
+        assertEquals(arrowCountBefore, player.getInventory().getItemCount(BlockType.ARROW));
+
+        // Player moves close to the arrow and updates
+        player.getPosition().set(2.5f, 20.0f, 0.0f);
+        arrow.update(0.1f, world, player);
+
+        assertTrue(arrow.isDead(), "Pilen skal være plukket opp (dead = true)");
+        assertEquals(arrowCountBefore + 1, player.getInventory().getItemCount(BlockType.ARROW), "Spiller skal ha plukket opp 1 pil");
+    }
+
+    @Test
+    public void testHostileArrowCannotBePickedUp() {
+        World world = new World(12345L);
+        Player player = new Player(world, 0, 20, 0);
+        clearFlightPath(world, 0, 5);
+        world.setBlock(3, 20, 0, BlockType.STONE);
+
+        int arrowCountBefore = player.getInventory().getItemCount(BlockType.ARROW);
+
+        // Skeleton fires arrow into stone wall
+        Arrow hostileArrow = new Arrow(0.5f, 20.5f, 0.0f, 60.0f, 0.0f, 0.0f, null, true);
+        hostileArrow.update(0.05f, world, player);
+
+        assertTrue(hostileArrow.isInGround());
+
+        // Player walks right on top of the hostile arrow
+        player.getPosition().set(3.0f, 20.0f, 0.0f);
+        hostileArrow.update(0.1f, world, player);
+
+        assertFalse(hostileArrow.isDead(), "Fiendtlig pil skal ikke kunne plukkes opp");
+        assertEquals(arrowCountBefore, player.getInventory().getItemCount(BlockType.ARROW));
     }
 }

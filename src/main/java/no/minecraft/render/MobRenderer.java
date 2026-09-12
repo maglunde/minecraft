@@ -28,6 +28,7 @@ public class MobRenderer {
     private final int vaoId;
     private final int vboId;
     private final MobTextureManager textureManager;
+    private final Matrix4f arrowMat = new Matrix4f();
 
     private static final String VERT_SRC = """
             #version 330 core
@@ -159,15 +160,40 @@ public class MobRenderer {
             }
         }
 
-        // 2. Build Arrows
+        // 2. Build Arrows (3D-modell med treskaft, flintspiss og fjær, rotert i flyretning)
         for (Arrow a : arrows) {
             if (a.isDead()) continue;
             float ax = a.getPosition().x;
             float ay = a.getPosition().y;
             float az = a.getPosition().z;
             float aLight = entityLight(world, ax, ay, az, sunLight);
-            Matrix4f mat = new Matrix4f().translate(ax, ay, az);
-            addUntexturedBox(untexturedVerts, mat, -0.03f, -0.03f, -0.25f, 0.06f, 0.06f, 0.5f, 0.9f, 0.85f, 0.75f, 1.0f, aLight);
+
+            Vector3f dir = a.getDirection();
+            float dx = dir.x;
+            float dy = dir.y;
+            float dz = dir.z;
+            float h = (float) Math.sqrt(dx * dx + dz * dz);
+            float yaw = (float) Math.atan2(dx, dz);
+            float pitch = (float) Math.atan2(dy, h);
+
+            arrowMat.identity()
+                    .translate(ax, ay, az)
+                    .rotateY(yaw)
+                    .rotateX(-pitch);
+
+            // 1. Shaft: Slankt treskaft (Oak wood: 0.55, 0.38, 0.22)
+            addUntexturedBox(untexturedVerts, arrowMat, -0.015f, -0.015f, -0.20f, 0.03f, 0.03f, 0.45f, 0.55f, 0.38f, 0.22f, 1.0f, aLight);
+
+            // 2. Arrowhead: Mørk flintspiss foran (+Z)
+            addUntexturedBox(untexturedVerts, arrowMat, -0.035f, -0.035f, 0.25f, 0.07f, 0.07f, 0.06f, 0.28f, 0.28f, 0.30f, 1.0f, aLight);
+            addUntexturedBox(untexturedVerts, arrowMat, -0.018f, -0.018f, 0.31f, 0.036f, 0.036f, 0.04f, 0.20f, 0.20f, 0.22f, 1.0f, aLight);
+
+            // 3. Fletchings: Hvite fjær i kryss bak på nocken (-Z)
+            addUntexturedBox(untexturedVerts, arrowMat, -0.06f, -0.008f, -0.24f, 0.12f, 0.016f, 0.10f, 0.94f, 0.94f, 0.90f, 1.0f, aLight);
+            addUntexturedBox(untexturedVerts, arrowMat, -0.008f, -0.06f, -0.24f, 0.016f, 0.12f, 0.10f, 0.90f, 0.90f, 0.86f, 1.0f, aLight);
+
+            // 4. Liten nock-ende bak fjærene
+            addUntexturedBox(untexturedVerts, arrowMat, -0.016f, -0.016f, -0.26f, 0.032f, 0.032f, 0.02f, 0.42f, 0.28f, 0.16f, 1.0f, aLight);
         }
 
         // 3. Build Ender Pearls
