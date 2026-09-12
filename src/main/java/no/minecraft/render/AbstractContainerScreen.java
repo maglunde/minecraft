@@ -78,8 +78,10 @@ abstract class AbstractContainerScreen implements GuiScreen {
             if (count > 0) {
                 int tId = type.getItemTexture();
                 float[] uv = TextureAtlas.getUVs(tId);
-                addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 0.85f);
-                hud.drawMinecraftNumber(overlayGeom, count, sx + 17.0f * p, sy + 17.0f * p, p * 0.95f);
+                addRect(tex, sx + p, sy + p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 0.85f);
+                if (count > 1 && !type.isDamageable()) {
+                    hud.drawMinecraftNumber(overlayGeom, count, sx + 17.0f * p, sy + 17.0f * p, p * 0.95f);
+                }
             }
             addRect(overlayGeom, sx + p, sy + p, 16.0f * p, 16.0f * p, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 0.25f);
             return;
@@ -88,10 +90,50 @@ abstract class AbstractContainerScreen implements GuiScreen {
         if (!stack.isEmpty()) {
             int tId = stack.getType().getItemTexture();
             float[] uv = TextureAtlas.getUVs(tId);
-            addRect(tex, sx + 2.0f * p, sy + 2.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 1.0f);
-            if (stack.getCount() > 0) {
+            addRect(tex, sx + p, sy + p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 1.0f);
+            if (stack.getCount() > 1 && !stack.getType().isDamageable()) {
                 hud.drawMinecraftNumber(overlayGeom, stack.getCount(), sx + 17.0f * p, sy + 17.0f * p, p * 0.95f);
             }
+            // Durability bar in inventory slot (same as hotbar)
+            if (stack.getType().isDamageable() && stack.getDamage() > 0) {
+                float barW = 12.0f * p;
+                float barH = 1.2f * p;
+                float bx = sx + 3.0f * p;
+                float by = sy + 14.0f * p;
+                float ratio = stack.getDurabilityRatio();
+                // Dark background
+                addRect(overlayGeom, bx, by, barW, barH, 0, 0, 0, 0, 0, 0, 0, 1.0f);
+                // Health color: Green (high) -> Yellow (mid) -> Red (low)
+                float r = ratio < 0.5f ? 1.0f : (1.0f - ratio) * 2.0f;
+                float g = ratio > 0.5f ? 1.0f : ratio * 2.0f;
+                addRect(overlayGeom, bx, by, barW * ratio, barH, 0, 0, 0, 0, r, g, 0.0f, 1.0f);
+            }
+        }
+    }
+
+    void renderCarriedItem(List<Float> tex, List<Float> overlayGeom, float p) {
+        if (hud.carriedItem.isEmpty()) return;
+        int tId = hud.carriedItem.getType().getItemTexture();
+        float[] uv = TextureAtlas.getUVs(tId);
+        float cx = hud.mouseX - 8.0f * p;
+        float cy = hud.mouseY - 8.0f * p;
+        addRect(tex, cx, cy, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 1.0f);
+        int displayCount = hud.getCarriedDisplayCount();
+        if (displayCount > 1 && !hud.carriedItem.getType().isDamageable()) {
+            hud.drawMinecraftNumber(overlayGeom, displayCount, cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
+        }
+        if (hud.carriedItem.getType().isDamageable() && hud.carriedItem.getDamage() > 0) {
+            float barW = 12.0f * p;
+            float barH = 1.2f * p;
+            float bx = cx + 2.0f * p;
+            float by = cy + 13.0f * p;
+            float ratio = hud.carriedItem.getDurabilityRatio();
+            // Dark background
+            addRect(overlayGeom, bx, by, barW, barH, 0, 0, 0, 0, 0, 0, 0, 1.0f);
+            // Health color: Green (high) -> Yellow (mid) -> Red (low)
+            float r = ratio < 0.5f ? 1.0f : (1.0f - ratio) * 2.0f;
+            float g = ratio > 0.5f ? 1.0f : ratio * 2.0f;
+            addRect(overlayGeom, bx, by, barW * ratio, barH, 0, 0, 0, 0, r, g, 0.0f, 1.0f);
         }
     }
     void renderItemTooltip(List<Float> overlayGeom, ItemStack item, float mx, float my, int windowWidth, int windowHeight) {

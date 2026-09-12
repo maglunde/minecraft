@@ -680,6 +680,7 @@ public class Player {
         for (ItemStack slot : armorSlots) {
             slot.clear();
         }
+        this.offhandItem.clear();
         this.selectedSlot = 0;
         ensureGroundedOnSolidBlock();
     }

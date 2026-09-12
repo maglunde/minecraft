@@ -28,7 +28,7 @@ public class WorldSaveManager {
 
     private static final int WORLD_MAGIC = 0x4D435744; // "MCWD"
     private static final int CHUNKS_MAGIC = 0x4D43434B; // "MCCK"
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
 
     public static long parseSeed(String seedInput) {
         if (seedInput == null || seedInput.trim().isEmpty()) {
@@ -258,6 +258,35 @@ public class WorldSaveManager {
                     ItemStack slot = inv.getSlot(i);
                     out.writeByte(slot.getType().getId());
                     out.writeInt(slot.getCount());
+                    out.writeInt(slot.getDamage());
+                }
+
+                // Armor (4 slots)
+                ItemStack[] armor = player.getArmorSlots();
+                out.writeInt(armor.length);
+                for (int i = 0; i < armor.length; i++) {
+                    ItemStack slot = armor[i];
+                    if (slot != null) {
+                        out.writeByte(slot.getType().getId());
+                        out.writeInt(slot.getCount());
+                        out.writeInt(slot.getDamage());
+                    } else {
+                        out.writeByte(BlockType.AIR.getId());
+                        out.writeInt(0);
+                        out.writeInt(0);
+                    }
+                }
+
+                // Offhand (1 slot)
+                ItemStack offhand = player.getOffhandItem();
+                if (offhand != null) {
+                    out.writeByte(offhand.getType().getId());
+                    out.writeInt(offhand.getCount());
+                    out.writeInt(offhand.getDamage());
+                } else {
+                    out.writeByte(BlockType.AIR.getId());
+                    out.writeInt(0);
+                    out.writeInt(0);
                 }
 
                 // Advancements
@@ -277,12 +306,15 @@ public class WorldSaveManager {
 
                     out.writeByte(fd.getInput().getType().getId());
                     out.writeInt(fd.getInput().getCount());
+                    out.writeInt(fd.getInput().getDamage());
 
                     out.writeByte(fd.getFuel().getType().getId());
                     out.writeInt(fd.getFuel().getCount());
+                    out.writeInt(fd.getFuel().getDamage());
 
                     out.writeByte(fd.getOutput().getType().getId());
                     out.writeInt(fd.getOutput().getCount());
+                    out.writeInt(fd.getOutput().getDamage());
 
                     out.writeFloat(fd.getCookTime());
                     out.writeFloat(fd.getBurnTime());
@@ -301,6 +333,7 @@ public class WorldSaveManager {
                         ItemStack slot = cd.getSlot(s);
                         out.writeByte(slot.getType().getId());
                         out.writeInt(slot.getCount());
+                        out.writeInt(slot.getDamage());
                     }
                 }
             }
@@ -368,6 +401,8 @@ public class WorldSaveManager {
             List<FurnaceData> furnaceList = new ArrayList<>();
             List<ChestData> chestList = new ArrayList<>();
             ItemStack[] loadedSlots = new ItemStack[Inventory.TOTAL_SLOTS];
+            ItemStack[] loadedArmor = new ItemStack[4];
+            ItemStack loadedOffhand = null;
 
             try (DataInputStream in = new DataInputStream(new BufferedInputStream(new GZIPInputStream(Files.newInputStream(datFile))))) {
                 int magic = in.readInt();
@@ -417,9 +452,32 @@ public class WorldSaveManager {
                 for (int i = 0; i < invSize; i++) {
                     byte typeId = in.readByte();
                     int count = in.readInt();
+                    int damage = (version >= 3) ? in.readInt() : 0;
                     if (i < Inventory.TOTAL_SLOTS) {
-                        loadedSlots[i] = new ItemStack(BlockType.getById(typeId), count);
+                        ItemStack st = new ItemStack(BlockType.getById(typeId), count);
+                        st.setDamage(damage);
+                        loadedSlots[i] = st;
                     }
+                }
+
+                if (version >= 3) {
+                    int armorCount = in.readInt();
+                    for (int i = 0; i < armorCount; i++) {
+                        byte typeId = in.readByte();
+                        int count = in.readInt();
+                        int damage = in.readInt();
+                        if (i < 4) {
+                            ItemStack st = new ItemStack(BlockType.getById(typeId), count);
+                            st.setDamage(damage);
+                            loadedArmor[i] = st;
+                        }
+                    }
+
+                    byte offTypeId = in.readByte();
+                    int offCount = in.readInt();
+                    int offDamage = in.readInt();
+                    loadedOffhand = new ItemStack(BlockType.getById(offTypeId), offCount);
+                    loadedOffhand.setDamage(offDamage);
                 }
 
                 int advCount = in.readInt();
@@ -436,18 +494,24 @@ public class WorldSaveManager {
 
                     byte inId = in.readByte();
                     int inCount = in.readInt();
+                    int inDamage = (version >= 3) ? in.readInt() : 0;
                     fd.getInput().setType(BlockType.getById(inId));
                     fd.getInput().setCount(inCount);
+                    fd.getInput().setDamage(inDamage);
 
                     byte fuelId = in.readByte();
                     int fuelCount = in.readInt();
+                    int fuelDamage = (version >= 3) ? in.readInt() : 0;
                     fd.getFuel().setType(BlockType.getById(fuelId));
                     fd.getFuel().setCount(fuelCount);
+                    fd.getFuel().setDamage(fuelDamage);
 
                     byte outId = in.readByte();
                     int outCount = in.readInt();
+                    int outDamage = (version >= 3) ? in.readInt() : 0;
                     fd.getOutput().setType(BlockType.getById(outId));
                     fd.getOutput().setCount(outCount);
+                    fd.getOutput().setDamage(outDamage);
 
                     fd.setCookTime(in.readFloat());
                     fd.setBurnTime(in.readFloat());
@@ -466,9 +530,11 @@ public class WorldSaveManager {
                         for (int s = 0; s < slotCount; s++) {
                             byte typeId = in.readByte();
                             int count = in.readInt();
+                            int damage = (version >= 3) ? in.readInt() : 0;
                             if (s < ChestData.CHEST_SIZE) {
                                 cd.getSlot(s).setType(BlockType.getById(typeId));
                                 cd.getSlot(s).setCount(count);
+                                cd.getSlot(s).setDamage(damage);
                             }
                         }
                         chestList.add(cd);
@@ -544,7 +610,31 @@ public class WorldSaveManager {
                 if (loadedSlots[i] != null) {
                     inv.getSlot(i).setType(loadedSlots[i].getType());
                     inv.getSlot(i).setCount(loadedSlots[i].getCount());
+                    inv.getSlot(i).setDamage(loadedSlots[i].getDamage());
                 }
+            }
+
+            ItemStack[] armor = player.getArmorSlots();
+            for (int i = 0; i < 4; i++) {
+                if (loadedArmor[i] != null) {
+                    armor[i].setType(loadedArmor[i].getType());
+                    armor[i].setCount(loadedArmor[i].getCount());
+                    armor[i].setDamage(loadedArmor[i].getDamage());
+                } else {
+                    armor[i].setType(BlockType.AIR);
+                    armor[i].setCount(0);
+                    armor[i].setDamage(0);
+                }
+            }
+
+            if (loadedOffhand != null) {
+                player.getOffhandItem().setType(loadedOffhand.getType());
+                player.getOffhandItem().setCount(loadedOffhand.getCount());
+                player.getOffhandItem().setDamage(loadedOffhand.getDamage());
+            } else {
+                player.getOffhandItem().setType(BlockType.AIR);
+                player.getOffhandItem().setCount(0);
+                player.getOffhandItem().setDamage(0);
             }
 
             // Refresh loaded chunks around player

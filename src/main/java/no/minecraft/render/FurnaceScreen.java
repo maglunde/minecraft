@@ -89,8 +89,19 @@ public class FurnaceScreen extends AbstractContainerScreen {
             int tId = outStack.getType().getItemTexture();
             float[] uv = TextureAtlas.getUVs(tId);
             addRect(tex, outX + 4.0f * p, outY + 4.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
-            if (outStack.getCount() > 0) {
+            if (outStack.getCount() > 1 && !outStack.getType().isDamageable()) {
                 hud.drawMinecraftNumber(overlayGeom, outStack.getCount(), outX + 22.0f * p, outY + 22.0f * p, p * 0.95f);
+            }
+            if (outStack.getType().isDamageable() && outStack.getDamage() > 0) {
+                float barW = 12.0f * p;
+                float barH = 1.2f * p;
+                float bx = outX + 6.0f * p;
+                float by = outY + 17.0f * p;
+                float ratio = outStack.getDurabilityRatio();
+                addRect(overlayGeom, bx, by, barW, barH, 0, 0, 0, 0, 0, 0, 0, 1.0f);
+                float r = ratio < 0.5f ? 1.0f : (1.0f - ratio) * 2.0f;
+                float g = ratio > 0.5f ? 1.0f : ratio * 2.0f;
+                addRect(overlayGeom, bx, by, barW * ratio, barH, 0, 0, 0, 0, r, g, 0.0f, 1.0f);
             }
         }
 
@@ -126,17 +137,7 @@ public class FurnaceScreen extends AbstractContainerScreen {
         }
 
         // 11. Carried item on cursor
-        if (!hud.carriedItem.isEmpty()) {
-            int tId = hud.carriedItem.getType().getItemTexture();
-            float[] uv = TextureAtlas.getUVs(tId);
-            float cx = hud.mouseX - 8.0f * p;
-            float cy = hud.mouseY - 8.0f * p;
-            addRect(tex, cx, cy, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 1.0f);
-            int displayCount = hud.getCarriedDisplayCount();
-            if (displayCount > 0) {
-                hud.drawMinecraftNumber(overlayGeom, displayCount, cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
-            }
-        }
+        renderCarriedItem(tex, overlayGeom, p);
 
         // 12. Hover tooltip popup
         if (hud.carriedItem.isEmpty() && hoveredStack != null && !hoveredStack.isEmpty()) {

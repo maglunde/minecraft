@@ -71,8 +71,19 @@ public class WorldSaveManagerTest {
         player.getInventory().clear();
         player.getInventory().getSlot(0).setType(BlockType.IRON_PICKAXE);
         player.getInventory().getSlot(0).setCount(1);
+        player.getInventory().getSlot(0).setDamage(55); // Damaged tool!
         player.getInventory().getSlot(1).setType(BlockType.IRON_INGOT);
         player.getInventory().getSlot(1).setCount(42);
+
+        // Armor with damage
+        player.getArmorSlot(0).setType(BlockType.DIAMOND_HELMET);
+        player.getArmorSlot(0).setCount(1);
+        player.getArmorSlot(0).setDamage(120);
+
+        // Offhand item with damage
+        player.getOffhandItem().setType(BlockType.BOW);
+        player.getOffhandItem().setCount(1);
+        player.getOffhandItem().setDamage(40);
 
         // Modify world blocks
         world.setBlock(10, 20, 10, BlockType.DIAMOND_ORE);
@@ -101,14 +112,23 @@ public class WorldSaveManagerTest {
         assertEquals(14, newPlayer.getHealth());
         assertEquals(16, newPlayer.getHunger());
 
-        // Assert inventory
+        // Assert inventory and durability
         ItemStack slot0 = newPlayer.getInventory().getSlot(0);
         assertEquals(BlockType.IRON_PICKAXE, slot0.getType());
         assertEquals(1, slot0.getCount());
+        assertEquals(55, slot0.getDamage());
 
         ItemStack slot1 = newPlayer.getInventory().getSlot(1);
         assertEquals(BlockType.IRON_INGOT, slot1.getType());
         assertEquals(42, slot1.getCount());
+
+        // Assert armor durability
+        assertEquals(BlockType.DIAMOND_HELMET, newPlayer.getArmorSlot(0).getType());
+        assertEquals(120, newPlayer.getArmorSlot(0).getDamage());
+
+        // Assert offhand durability
+        assertEquals(BlockType.BOW, newPlayer.getOffhandItem().getType());
+        assertEquals(40, newPlayer.getOffhandItem().getDamage());
 
         // Assert world block and time
         assertEquals(180.0f, newWorld.getWorldTime(), 0.01f);

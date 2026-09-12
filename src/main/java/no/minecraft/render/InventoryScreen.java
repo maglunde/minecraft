@@ -124,9 +124,20 @@ public class InventoryScreen extends AbstractContainerScreen {
             BlockType outBlock = craftResult.getType();
             int tileId = outBlock.getItemTexture();
             float[] uv = TextureAtlas.getUVs(tileId);
-            addRect(tex, resultSlotX + 3.0f * p, resultSlotY + 3.0f * p, 14.0f * p, 14.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
-            if (craftResult.getCount() > 0) {
+            addRect(tex, resultSlotX + 2.0f * p, resultSlotY + 2.0f * p, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
+            if (craftResult.getCount() > 1 && !outBlock.isDamageable()) {
                 hud.drawMinecraftNumber(overlayGeom, craftResult.getCount(), resultSlotX + 19.0f * p, resultSlotY + 19.0f * p, p * 0.95f);
+            }
+            if (outBlock.isDamageable() && craftResult.getDamage() > 0) {
+                float barW = 12.0f * p;
+                float barH = 1.2f * p;
+                float bx = resultSlotX + 4.0f * p;
+                float by = resultSlotY + 15.0f * p;
+                float ratio = craftResult.getDurabilityRatio();
+                addRect(overlayGeom, bx, by, barW, barH, 0, 0, 0, 0, 0, 0, 0, 1.0f);
+                float r = ratio < 0.5f ? 1.0f : (1.0f - ratio) * 2.0f;
+                float g = ratio > 0.5f ? 1.0f : ratio * 2.0f;
+                addRect(overlayGeom, bx, by, barW * ratio, barH, 0, 0, 0, 0, r, g, 0.0f, 1.0f);
             }
         }
 
@@ -178,17 +189,7 @@ public class InventoryScreen extends AbstractContainerScreen {
         }
 
         // 14. Carried item on mouse cursor
-        if (!hud.carriedItem.isEmpty()) {
-            int tId = hud.carriedItem.getType().getItemTexture();
-            float[] uv = TextureAtlas.getUVs(tId);
-            float cx = hud.mouseX - 8.0f * p;
-            float cy = hud.mouseY - 8.0f * p;
-            addRect(tex, cx, cy, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 1.0f);
-            int displayCount = hud.getCarriedDisplayCount();
-            if (displayCount > 0) {
-                hud.drawMinecraftNumber(overlayGeom, displayCount, cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
-            }
-        }
+        renderCarriedItem(tex, overlayGeom, p);
 
         // 15. Item tooltip popup on hover
         if (hud.carriedItem.isEmpty() && hoveredStack != null && !hoveredStack.isEmpty()) {

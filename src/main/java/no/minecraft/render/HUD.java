@@ -2126,7 +2126,7 @@ public class HUD {
                 addRect(tex, slotX, slotY, slotInnerSize, slotInnerSize, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
 
                 // Draw stack count number directly in the bottom-right corner of the slot on TOP of texture
-                if (count > 0 && !block.isDamageable()) {
+                if (count > 1 && !block.isDamageable()) {
                     float numRight = hx + (i * 20.0f + 18.5f) * pScale;
                     float numBottom = hy + 18.5f * pScale;
                     drawMinecraftNumber(overlayGeom, count, numRight, numBottom, pScale * 0.95f);
@@ -2177,7 +2177,7 @@ public class HUD {
                 float[] uv = TextureAtlas.getUVs(tileId);
                 addRect(tex, offItemX, offItemY, slotInnerSize, slotInnerSize, uv[0], uv[1], uv[2], uv[3], 1, 1, 1, 1);
 
-                if (offCount > 0 && !offBlock.isDamageable()) {
+                if (offCount > 1 && !offBlock.isDamageable()) {
                     float numRight = offhandX + 22.0f * pScale;
                     float numBottom = hy + 18.5f * pScale;
                     drawMinecraftNumber(overlayGeom, offCount, numRight, numBottom, pScale * 0.95f);
@@ -2563,6 +2563,7 @@ public class HUD {
     }
 
     void drawMinecraftNumber(List<Float> g, int number, float rightX, float bottomY, float s) {
+        if (number <= 1) return;
         String numStr = String.valueOf(number);
         int charWidth = 5;
         int charHeight = 7;

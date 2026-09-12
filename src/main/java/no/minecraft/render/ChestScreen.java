@@ -97,17 +97,7 @@ public class ChestScreen extends AbstractContainerScreen {
         }
 
         // 7. Carried item on cursor
-        if (!hud.carriedItem.isEmpty()) {
-            int tId = hud.carriedItem.getType().getItemTexture();
-            float[] uv = TextureAtlas.getUVs(tId);
-            float cx = hud.mouseX - 8.0f * p;
-            float cy = hud.mouseY - 8.0f * p;
-            addRect(tex, cx, cy, 16.0f * p, 16.0f * p, uv[0], uv[1], uv[2], uv[3], 1.0f, 1.0f, 1.0f, 1.0f);
-            int displayCount = hud.getCarriedDisplayCount();
-            if (displayCount > 0) {
-                hud.drawMinecraftNumber(overlayGeom, displayCount, cx + 16.0f * p, cy + 16.0f * p, p * 0.95f);
-            }
-        }
+        renderCarriedItem(tex, overlayGeom, p);
 
         // 8. Hover tooltip popup
         if (hud.carriedItem.isEmpty() && hoveredStack != null && !hoveredStack.isEmpty()) {
