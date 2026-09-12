@@ -201,7 +201,6 @@
                 <configuration>
                     <executable>java</executable>
                     <arguments>
-                        <argument>-XstartOnFirstThread</argument>
                         <argument>-classpath</argument>
                         <classpath/>
                         <argument>no.minecraft.Main</argument>
@@ -210,4 +209,32 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>macos</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                </os>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <configuration>
+                            <executable>java</executable>
+                            <arguments>
+                                <argument>-XstartOnFirstThread</argument>
+                                <argument>-classpath</argument>
+                                <classpath/>
+                                <argument>no.minecraft.Main</argument>
+                            </arguments>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
