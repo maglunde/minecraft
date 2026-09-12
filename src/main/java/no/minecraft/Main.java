@@ -563,6 +563,7 @@ public class Main {
                 } else if (action == GLFW_RELEASE) {
                     isRightMouseDown = false;
                     rightClickTimer = 0.0f;
+                    handleRightClickRelease();
                 }
             }
         });
@@ -826,18 +827,11 @@ public class Main {
             }
         }
 
-        // 1. Bow shooting (fires Arrow entity if player has arrows or is in Creative)
+        // 1. Bow drawing (holding right-click charges the bow for up to 2.0 seconds)
         if (held == BlockType.BOW) {
             boolean hasArrow = player.getGameMode() == GameMode.CREATIVE || player.getInventory().getItemCount(BlockType.ARROW) > 0;
             if (hasArrow) {
-                if (player.getGameMode() != GameMode.CREATIVE) {
-                    player.getInventory().removeItem(BlockType.ARROW, 1);
-                    player.getInventory().getSlot(player.getSelectedSlot()).damageTool(1);
-                }
-                Vector3f eye = player.getEyePosition();
-                Vector3f fwd = player.getCamera().getForward();
-                world.spawnArrow(eye.x + fwd.x * 0.3f, eye.y + fwd.y * 0.3f, eye.z + fwd.z * 0.3f, fwd.x * 24.0f, fwd.y * 24.0f, fwd.z * 24.0f, player, false);
-                no.minecraft.sound.SoundManager.getInstance().play("bow_shoot", 1.0f);
+                player.startDrawingBow();
                 return true;
             }
         }
@@ -1097,8 +1091,12 @@ public class Main {
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             // Setup 3D matrices
+            float fov = gs.getFov();
+            if (player.isDrawingBow()) {
+                fov -= player.getBowChargeProgress() * 12.0f;
+            }
             Matrix4f projection = new Matrix4f().perspective(
-                    (float) Math.toRadians(gs.getFov()),
+                    (float) Math.toRadians(fov),
                     (float) width / (float) height,
                     0.05f,
                     300.0f
@@ -1373,9 +1371,19 @@ public class Main {
                         player.useSelectedBlock();
                     }
                 }
+            } else if (held == BlockType.BOW && player.isDrawingBow()) {
+                boolean hasArrow = player.getGameMode() == GameMode.CREATIVE || player.getInventory().getItemCount(BlockType.ARROW) > 0;
+                if (hasArrow) {
+                    player.updateDrawingBow(dt);
+                } else {
+                    player.stopDrawingBow();
+                }
             } else {
                 if (player.isEating()) {
                     player.stopEating();
+                }
+                if (player.isDrawingBow()) {
+                    player.stopDrawingBow();
                 }
                 rightClickTimer -= dt;
                 if (rightClickTimer <= 0.0f) {
@@ -1391,7 +1399,54 @@ public class Main {
             if (player.isEating()) {
                 player.stopEating();
             }
+            if (player.isDrawingBow()) {
+                handleRightClickRelease();
+            }
             rightClickTimer = 0.0f;
+        }
+    }
+
+    private void handleRightClickRelease() {
+        if (player.isDrawingBow()) {
+            float charge = player.getBowChargeTimer();
+            player.stopDrawingBow();
+
+            BlockType held = player.getSelectedBlock();
+            if (held == BlockType.BOW && charge >= 0.1f) {
+                boolean hasArrow = player.getGameMode() == GameMode.CREATIVE || player.getInventory().getItemCount(BlockType.ARROW) > 0;
+                if (hasArrow) {
+                    if (player.getGameMode() != GameMode.CREATIVE) {
+                        player.getInventory().removeItem(BlockType.ARROW, 1);
+                        player.getInventory().getSlot(player.getSelectedSlot()).damageTool(1);
+                    }
+
+                    float ratio = Math.min(1.0f, charge / Player.MAX_BOW_CHARGE);
+                    // Speed: 8.0 m/s up to 32.0 m/s
+                    float speed = 8.0f + ratio * 24.0f;
+                    // Damage: 2 up to 10 (or 12 if crit)
+                    int baseDamage = (int) Math.round(2 + ratio * 8);
+                    boolean isCrit = (ratio >= 0.85f);
+                    int finalDamage = isCrit ? baseDamage + 2 : baseDamage;
+
+                    Vector3f eye = player.getEyePosition();
+                    Vector3f fwd = player.getCamera().getForward();
+                    world.spawnArrow(
+                            eye.x + fwd.x * 0.3f,
+                            eye.y + fwd.y * 0.3f,
+                            eye.z + fwd.z * 0.3f,
+                            fwd.x * speed,
+                            fwd.y * speed,
+                            fwd.z * speed,
+                            player,
+                            false,
+                            finalDamage,
+                            isCrit
+                    );
+
+                    float pitch = 0.8f + ratio * 0.4f;
+                    no.minecraft.sound.SoundManager.getInstance().play("bow_shoot", pitch);
+                }
+            }
         }
     }
 

@@ -79,6 +79,11 @@ public class Player {
     private float eatTimer = 0.0f;
     private float eatSoundTimer = 0.0f;
 
+    // Bow Drawing System (opp til 2 sekunder stramming)
+    public static final float MAX_BOW_CHARGE = 2.0f;
+    private boolean isDrawingBow = false;
+    private float bowChargeTimer = 0.0f;
+
     private boolean movingForward = false;
     private boolean movingBackward = false;
     private boolean movingLeft = false;
@@ -114,7 +119,7 @@ public class Player {
         }
 
         float baseSpeed = isSneaking ? SNEAK_SPEED : (isSprinting ? SPRINT_SPEED : WALK_SPEED);
-        if (isEating) {
+        if (isEating || isDrawingBow) {
             baseSpeed *= 0.30f;
         }
         // Soul Sand speed reduction
@@ -617,6 +622,10 @@ public class Player {
 
     public void setSelectedSlot(int slot) {
         if (slot >= 0 && slot < Inventory.HOTBAR_SIZE) {
+            if (this.selectedSlot != slot) {
+                stopEating();
+                stopDrawingBow();
+            }
             this.selectedSlot = slot;
         }
     }
@@ -839,6 +848,36 @@ public class Player {
     public void addExhaustion(float e) {
         if (gameMode == GameMode.SURVIVAL) {
             this.exhaustion += e;
+        }
+    }
+
+    public boolean isDrawingBow() {
+        return isDrawingBow;
+    }
+
+    public float getBowChargeTimer() {
+        return bowChargeTimer;
+    }
+
+    public float getBowChargeProgress() {
+        return Math.min(1.0f, bowChargeTimer / MAX_BOW_CHARGE);
+    }
+
+    public void startDrawingBow() {
+        if (!isDrawingBow) {
+            isDrawingBow = true;
+            bowChargeTimer = 0.0f;
+        }
+    }
+
+    public void stopDrawingBow() {
+        isDrawingBow = false;
+        bowChargeTimer = 0.0f;
+    }
+
+    public void updateDrawingBow(float dt) {
+        if (isDrawingBow) {
+            bowChargeTimer = Math.min(MAX_BOW_CHARGE, bowChargeTimer + dt);
         }
     }
 

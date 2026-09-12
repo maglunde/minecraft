@@ -108,6 +108,73 @@ public class ArrowCollisionTest {
         assertTrue(player.getHealth() < 20, "Fiendtlig pil skal skade spilleren");
     }
 
+    @Test
+    public void testPlayerArrowSpawnsCombatTextOnMobHit() {
+        World world = new World(12345L);
+        Player player = new Player(world, 0, 22, 0);
+        clearFlightPath(world, 0, 4);
+        world.spawnMob(MobType.ZOMBIE, 3.0f, 20.0f, 0.5f);
+        Mob zombie = world.getMobs().get(0);
+
+        int textsBefore = no.minecraft.render.CombatTextManager.getInstance().getTexts().size();
+
+        // Arrow med 6 skade (3 hjerter)
+        Arrow arrow = new Arrow(0.5f, 20.5f, 0.5f, 60.0f, 0.0f, 0.0f, player, false, 6, false);
+        arrow.update(0.05f, world, player);
+
+        assertTrue(arrow.isDead());
+        assertEquals(14, zombie.getHealth(), "Zombie skal ha tatt 6 skade (20 -> 14)");
+
+        var texts = no.minecraft.render.CombatTextManager.getInstance().getTexts();
+        assertEquals(textsBefore + 1, texts.size(), "CombatTextManager skal motta scrolling combat text ved piltreff");
+        var ct = texts.get(texts.size() - 1);
+        assertEquals(3.0f, ct.hearts, 0.01f, "Combat text skal vise 3.0 hjerter for 6 skadepoeng");
+        assertFalse(ct.isCrit, "Ikke-kritisk pil skal ha isCrit = false");
+    }
+
+    @Test
+    public void testArrowCriticalHitAndDamageScaling() {
+        World world = new World(12345L);
+        Player player = new Player(world, 0, 22, 0);
+        clearFlightPath(world, 0, 4);
+        world.spawnMob(MobType.ZOMBIE, 3.0f, 20.0f, 0.5f);
+        Mob zombie = world.getMobs().get(0);
+
+        // Arrow med maks stramming (12 skade = 6 hjerter, isCrit = true)
+        Arrow critArrow = new Arrow(0.5f, 20.5f, 0.5f, 60.0f, 0.0f, 0.0f, player, false, 12, true);
+        critArrow.update(0.05f, world, player);
+
+        assertTrue(critArrow.isDead());
+        assertEquals(8, zombie.getHealth(), "Zombie skal ha tatt 12 skade ved full stramming (20 -> 8)");
+
+        var texts = no.minecraft.render.CombatTextManager.getInstance().getTexts();
+        var ct = texts.get(texts.size() - 1);
+        assertEquals(6.0f, ct.hearts, 0.01f, "Combat text skal vise 6.0 hjerter for 12 skadepoeng");
+        assertTrue(ct.isCrit, "Fullt strammet pil skal markeres som kritisk");
+    }
+
+    @Test
+    public void testPlayerBowChargingState() {
+        World world = new World(12345L);
+        Player player = new Player(world, 0, 20, 0);
+
+        assertFalse(player.isDrawingBow());
+        assertEquals(0.0f, player.getBowChargeProgress(), 0.001f);
+
+        player.startDrawingBow();
+        assertTrue(player.isDrawingBow());
+
+        player.updateDrawingBow(1.0f);
+        assertEquals(0.5f, player.getBowChargeProgress(), 0.01f, "1.0s oppdatering skal gi 50% stramming (maks 2.0s)");
+
+        player.updateDrawingBow(1.5f);
+        assertEquals(1.0f, player.getBowChargeProgress(), 0.01f, "Over 2.0s skal begrenses til 100% stramming");
+
+        player.stopDrawingBow();
+        assertFalse(player.isDrawingBow());
+        assertEquals(0.0f, player.getBowChargeProgress(), 0.001f);
+    }
+
     private void clearFlightPath(World world, int fromX, int toX) {
         for (int x = fromX; x <= toX; x++) {
             for (int y = 19; y <= 22; y++) {

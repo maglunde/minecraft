@@ -206,15 +206,20 @@ public class PlayerRenderer {
         addOrientedBox(bodyVerts, rightLegMat, -0.10f, -0.75f, -0.11f, 0.20f, 0.15f, 0.22f, shoeR, shoeG, shoeB);
 
         // --- ARMS ---
-        // Left Arm (Swings opposite to left leg)
+        // Left Arm (Swings opposite to left leg, aims bow when drawing)
         Matrix4f leftArmMat = new Matrix4f(torsoMat).translate(-0.31f, 0.60f, 0.0f);
-        leftArmMat.rotateX(-armAngle);
+        if (player.isDrawingBow()) {
+            leftArmMat.rotateX((float) Math.toRadians(-85.0f));
+            leftArmMat.rotateY((float) Math.toRadians(25.0f));
+        } else {
+            leftArmMat.rotateX(-armAngle);
+        }
         // Sleeve (top 0.18m)
         addOrientedBox(bodyVerts, leftArmMat, -0.09f, -0.18f, -0.09f, 0.18f, 0.18f, 0.18f, shirtR, shirtG, shirtB);
         // Forearm & Hand (skin tone: 0.47m)
         addOrientedBox(bodyVerts, leftArmMat, -0.08f, -0.65f, -0.08f, 0.16f, 0.47f, 0.16f, skinR, skinG, skinB);
 
-        // Right Arm (Carries tool / item, swings when mining/attacking, raises when eating)
+        // Right Arm (Carries tool / item, swings when mining/attacking, raises when eating, pulls string when drawing bow)
         Matrix4f rightArmMat = new Matrix4f(torsoMat).translate(0.31f, 0.60f, 0.0f);
         if (player.isEating()) {
             float eatProg = player.getEatProgress();
@@ -222,6 +227,9 @@ public class PlayerRenderer {
             rightArmMat.rotateX((float) Math.toRadians(-80.0f + eatWobble * 5.0f));
             rightArmMat.rotateY((float) Math.toRadians(-35.0f));
             rightArmMat.rotateZ((float) Math.toRadians(15.0f));
+        } else if (player.isDrawingBow()) {
+            rightArmMat.rotateX((float) Math.toRadians(-85.0f));
+            rightArmMat.rotateY((float) Math.toRadians(-30.0f));
         } else {
             rightArmMat.rotateX(armAngle - swingAngle);
         }

@@ -11,22 +11,30 @@ public class Arrow {
     private final Vector3f velocity = new Vector3f();
     private final boolean hostileShooter;
     private final Player shooter;
+    private final int damage;
+    private final boolean isCrit;
     private boolean dead = false;
     private float lifetime = 0.0f;
 
     public Arrow(float x, float y, float z, float vx, float vy, float vz) {
-        this(x, y, z, vx, vy, vz, false);
+        this(x, y, z, vx, vy, vz, null, false, 3, false);
     }
 
     public Arrow(float x, float y, float z, float vx, float vy, float vz, boolean hostileShooter) {
-        this(x, y, z, vx, vy, vz, null, hostileShooter);
+        this(x, y, z, vx, vy, vz, null, hostileShooter, 3, false);
     }
 
     public Arrow(float x, float y, float z, float vx, float vy, float vz, Player shooter, boolean hostileShooter) {
+        this(x, y, z, vx, vy, vz, shooter, hostileShooter, 3, false);
+    }
+
+    public Arrow(float x, float y, float z, float vx, float vy, float vz, Player shooter, boolean hostileShooter, int damage, boolean isCrit) {
         this.position.set(x, y, z);
         this.velocity.set(vx, vy, vz);
         this.shooter = shooter;
         this.hostileShooter = hostileShooter;
+        this.damage = damage;
+        this.isCrit = isCrit;
     }
 
     public void update(float dt, World world, Player player) {
@@ -73,7 +81,7 @@ public class Arrow {
             if (x >= pBox.minX && x <= pBox.maxX &&
                 y >= pBox.minY && y <= pBox.maxY &&
                 z >= pBox.minZ && z <= pBox.maxZ) {
-                player.damage(3);
+                player.damage(damage);
                 // Knockback
                 player.getVelocity().add(velocity.x * 0.25f, 3.0f, velocity.z * 0.25f);
                 return true;
@@ -89,7 +97,28 @@ public class Arrow {
             if (x >= box.minX && x <= box.maxX && y >= box.minY && y <= box.maxY && z >= box.minZ && z <= box.maxZ) {
                 float vlen = (float) Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
                 float kb = (vlen > 0.01f) ? 1.0f / vlen : 0.0f;
-                m.takeDamage(3, velocity.x * kb, velocity.z * kb, world);
+                m.takeDamage(damage, velocity.x * kb, velocity.z * kb, world);
+
+                float mobH = m.getType().getHeight();
+                if (isCrit) {
+                    no.minecraft.sound.SoundManager.getInstance().play("crit", 1.0f);
+                    no.minecraft.render.ParticleManager.getInstance().spawnCritParticles(
+                            m.getPosition().x,
+                            m.getPosition().y + mobH * 0.65f,
+                            m.getPosition().z,
+                            16
+                    );
+                } else {
+                    no.minecraft.sound.SoundManager.getInstance().play("hurt", 0.9f);
+                }
+
+                no.minecraft.render.CombatTextManager.getInstance().add(
+                        m.getPosition().x,
+                        m.getPosition().y + mobH * 0.75f,
+                        m.getPosition().z,
+                        damage / 2.0f,
+                        isCrit
+                );
                 return true;
             }
         }
@@ -118,5 +147,13 @@ public class Arrow {
 
     public boolean isDead() {
         return dead;
+    }
+
+    public int getDamage() {
+        return damage;
+    }
+
+    public boolean isCrit() {
+        return isCrit;
     }
 }

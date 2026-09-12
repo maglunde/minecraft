@@ -232,6 +232,13 @@ public class HandRenderer {
             armMat.rotateX((float) Math.toRadians(25.0f));
             armMat.rotateY((float) Math.toRadians(-20.0f));
             armMat.rotateZ((float) Math.toRadians(15.0f));
+        } else if (player.isDrawingBow()) {
+            float prog = player.getBowChargeProgress();
+            float wobble = (prog >= 0.85f) ? (float) Math.sin(System.currentTimeMillis() * 0.04f) * 0.002f : 0.0f;
+            armMat.translate(-0.12f * prog + wobble, 0.05f * prog + wobble, 0.12f * prog);
+            armMat.rotateX((float) Math.toRadians(-12.0f * prog));
+            armMat.rotateY((float) Math.toRadians(-15.0f * prog));
+            armMat.rotateZ((float) Math.toRadians(8.0f * prog));
         }
 
         if (hasItem && held.isSolid()) {

@@ -124,4 +124,63 @@ public class MobAITest {
         assertEquals(0.0f, dragon.getVelocity().x, 0.001f);
         assertEquals(0.0f, dragon.getVelocity().z, 0.001f);
     }
+
+    @Test
+    public void testSkeletonShootsWhenLineOfSightIsClear() {
+        World world = new World(12345L);
+        for (int x = -5; x <= 15; x++) {
+            for (int z = -5; z <= 5; z++) {
+                world.setBlock(x, 9, z, BlockType.STONE);
+                for (int y = 10; y <= 16; y++) {
+                    world.setBlock(x, y, z, BlockType.AIR);
+                }
+            }
+        }
+
+        Player player = new Player(world, 10.0f, 10.0f, 0.0f);
+        player.setGameMode(GameMode.SURVIVAL);
+
+        Mob skeleton = new Mob(MobType.SKELETON, 0.0f, 10.0f, 0.0f);
+
+        // Update skeleton nok tid til at shootCooldown utløper
+        for (int i = 0; i < 40; i++) {
+            skeleton.update(0.05f, world, player);
+            if (!world.getArrows().isEmpty()) break;
+        }
+
+        assertFalse(world.getArrows().isEmpty(), "Skeleton skal skyte når det har klar bane mot spiller");
+    }
+
+    @Test
+    public void testSkeletonDoesNotShootWhenBlockedByWall() {
+        World world = new World(12345L);
+        for (int x = -5; x <= 15; x++) {
+            for (int z = -5; z <= 5; z++) {
+                world.setBlock(x, 9, z, BlockType.STONE);
+                for (int y = 10; y <= 16; y++) {
+                    world.setBlock(x, y, z, BlockType.AIR);
+                }
+            }
+        }
+
+        // Bygg en solid vegg mellom skeleton og spiller ved x = 5
+        for (int z = -5; z <= 5; z++) {
+            for (int y = 10; y <= 14; y++) {
+                world.setBlock(5, y, z, BlockType.STONE);
+            }
+        }
+
+        Player player = new Player(world, 10.0f, 10.0f, 0.0f);
+        player.setGameMode(GameMode.SURVIVAL);
+
+        Mob skeleton = new Mob(MobType.SKELETON, 0.0f, 10.0f, 0.0f);
+
+        // Kjør oppdatering i 3 sekunder
+        for (int i = 0; i < 60; i++) {
+            skeleton.update(0.05f, world, player);
+        }
+
+        assertTrue(world.getArrows().isEmpty(), "Skeleton skal IKKE skyte når en vegg blokkerer sikten mot spiller");
+        assertTrue(skeleton.getVelocity().x > 0, "Skeleton skal bevege seg mot spiller for å finne klar bane");
+    }
 }

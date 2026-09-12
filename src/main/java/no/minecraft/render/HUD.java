@@ -1962,7 +1962,6 @@ public class HUD {
             addRect(geom, 0, 0, windowWidth, windowHeight, 0, 0, 0, 0, 0.85f, 0.08f, 0.08f, alpha);
         }
 
-        // 2. Minecraft Crosshair in center (only when inventory is closed and not in front third person)
         if (!isInventoryOpen() && player.getCamera().getPerspective() != no.minecraft.player.Perspective.THIRD_PERSON_FRONT) {
             float cx = windowWidth / 2.0f;
             float cy = windowHeight / 2.0f;
@@ -1970,6 +1969,10 @@ public class HUD {
                 drawDebugCrosshair(geom, overlayGeom, cx, cy, player.getCamera());
             } else {
                 drawMinecraftCrosshair(geom, cx, cy);
+            }
+
+            if (player.isDrawingBow()) {
+                drawBowChargeIndicator(geom, cx, cy + 14.0f, player.getBowChargeProgress());
             }
         }
 
@@ -2460,6 +2463,33 @@ public class HUD {
         addRect(g, cx - th / 2 - 1, cy - size - 1, th + 2, size * 2 + 2, 0, 0, 0, 0, 0, 0, 0, 0.6f);
         addRect(g, cx - size, cy - th / 2, size * 2, th, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 0.9f);
         addRect(g, cx - th / 2, cy - size, th, size * 2, 0, 0, 0, 0, 1.0f, 1.0f, 1.0f, 0.9f);
+    }
+
+    private void drawBowChargeIndicator(List<Float> g, float cx, float cy, float progress) {
+        float barW = 20.0f;
+        float barH = 3.0f;
+        float x = cx - barW / 2.0f;
+        float y = cy;
+
+        // Mørk bakgrunn med 1px ramme
+        addRect(g, x - 1, y - 1, barW + 2, barH + 2, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.65f);
+        addRect(g, x, y, barW, barH, 0, 0, 0, 0, 0.2f, 0.2f, 0.2f, 0.8f);
+
+        // Fyll søylen basert på strammingsgrad
+        float fillW = barW * Math.clamp(progress, 0.0f, 1.0f);
+        if (fillW > 0.5f) {
+            float r, gr, b;
+            if (progress >= 0.85f) {
+                // Maks stramming (kritisk skudd): lys gullgul
+                r = 1.0f; gr = 0.90f; b = 0.25f;
+            } else {
+                // Under opplading: fargeskala fra lys hvitgrønn til grønn
+                r = 0.85f * (1.0f - progress);
+                gr = 0.95f;
+                b = 0.35f * (1.0f - progress);
+            }
+            addRect(g, x, y, fillW, barH, 0, 0, 0, 0, r, gr, b, 0.95f);
+        }
     }
 
     private void drawThickLine(List<Float> g, float x0, float y0, float x1, float y1, float thickness, float r, float gr, float b, float a) {

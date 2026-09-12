@@ -236,23 +236,39 @@ public class Mob {
 
     private static boolean thinkSkeleton(Mob m, float dt, World world, Player player, float dist, float dx, float dz) {
         m.yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
-        // Skeleton keeps distance (around 8-12 blocks) and shoots
-        if (dist > 10.0f) {
+
+        float eyeY = m.position.y + m.type.getHeight() * 0.85f;
+        Vector3f pEye = player.getEyePosition();
+        Vector3f pPos = player.getPosition();
+        float pChestY = pPos.y + 0.9f;
+
+        boolean hasLineOfSight = no.minecraft.player.Raycast.hasLineOfSight(world, m.position.x, eyeY, m.position.z, pEye.x, pEye.y, pEye.z)
+                || no.minecraft.player.Raycast.hasLineOfSight(world, m.position.x, eyeY, m.position.z, pPos.x, pChestY, pPos.z);
+
+        if (!hasLineOfSight) {
+            // Skjelettet ser ikke spilleren: beveg seg mot spiller for å finne fri sikt, og skyt aldri
             m.moveX = dx * m.type.getMoveSpeed();
             m.moveZ = dz * m.type.getMoveSpeed();
-        } else if (dist < 6.0f) {
-            m.moveX = -dx * m.type.getMoveSpeed();
-            m.moveZ = -dz * m.type.getMoveSpeed();
-        }
+            m.shootCooldown = Math.max(0.5f, m.shootCooldown - dt);
+        } else {
+            // Skjelettet har fri sikt: hold avstand (rundt 6-10 blokker) og skyt
+            if (dist > 10.0f) {
+                m.moveX = dx * m.type.getMoveSpeed();
+                m.moveZ = dz * m.type.getMoveSpeed();
+            } else if (dist < 6.0f) {
+                m.moveX = -dx * m.type.getMoveSpeed();
+                m.moveZ = -dz * m.type.getMoveSpeed();
+            }
 
-        m.shootCooldown -= dt;
-        if (m.shootCooldown <= 0 && dist < 18.0f) {
-            m.shootCooldown = 2.0f + m.random.nextFloat() * 0.5f;
-            no.minecraft.sound.SoundManager.getInstance().play("bow_shoot", 0.9f);
-            float arrowVx = dx * 14.0f;
-            float arrowVy = (player.getPosition().y - m.position.y) * 2.0f + 2.5f;
-            float arrowVz = dz * 14.0f;
-            world.spawnArrow(m.position.x, m.position.y + m.type.getHeight() * 0.7f, m.position.z, arrowVx, arrowVy, arrowVz, true);
+            m.shootCooldown -= dt;
+            if (m.shootCooldown <= 0 && dist < 18.0f) {
+                m.shootCooldown = 2.0f + m.random.nextFloat() * 0.5f;
+                no.minecraft.sound.SoundManager.getInstance().play("bow_shoot", 0.9f);
+                float arrowVx = dx * 14.0f;
+                float arrowVy = (player.getPosition().y - m.position.y) * 2.0f + 2.5f;
+                float arrowVz = dz * 14.0f;
+                world.spawnArrow(m.position.x, m.position.y + m.type.getHeight() * 0.7f, m.position.z, arrowVx, arrowVy, arrowVz, true);
+            }
         }
         return true;
     }
@@ -271,45 +287,58 @@ public class Mob {
 
     private static boolean thinkBlaze(Mob m, float dt, World world, Player player, float dist, float dx, float dz) {
         m.yaw = (float) Math.toDegrees(Math.atan2(dz, dx));
-        if (dist > 8.0f) {
+        float eyeY = m.position.y + 0.8f;
+        Vector3f pEye = player.getEyePosition();
+        Vector3f pPos = player.getPosition();
+        float pChestY = pPos.y + 0.9f;
+
+        boolean hasLineOfSight = no.minecraft.player.Raycast.hasLineOfSight(world, m.position.x, eyeY, m.position.z, pEye.x, pEye.y, pEye.z)
+                || no.minecraft.player.Raycast.hasLineOfSight(world, m.position.x, eyeY, m.position.z, pPos.x, pChestY, pPos.z);
+
+        if (!hasLineOfSight) {
             m.moveX = dx * m.type.getMoveSpeed();
             m.moveZ = dz * m.type.getMoveSpeed();
-        } else if (dist < 4.0f) {
-            m.moveX = -dx * m.type.getMoveSpeed();
-            m.moveZ = -dz * m.type.getMoveSpeed();
+            m.shootCooldown = Math.max(0.6f, m.shootCooldown - dt);
+        } else {
+            if (dist > 8.0f) {
+                m.moveX = dx * m.type.getMoveSpeed();
+                m.moveZ = dz * m.type.getMoveSpeed();
+            } else if (dist < 4.0f) {
+                m.moveX = -dx * m.type.getMoveSpeed();
+                m.moveZ = -dz * m.type.getMoveSpeed();
+            }
+
+            m.shootCooldown -= dt;
+            if (m.shootCooldown <= 0 && dist < 20.0f) {
+                m.shootCooldown = 2.5f + m.random.nextFloat();
+                no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.2f);
+                float vx = dx * 16.0f;
+                float vy = (player.getPosition().y - m.position.y) * 2.0f + 1.5f;
+                float vz = dz * 16.0f;
+                world.spawnArrow(m.position.x, m.position.y + 0.8f, m.position.z, vx, vy, vz, true);
+            }
         }
         float targetY = player.getPosition().y + 1.5f;
         m.velocity.y += (targetY - m.position.y) * 2.0f * dt;
         m.velocity.y *= 0.85f;
 
-        m.shootCooldown -= dt;
-        if (m.shootCooldown <= 0 && dist < 20.0f) {
-            m.shootCooldown = 2.5f + m.random.nextFloat();
-            no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.2f);
-            float vx = dx * 16.0f;
-            float vy = (player.getPosition().y - m.position.y) * 2.0f + 1.5f;
-            float vz = dz * 16.0f;
-            world.spawnArrow(m.position.x, m.position.y + 0.8f, m.position.z, vx, vy, vz, true);
-        }
         return true;
     }
 
     private static boolean thinkEnderman(Mob m, float dt, World world, Player player, float dist, float dx, float dz) {
         if (!m.aggressive && dist < 40.0f) {
-            org.joml.Vector3f pEye = player.getEyePosition();
-            org.joml.Vector3f toHead = new org.joml.Vector3f(
-                    m.position.x - pEye.x,
-                    (m.position.y + m.type.getHeight() * 0.85f) - pEye.y,
-                    m.position.z - pEye.z
-            );
-            float dLen = toHead.length();
-            if (dLen > 0.1f) {
-                toHead.normalize();
-                org.joml.Vector3f lookDir = player.getCamera().getForward();
-                float dot = lookDir.dot(toHead);
+            Vector3f pEye = player.getEyePosition();
+            float headY = m.position.y + m.type.getHeight() * 0.85f;
+            float toHeadX = m.position.x - pEye.x;
+            float toHeadY = headY - pEye.y;
+            float toHeadZ = m.position.z - pEye.z;
+            float dLenSq = toHeadX * toHeadX + toHeadY * toHeadY + toHeadZ * toHeadZ;
+            if (dLenSq > 0.01f) {
+                float dLen = (float) Math.sqrt(dLenSq);
+                Vector3f lookDir = player.getCamera().getForward();
+                float dot = (lookDir.x * toHeadX + lookDir.y * toHeadY + lookDir.z * toHeadZ) / dLen;
                 if (dot > 0.978f) {
-                    no.minecraft.player.Raycast.HitResult los = no.minecraft.player.Raycast.raycast(world, pEye, toHead, dLen);
-                    if (los == null) {
+                    if (no.minecraft.player.Raycast.hasLineOfSight(world, pEye.x, pEye.y, pEye.z, m.position.x, headY, m.position.z)) {
                         m.aggressive = true;
                         no.minecraft.sound.SoundManager.getInstance().play("fuse", 1.6f);
                     }

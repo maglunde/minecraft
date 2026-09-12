@@ -569,6 +569,10 @@ public class World {
         arrows.add(new no.minecraft.entity.Arrow(x, y, z, vx, vy, vz, shooter, hostileShooter));
     }
 
+    public void spawnArrow(float x, float y, float z, float vx, float vy, float vz, Player shooter, boolean hostileShooter, int damage, boolean isCrit) {
+        arrows.add(new no.minecraft.entity.Arrow(x, y, z, vx, vy, vz, shooter, hostileShooter, damage, isCrit));
+    }
+
     public void spawnEnderPearl(float x, float y, float z, float vx, float vy, float vz, Player owner) {
         enderPearls.add(new no.minecraft.entity.EnderPearl(x, y, z, vx, vy, vz, owner));
     }
