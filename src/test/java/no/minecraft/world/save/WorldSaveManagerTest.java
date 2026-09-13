@@ -179,6 +179,50 @@ public class WorldSaveManagerTest {
     }
 
     @Test
+    public void testSecondSavePreservesEvictedChunkData() {
+        int originalRd = no.minecraft.settings.GameSettings.getInstance().getRenderDistance();
+        try {
+            no.minecraft.settings.GameSettings.getInstance().setRenderDistance(3);
+
+            final int chunkX = 0;
+            final int chunkZ = 0;
+            final int blockX = 2;
+            final int blockY = 20;
+            final int blockZ = 0;
+            final BlockType marker = BlockType.OBSIDIAN;
+
+            World world = new World();
+            Player player = new Player(world, 0, 10, 0);
+            createdWorldInfo = WorldSaveManager.createNewWorld(
+                    "EvictedChunkSecondSave_" + System.currentTimeMillis(),
+                    "8675309", GameMode.SURVIVAL, world, player);
+
+            world.updateLoadedChunks(chunkX, chunkZ);
+            assertNotNull(world.getChunk(chunkX, chunkZ));
+            world.setBlock(blockX, blockY, blockZ, marker);
+            assertEquals(marker, world.getBlock(blockX, blockY, blockZ));
+
+            assertTrue(WorldSaveManager.saveWorld(world, player, createdWorldInfo));
+
+            world.updateLoadedChunks(6, 0);
+            assertNull(world.getChunk(chunkX, chunkZ), "Opprinnelig chunk skal være eviktert fra minnet");
+
+            assertTrue(WorldSaveManager.saveWorld(world, player, createdWorldInfo));
+
+            World loadedWorld = new World();
+            Player loadedPlayer = new Player(loadedWorld, 0, 0, 0);
+            assertTrue(WorldSaveManager.loadWorld(loadedWorld, loadedPlayer, createdWorldInfo));
+
+            loadedWorld.updateLoadedChunks(chunkX, chunkZ);
+            assertNotNull(loadedWorld.getChunk(chunkX, chunkZ));
+            assertEquals(marker, loadedWorld.getBlock(blockX, blockY, blockZ),
+                    "Blokkendringen skal overleve en ny save etter at chunken ble eviktert");
+        } finally {
+            no.minecraft.settings.GameSettings.getInstance().setRenderDistance(originalRd);
+        }
+    }
+
+    @Test
     public void testBonusChestCreationAndContents() {
         World world = new World();
         Player player = new Player(world, 0, 10, 0);
