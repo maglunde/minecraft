@@ -1,13 +1,22 @@
 package no.minecraft.world;
 
+import no.minecraft.player.GameMode;
+import no.minecraft.player.Player;
 import no.minecraft.settings.GameSettings;
+import no.minecraft.world.save.WorldInfo;
+import no.minecraft.world.save.WorldSaveManager;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Path;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ChunkUnloadingTest {
+
+    @TempDir
+    Path tempDir;
 
     @Test
     public void testChunksEvictedFromMemoryWhenMovingAway() {
@@ -46,24 +55,30 @@ public class ChunkUnloadingTest {
     @Test
     public void testDirtyChunkNotEvictedUntilSaved() {
         int originalRd = GameSettings.getInstance().getRenderDistance();
+        Path originalSavesDir = WorldSaveManager.SAVES_DIR;
         try {
+            WorldSaveManager.SAVES_DIR = tempDir;
             GameSettings.getInstance().setRenderDistance(3);
             World world = new World(12345L);
+            Player player = new Player(world, 0, 10, 0);
+            WorldInfo info = new WorldInfo("UnloadingTest", "unloading-test", 12345L,
+                    GameMode.SURVIVAL, System.currentTimeMillis());
             world.updateLoadedChunks(0, 0);
             world.setBlock(1, 20, 1, BlockType.GRASS); // player edit -> dirty
 
             world.updateLoadedChunks(6, 0);
             assertNotNull(world.getChunk(0, 0), "Skitten chunk må holdes i minnet til den er lagret");
 
-            world.markAllChunksSaved(); // simulerer autosave
+            assertTrue(WorldSaveManager.saveWorld(world, player, info));
             world.updateLoadedChunks(6, 0);
             assertNull(world.getChunk(0, 0), "Lagret chunk skal kunne evikteres");
 
-            // Returning: chunk is marked saved but no save file exists -> deterministic regen fallback
+            // Returning: chunk is loaded directly from its persistent file
             world.updateLoadedChunks(0, 0);
             assertNotNull(world.getChunk(0, 0));
         } finally {
             GameSettings.getInstance().setRenderDistance(originalRd);
+            WorldSaveManager.SAVES_DIR = originalSavesDir;
         }
     }
 

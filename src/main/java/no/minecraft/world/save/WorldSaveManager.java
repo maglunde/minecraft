@@ -18,7 +18,6 @@ import org.joml.Vector3f;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -28,6 +27,8 @@ public class WorldSaveManager {
 
     private static final int WORLD_MAGIC = 0x4D435744; // "MCWD"
     private static final int CHUNKS_MAGIC = 0x4D43434B; // "MCCK"
+    private static final int CHUNK_FILE_MAGIC = 0x4D434346; // "MCCF"
+    private static final int CHUNK_FILE_VERSION = 1;
     private static final int VERSION = 3;
 
     public static long parseSeed(String seedInput) {
@@ -341,43 +342,8 @@ public class WorldSaveManager {
             }
             moveAtomically(datTmp, datFile);
 
-            // 2. Save chunks.dat (write temp file, then move into place atomically)
-            Path chunksFile = worldDir.resolve("chunks.dat");
-            Path chunksTmp = worldDir.resolve("chunks.dat.tmp");
-            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new GZIPOutputStream(Files.newOutputStream(chunksTmp))))) {
-                out.writeInt(CHUNKS_MAGIC);
-                out.writeInt(VERSION);
-
-                Dimension[] dims = Dimension.values();
-                out.writeInt(dims.length);
-                for (Dimension dim : dims) {
-                    out.writeByte(dim.ordinal());
-
-                    Map<Long, Chunk> dimChunks = world.getDimensionChunks().get(dim);
-                    int count = (dimChunks != null) ? dimChunks.size() : 0;
-                    out.writeInt(count);
-                    if (dimChunks != null) {
-                        for (Chunk c : dimChunks.values()) {
-                            out.writeInt(c.getChunkX());
-                            out.writeInt(c.getChunkZ());
-                            out.write(c.getBlocks());
-                        }
-                    }
-
-                    Set<Long> genSet = world.getDimensionGenerated().get(dim);
-                    int genCount = (genSet != null) ? genSet.size() : 0;
-                    out.writeInt(genCount);
-                    if (genSet != null) {
-                        for (Long key : genSet) {
-                            out.writeLong(key);
-                        }
-                    }
-                }
-            }
-            moveAtomically(chunksTmp, chunksFile);
-
-            world.markAllChunksSaved();
-            return true;
+            // 2. Save each loaded chunk independently. Files for evicted chunks are untouched.
+            return saveLoadedChunks(world, worldDir);
         } catch (IOException e) {
             e.printStackTrace();
             return false;
@@ -559,6 +525,11 @@ public class WorldSaveManager {
                 return false;
             }
 
+            // Convert the legacy monolithic chunk file before setSeed starts loading chunks.
+            if (!importLegacyChunks(worldDir)) {
+                return false;
+            }
+
             // Reset world
             world.cleanup();
             world.setSeed(info.getSeed());
@@ -568,42 +539,6 @@ public class WorldSaveManager {
             world.setFurnaces(furnaceList);
             world.setChests(chestList);
             AdvancementManager.getInstance().setUnlocked(advNames);
-
-            // 2. Read chunks.dat
-            Path chunksFile = worldDir.resolve("chunks.dat");
-            if (Files.exists(chunksFile)) {
-                try (DataInputStream in = new DataInputStream(new BufferedInputStream(new GZIPInputStream(Files.newInputStream(chunksFile))))) {
-                    int magic = in.readInt();
-                    if (magic == CHUNKS_MAGIC) {
-                        int version = in.readInt();
-                        int numDims = in.readInt();
-                        for (int d = 0; d < numDims; d++) {
-                            byte dOrd = in.readByte();
-                            Dimension chunkDim = (dOrd >= 0 && dOrd < Dimension.values().length) ? Dimension.values()[dOrd] : Dimension.OVERWORLD;
-                            Map<Long, Chunk> targetChunks = world.getDimensionChunks().computeIfAbsent(chunkDim, k -> new ConcurrentHashMap<>());
-                            Set<Long> targetGen = world.getDimensionGenerated().computeIfAbsent(chunkDim, k -> ConcurrentHashMap.newKeySet());
-
-                            int chunkCount = in.readInt();
-                            byte[] blockBuf = new byte[Chunk.SIZE_X * Chunk.SIZE_Y * Chunk.SIZE_Z];
-                            for (int c = 0; c < chunkCount; c++) {
-                                int cx = in.readInt();
-                                int cz = in.readInt();
-                                in.readFully(blockBuf);
-
-                                Chunk chunk = new Chunk(world, cx, cz);
-                                chunk.setBlocks(blockBuf);
-                                targetChunks.put(World.chunkKey(cx, cz), chunk);
-                                world.markChunkSaved(chunkDim, cx, cz);
-                            }
-
-                            int genCount = in.readInt();
-                            for (int g = 0; g < genCount; g++) {
-                                targetGen.add(in.readLong());
-                            }
-                        }
-                    }
-                }
-            }
 
             // Restore player state
             player.setGameMode(info.getGameMode());
@@ -662,33 +597,149 @@ public class WorldSaveManager {
     }
 
     public static boolean loadChunkInto(Chunk chunk, Path worldDir, Dimension dim) {
-        Path chunksFile = worldDir.resolve("chunks.dat");
-        if (!Files.exists(chunksFile)) return false;
-        try (DataInputStream in = new DataInputStream(new BufferedInputStream(new GZIPInputStream(Files.newInputStream(chunksFile))))) {
-            int magic = in.readInt();
-            if (magic != CHUNKS_MAGIC) return false;
-            int version = in.readInt();
-            int numDims = in.readInt();
-            byte[] blockBuf = new byte[Chunk.SIZE_X * Chunk.SIZE_Y * Chunk.SIZE_Z];
-            for (int d = 0; d < numDims; d++) {
-                byte dOrd = in.readByte();
-                int chunkCount = in.readInt();
-                for (int c = 0; c < chunkCount; c++) {
-                    int cx = in.readInt();
-                    int cz = in.readInt();
-                    in.readFully(blockBuf);
-                    if (dOrd == dim.ordinal() && cx == chunk.getChunkX() && cz == chunk.getChunkZ()) {
-                        chunk.setBlocks(blockBuf);
-                        return true;
-                    }
-                }
-                int genCount = in.readInt();
-                for (int g = 0; g < genCount; g++) in.readLong();
+        Path chunkFile = chunkFile(worldDir, dim, chunk.getChunkX(), chunk.getChunkZ());
+        if (!Files.isRegularFile(chunkFile)) return false;
+        try (DataInputStream in = new DataInputStream(new BufferedInputStream(new GZIPInputStream(Files.newInputStream(chunkFile))))) {
+            if (in.readInt() != CHUNK_FILE_MAGIC) {
+                throw new IOException("Invalid chunk magic");
             }
+            int version = in.readInt();
+            if (version < 1 || version > CHUNK_FILE_VERSION) {
+                throw new IOException("Unsupported chunk version: " + version);
+            }
+            int dimensionOrdinal = in.readByte();
+            int chunkX = in.readInt();
+            int chunkZ = in.readInt();
+            int blockCount = in.readInt();
+            int expectedBlockCount = Chunk.SIZE_X * Chunk.SIZE_Y * Chunk.SIZE_Z;
+            if (dimensionOrdinal != dim.ordinal()
+                    || chunkX != chunk.getChunkX()
+                    || chunkZ != chunk.getChunkZ()
+                    || blockCount != expectedBlockCount) {
+                throw new IOException("Chunk header does not match requested chunk");
+            }
+            byte[] blocks = new byte[expectedBlockCount];
+            in.readFully(blocks);
+            chunk.setBlocks(blocks);
+            return true;
         } catch (IOException e) {
+            System.err.println("Failed to load chunk " + dim + " " + chunk.getChunkX() + "," + chunk.getChunkZ()
+                    + ": " + e.getMessage());
             return false;
         }
-        return false;
+    }
+
+    private static boolean saveLoadedChunks(World world, Path worldDir) {
+        boolean allSaved = true;
+        for (Dimension dim : Dimension.values()) {
+            Map<Long, Chunk> dimChunks = world.getDimensionChunks().get(dim);
+            if (dimChunks == null) continue;
+            for (Chunk chunk : dimChunks.values()) {
+                Path target = chunkFile(worldDir, dim, chunk.getChunkX(), chunk.getChunkZ());
+                if (!chunk.needsSave()
+                        && world.isChunkSaved(dim, chunk.getChunkX(), chunk.getChunkZ())
+                        && Files.isRegularFile(target)) {
+                    continue;
+                }
+                try {
+                    writeChunkFile(target, dim, chunk.getChunkX(), chunk.getChunkZ(), chunk.getBlocks());
+                    world.markChunkSaved(dim, chunk.getChunkX(), chunk.getChunkZ());
+                    chunk.clearNeedsSave();
+                } catch (IOException e) {
+                    allSaved = false;
+                    world.markChunkUnsaved(dim, chunk.getChunkX(), chunk.getChunkZ());
+                    System.err.println("Failed to save chunk " + dim + " " + chunk.getChunkX() + "," + chunk.getChunkZ()
+                            + ": " + e.getMessage());
+                }
+            }
+        }
+        return allSaved;
+    }
+
+    private static void writeChunkFile(Path target, Dimension dim, int chunkX, int chunkZ, byte[] blocks)
+            throws IOException {
+        int expectedBlockCount = Chunk.SIZE_X * Chunk.SIZE_Y * Chunk.SIZE_Z;
+        if (blocks == null || blocks.length != expectedBlockCount) {
+            throw new IOException("Unexpected block array length");
+        }
+        Files.createDirectories(target.getParent());
+        Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
+        try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new GZIPOutputStream(Files.newOutputStream(tmp))))) {
+            out.writeInt(CHUNK_FILE_MAGIC);
+            out.writeInt(CHUNK_FILE_VERSION);
+            out.writeByte(dim.ordinal());
+            out.writeInt(chunkX);
+            out.writeInt(chunkZ);
+            out.writeInt(blocks.length);
+            out.write(blocks);
+        }
+        moveChunkAtomically(tmp, target);
+    }
+
+    private static Path chunkFile(Path worldDir, Dimension dim, int chunkX, int chunkZ) {
+        String dimensionName = dim.name().toLowerCase(Locale.ROOT);
+        return worldDir.resolve("dimensions").resolve(dimensionName)
+                .resolve("c." + chunkX + "." + chunkZ + ".dat");
+    }
+
+    private static boolean importLegacyChunks(Path worldDir) {
+        Path legacyFile = worldDir.resolve("chunks.dat");
+        if (!Files.isRegularFile(legacyFile)) return true;
+
+        try (DataInputStream in = new DataInputStream(new BufferedInputStream(new GZIPInputStream(Files.newInputStream(legacyFile))))) {
+            if (in.readInt() != CHUNKS_MAGIC) {
+                throw new IOException("Invalid legacy chunk magic");
+            }
+            int version = in.readInt();
+            if (version < 1 || version > VERSION) {
+                throw new IOException("Unsupported legacy chunk version: " + version);
+            }
+            int numDims = in.readInt();
+            if (numDims < 0 || numDims > Dimension.values().length) {
+                throw new IOException("Invalid legacy dimension count: " + numDims);
+            }
+
+            byte[] blocks = new byte[Chunk.SIZE_X * Chunk.SIZE_Y * Chunk.SIZE_Z];
+            for (int d = 0; d < numDims; d++) {
+                int dimensionOrdinal = in.readByte();
+                if (dimensionOrdinal < 0 || dimensionOrdinal >= Dimension.values().length) {
+                    throw new IOException("Invalid legacy dimension: " + dimensionOrdinal);
+                }
+                Dimension dim = Dimension.values()[dimensionOrdinal];
+                int chunkCount = in.readInt();
+                if (chunkCount < 0) {
+                    throw new IOException("Invalid legacy chunk count: " + chunkCount);
+                }
+                for (int c = 0; c < chunkCount; c++) {
+                    int chunkX = in.readInt();
+                    int chunkZ = in.readInt();
+                    in.readFully(blocks);
+                    Path target = chunkFile(worldDir, dim, chunkX, chunkZ);
+                    if (!Files.isRegularFile(target)) {
+                        writeChunkFile(target, dim, chunkX, chunkZ, blocks);
+                    }
+                }
+
+                int generatedCount = in.readInt();
+                if (generatedCount < 0) {
+                    throw new IOException("Invalid legacy generated chunk count: " + generatedCount);
+                }
+                for (int g = 0; g < generatedCount; g++) {
+                    in.readLong();
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to import legacy chunks.dat: " + e.getMessage());
+            return false;
+        }
+
+        Path archive = worldDir.resolve("chunks.dat.legacy");
+        try {
+            moveAtomically(legacyFile, archive);
+        } catch (IOException e) {
+            System.err.println("Legacy chunks were imported but chunks.dat could not be archived: " + e.getMessage());
+        }
+        return true;
     }
 
     private static void moveAtomically(Path tmp, Path target) throws IOException {
@@ -696,6 +747,14 @@ public class WorldSaveManager {
             Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException e) {
             Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private static void moveChunkAtomically(Path tmp, Path target) throws IOException {
+        try {
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException e) {
+            throw new IOException("Atomic chunk replacement is not supported by this file system", e);
         }
     }
 

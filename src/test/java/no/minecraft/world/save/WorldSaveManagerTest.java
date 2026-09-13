@@ -4,14 +4,20 @@ import no.minecraft.player.GameMode;
 import no.minecraft.player.ItemStack;
 import no.minecraft.player.Player;
 import no.minecraft.world.BlockType;
+import no.minecraft.world.Chunk;
+import no.minecraft.world.Dimension;
 import no.minecraft.world.World;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.zip.GZIPOutputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -220,6 +226,172 @@ public class WorldSaveManagerTest {
         } finally {
             no.minecraft.settings.GameSettings.getInstance().setRenderDistance(originalRd);
         }
+    }
+
+    @Test
+    public void testNegativeChunkCoordinatesSaveAndLoad() {
+        final int chunkX = -2;
+        final int chunkZ = -3;
+        final int blockX = chunkX * Chunk.SIZE_X + 3;
+        final int blockZ = chunkZ * Chunk.SIZE_Z + 5;
+
+        World world = new World();
+        Player player = new Player(world, 0, 10, 0);
+        createdWorldInfo = WorldSaveManager.createNewWorld(
+                "NegativeChunks_" + System.currentTimeMillis(), "1200", GameMode.SURVIVAL, world, player);
+
+        world.ensureChunkGenerated(chunkX, chunkZ);
+        world.setBlock(blockX, 20, blockZ, BlockType.OBSIDIAN);
+        assertTrue(WorldSaveManager.saveWorld(world, player, createdWorldInfo));
+
+        Path chunkFile = tempDir.resolve(createdWorldInfo.getFolderName())
+                .resolve("dimensions/overworld/c.-2.-3.dat");
+        assertTrue(Files.isRegularFile(chunkFile));
+
+        World loadedWorld = new World();
+        Player loadedPlayer = new Player(loadedWorld, 0, 0, 0);
+        assertTrue(WorldSaveManager.loadWorld(loadedWorld, loadedPlayer, createdWorldInfo));
+        loadedWorld.ensureChunkGenerated(chunkX, chunkZ);
+        assertEquals(BlockType.OBSIDIAN, loadedWorld.getBlock(blockX, 20, blockZ));
+    }
+
+    @Test
+    public void testSameChunkCoordinatesAreSeparatedByDimension() {
+        final int chunkX = 12;
+        final int chunkZ = -11;
+        final int blockX = chunkX * Chunk.SIZE_X + 4;
+        final int blockZ = chunkZ * Chunk.SIZE_Z + 6;
+
+        World world = new World();
+        Player player = new Player(world, 0, 10, 0);
+        createdWorldInfo = WorldSaveManager.createNewWorld(
+                "DimensionChunks_" + System.currentTimeMillis(), "2200", GameMode.SURVIVAL, world, player);
+
+        world.setCurrentDimension(Dimension.OVERWORLD);
+        world.ensureChunkGenerated(chunkX, chunkZ);
+        world.setBlock(blockX, 20, blockZ, BlockType.GOLD_ORE);
+
+        world.setCurrentDimension(Dimension.NETHER);
+        world.ensureChunkGenerated(chunkX, chunkZ);
+        world.setBlock(blockX, 20, blockZ, BlockType.OBSIDIAN);
+        assertTrue(WorldSaveManager.saveWorld(world, player, createdWorldInfo));
+
+        Path worldDir = tempDir.resolve(createdWorldInfo.getFolderName());
+        assertTrue(Files.isRegularFile(worldDir.resolve("dimensions/overworld/c.12.-11.dat")));
+        assertTrue(Files.isRegularFile(worldDir.resolve("dimensions/nether/c.12.-11.dat")));
+
+        World loadedWorld = new World();
+        Player loadedPlayer = new Player(loadedWorld, 0, 0, 0);
+        assertTrue(WorldSaveManager.loadWorld(loadedWorld, loadedPlayer, createdWorldInfo));
+
+        loadedWorld.setCurrentDimension(Dimension.OVERWORLD);
+        loadedWorld.ensureChunkGenerated(chunkX, chunkZ);
+        assertEquals(BlockType.GOLD_ORE, loadedWorld.getBlock(blockX, 20, blockZ));
+
+        loadedWorld.setCurrentDimension(Dimension.NETHER);
+        loadedWorld.ensureChunkGenerated(chunkX, chunkZ);
+        assertEquals(BlockType.OBSIDIAN, loadedWorld.getBlock(blockX, 20, blockZ));
+    }
+
+    @Test
+    public void testLaterSavePreservesOtherUnloadedChunkFiles() {
+        final int firstChunkX = 20;
+        final int firstChunkZ = 20;
+        final int secondChunkX = -20;
+        final int secondChunkZ = 18;
+        final int firstBlockX = firstChunkX * Chunk.SIZE_X + 2;
+        final int firstBlockZ = firstChunkZ * Chunk.SIZE_Z + 2;
+        final int secondBlockX = secondChunkX * Chunk.SIZE_X + 3;
+        final int secondBlockZ = secondChunkZ * Chunk.SIZE_Z + 3;
+
+        World world = new World();
+        Player player = new Player(world, 0, 10, 0);
+        createdWorldInfo = WorldSaveManager.createNewWorld(
+                "UnloadedChunkFiles_" + System.currentTimeMillis(), "3200", GameMode.SURVIVAL, world, player);
+        world.ensureChunkGenerated(firstChunkX, firstChunkZ);
+        world.setBlock(firstBlockX, 20, firstBlockZ, BlockType.GOLD_ORE);
+        world.ensureChunkGenerated(secondChunkX, secondChunkZ);
+        world.setBlock(secondBlockX, 20, secondBlockZ, BlockType.DIAMOND_ORE);
+        assertTrue(WorldSaveManager.saveWorld(world, player, createdWorldInfo));
+
+        World laterWorld = new World();
+        Player laterPlayer = new Player(laterWorld, 0, 0, 0);
+        assertTrue(WorldSaveManager.loadWorld(laterWorld, laterPlayer, createdWorldInfo));
+        assertNull(laterWorld.getChunk(secondChunkX, secondChunkZ));
+        laterWorld.ensureChunkGenerated(firstChunkX, firstChunkZ);
+        laterWorld.setBlock(firstBlockX, 20, firstBlockZ, BlockType.IRON_ORE);
+        assertTrue(WorldSaveManager.saveWorld(laterWorld, laterPlayer, createdWorldInfo));
+
+        World reloadedWorld = new World();
+        Player reloadedPlayer = new Player(reloadedWorld, 0, 0, 0);
+        assertTrue(WorldSaveManager.loadWorld(reloadedWorld, reloadedPlayer, createdWorldInfo));
+        reloadedWorld.ensureChunkGenerated(firstChunkX, firstChunkZ);
+        assertEquals(BlockType.IRON_ORE, reloadedWorld.getBlock(firstBlockX, 20, firstBlockZ));
+        reloadedWorld.ensureChunkGenerated(secondChunkX, secondChunkZ);
+        assertEquals(BlockType.DIAMOND_ORE, reloadedWorld.getBlock(secondBlockX, 20, secondBlockZ));
+    }
+
+    @Test
+    public void testFailedChunkWriteKeepsChunkDirty() throws Exception {
+        World world = new World();
+        Player player = new Player(world, 0, 10, 0);
+        createdWorldInfo = WorldSaveManager.createNewWorld(
+                "FailedChunkWrite_" + System.currentTimeMillis(), "4200", GameMode.SURVIVAL, world, player);
+
+        Chunk chunk = world.ensureChunkGenerated(0, 0);
+        world.setBlock(2, 20, 2, BlockType.OBSIDIAN);
+        assertTrue(chunk.needsSave());
+
+        Path chunkFile = tempDir.resolve(createdWorldInfo.getFolderName())
+                .resolve("dimensions/overworld/c.0.0.dat");
+        Files.delete(chunkFile);
+        Files.createDirectory(chunkFile);
+
+        assertFalse(WorldSaveManager.saveWorld(world, player, createdWorldInfo));
+        assertTrue(chunk.needsSave(), "Dirty-flagget må beholdes når chunkfilen ikke kan erstattes");
+        assertFalse(world.isChunkSaved(Dimension.OVERWORLD, 0, 0));
+    }
+
+    @Test
+    public void testLegacyChunksDatIsImported() throws Exception {
+        final int chunkX = 24;
+        final int chunkZ = -24;
+        final int localX = 2;
+        final int localY = 20;
+        final int localZ = 3;
+
+        World world = new World();
+        Player player = new Player(world, 0, 10, 0);
+        createdWorldInfo = WorldSaveManager.createNewWorld(
+                "LegacyChunks_" + System.currentTimeMillis(), "5200", GameMode.SURVIVAL, world, player);
+        Path worldDir = tempDir.resolve(createdWorldInfo.getFolderName());
+
+        byte[] blocks = new byte[Chunk.SIZE_X * Chunk.SIZE_Y * Chunk.SIZE_Z];
+        int blockIndex = (localY * Chunk.SIZE_Z + localZ) * Chunk.SIZE_X + localX;
+        blocks[blockIndex] = BlockType.OBSIDIAN.getId();
+        try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(
+                new GZIPOutputStream(Files.newOutputStream(worldDir.resolve("chunks.dat")))))) {
+            out.writeInt(0x4D43434B);
+            out.writeInt(3);
+            out.writeInt(1);
+            out.writeByte(Dimension.OVERWORLD.ordinal());
+            out.writeInt(1);
+            out.writeInt(chunkX);
+            out.writeInt(chunkZ);
+            out.write(blocks);
+            out.writeInt(1);
+            out.writeLong(World.chunkKey(chunkX, chunkZ));
+        }
+
+        World loadedWorld = new World();
+        Player loadedPlayer = new Player(loadedWorld, 0, 0, 0);
+        assertTrue(WorldSaveManager.loadWorld(loadedWorld, loadedPlayer, createdWorldInfo));
+        loadedWorld.ensureChunkGenerated(chunkX, chunkZ);
+        assertEquals(BlockType.OBSIDIAN, loadedWorld.getBlock(
+                chunkX * Chunk.SIZE_X + localX, localY, chunkZ * Chunk.SIZE_Z + localZ));
+        assertTrue(Files.isRegularFile(worldDir.resolve("dimensions/overworld/c.24.-24.dat")));
+        assertTrue(Files.isRegularFile(worldDir.resolve("chunks.dat.legacy")));
+        assertFalse(Files.exists(worldDir.resolve("chunks.dat")));
     }
 
     @Test

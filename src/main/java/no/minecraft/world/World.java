@@ -998,7 +998,10 @@ public class World {
         if (!activeGenerated.contains(key)) {
             // Mark generated before decorating so border decoration writes into this chunk are kept
             activeGenerated.add(key);
-            if (!isChunkSaved(cx, cz) || !loadChunkFromSave(chunk, cx, cz)) {
+            if (loadChunkFromSave(chunk, cx, cz)) {
+                markChunkSaved(currentDimension, cx, cz);
+            } else {
+                markChunkUnsaved(currentDimension, cx, cz);
                 generateChunkTerrain(chunk);
                 decorateChunk(cx, cz);
                 repairNeighborDecorations(cx, cz);
@@ -1999,22 +2002,15 @@ public class World {
         savedChunkKeys.computeIfAbsent(dim, k -> ConcurrentHashMap.newKeySet()).add(chunkKey(cx, cz));
     }
 
-    public void markAllChunksSaved() {
-        for (Map.Entry<Dimension, Map<Long, Chunk>> dimEntry : dimensionChunks.entrySet()) {
-            Set<Long> genSet = dimensionGenerated.get(dimEntry.getKey());
-            Set<Long> keys = savedChunkKeys.computeIfAbsent(dimEntry.getKey(), k -> ConcurrentHashMap.newKeySet());
-            for (Map.Entry<Long, Chunk> entry : dimEntry.getValue().entrySet()) {
-                entry.getValue().clearNeedsSave();
-                // Only fully generated chunks count as persisted; phantom chunks must be regenerated
-                if (genSet != null && genSet.contains(entry.getKey())) {
-                    keys.add(entry.getKey());
-                }
-            }
+    public void markChunkUnsaved(Dimension dim, int cx, int cz) {
+        Set<Long> keys = savedChunkKeys.get(dim);
+        if (keys != null) {
+            keys.remove(chunkKey(cx, cz));
         }
     }
 
-    private boolean isChunkSaved(int cx, int cz) {
-        Set<Long> keys = savedChunkKeys.get(currentDimension);
+    public boolean isChunkSaved(Dimension dim, int cx, int cz) {
+        Set<Long> keys = savedChunkKeys.get(dim);
         return keys != null && keys.contains(chunkKey(cx, cz));
     }
 
