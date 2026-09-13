@@ -229,6 +229,94 @@ public class WorldSaveManagerTest {
     }
 
     @Test
+    public void testSecondSavePreservesTwoEvictedChunksInFreshWorld() {
+        int originalRd = no.minecraft.settings.GameSettings.getInstance().getRenderDistance();
+        try {
+            no.minecraft.settings.GameSettings.getInstance().setRenderDistance(3);
+
+            final int firstChunkX = 0;
+            final int firstChunkZ = 0;
+            final int secondChunkX = 2;
+            final int secondChunkZ = 1;
+            final int firstBlockX = firstChunkX * Chunk.SIZE_X + 2;
+            final int firstBlockZ = firstChunkZ * Chunk.SIZE_Z + 3;
+            final int secondBlockX = secondChunkX * Chunk.SIZE_X + 4;
+            final int secondBlockZ = secondChunkZ * Chunk.SIZE_Z + 5;
+
+            World world = new World();
+            Player player = new Player(world, 0, 10, 0);
+            createdWorldInfo = WorldSaveManager.createNewWorld(
+                    "TwoEvictedChunks_" + System.currentTimeMillis(), "9100", GameMode.SURVIVAL, world, player);
+
+            world.ensureChunkGenerated(firstChunkX, firstChunkZ);
+            world.ensureChunkGenerated(secondChunkX, secondChunkZ);
+            world.setBlock(firstBlockX, 20, firstBlockZ, BlockType.GOLD_ORE);
+            world.setBlock(secondBlockX, 20, secondBlockZ, BlockType.DIAMOND_ORE);
+            assertTrue(WorldSaveManager.saveWorld(world, player, createdWorldInfo));
+
+            world.updateLoadedChunks(8, 0);
+            assertNull(world.getChunk(firstChunkX, firstChunkZ));
+            assertNull(world.getChunk(secondChunkX, secondChunkZ));
+            assertTrue(WorldSaveManager.saveWorld(world, player, createdWorldInfo));
+
+            World loadedWorld = new World();
+            Player loadedPlayer = new Player(loadedWorld, 0, 0, 0);
+            assertTrue(WorldSaveManager.loadWorld(loadedWorld, loadedPlayer, createdWorldInfo));
+
+            loadedWorld.ensureChunkGenerated(firstChunkX, firstChunkZ);
+            loadedWorld.ensureChunkGenerated(secondChunkX, secondChunkZ);
+            assertEquals(BlockType.GOLD_ORE, loadedWorld.getBlock(firstBlockX, 20, firstBlockZ));
+            assertEquals(BlockType.DIAMOND_ORE, loadedWorld.getBlock(secondBlockX, 20, secondBlockZ));
+        } finally {
+            no.minecraft.settings.GameSettings.getInstance().setRenderDistance(originalRd);
+        }
+    }
+
+    @Test
+    public void testUnmodifiedChunkRegeneratesDeterministicallyWithoutSaveFile() {
+        final int chunkX = 31;
+        final int chunkZ = -27;
+        final int sampleY = 20;
+
+        World world = new World();
+        world.setSeed(9300L);
+        Chunk original = world.ensureChunkGenerated(chunkX, chunkZ);
+        BlockType originalBlock = original.getBlock(7, sampleY, 9);
+        assertFalse(original.needsSave(), "En urørt chunk skal ikke bli spillerdata");
+
+        int originalRd = no.minecraft.settings.GameSettings.getInstance().getRenderDistance();
+        try {
+            no.minecraft.settings.GameSettings.getInstance().setRenderDistance(3);
+            world.updateLoadedChunks(0, 0);
+            assertNull(world.getChunk(chunkX, chunkZ));
+            Chunk regenerated = world.ensureChunkGenerated(chunkX, chunkZ);
+            assertEquals(originalBlock, regenerated.getBlock(7, sampleY, 9));
+        } finally {
+            no.minecraft.settings.GameSettings.getInstance().setRenderDistance(originalRd);
+        }
+    }
+
+    @Test
+    public void testCorruptChunkFileDoesNotAbortWorldLoad() throws Exception {
+        World world = new World();
+        Player player = new Player(world, 0, 10, 0);
+        createdWorldInfo = WorldSaveManager.createNewWorld(
+                "CorruptChunk_" + System.currentTimeMillis(), "9400", GameMode.SURVIVAL, world, player);
+
+        int chunkX = Math.floorDiv((int) Math.floor(player.getPosition().x), Chunk.SIZE_X);
+        int chunkZ = Math.floorDiv((int) Math.floor(player.getPosition().z), Chunk.SIZE_Z);
+        Path chunkFile = tempDir.resolve(createdWorldInfo.getFolderName())
+                .resolve("dimensions/overworld/c." + chunkX + "." + chunkZ + ".dat");
+        assertTrue(Files.isRegularFile(chunkFile));
+        Files.write(chunkFile, new byte[] {1, 2, 3});
+
+        World loadedWorld = new World();
+        Player loadedPlayer = new Player(loadedWorld, 0, 0, 0);
+        assertTrue(WorldSaveManager.loadWorld(loadedWorld, loadedPlayer, createdWorldInfo));
+        assertDoesNotThrow(() -> loadedWorld.ensureChunkGenerated(chunkX, chunkZ));
+    }
+
+    @Test
     public void testNegativeChunkCoordinatesSaveAndLoad() {
         final int chunkX = -2;
         final int chunkZ = -3;

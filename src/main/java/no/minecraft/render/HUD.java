@@ -1951,6 +1951,12 @@ public class HUD {
         return true;
     }
 
+    private int renderedChunkCount;
+
+    public void setRenderedChunkCount(int count) {
+        renderedChunkCount = count;
+    }
+
     public void render(int windowWidth, int windowHeight, float mouseX, float mouseY, Player player, TextureAtlas atlas, no.minecraft.world.World world, no.minecraft.chat.ChatManager chatManager) {
         render(windowWidth, windowHeight, mouseX, mouseY, player, atlas, world, chatManager, this.lastFps, this.lastTargetedHit);
     }
@@ -2934,7 +2940,7 @@ public class HUD {
         leftLines.add(I18n.format("debug.light", light, skyLight, 0));
         leftLines.add(I18n.format("debug.day", day, timeStr, world.getSunLightLevel()));
         leftLines.add(I18n.format("debug.chunks",
-                world.getRenderedChunkCount(), world.getLoadedChunkCount(), world.getMobs().size(), world.getDroppedItems().size()));
+                renderedChunkCount, world.getLoadedChunkCount(), world.getMobs().size(), world.getDroppedItems().size()));
 
         for (int i = 0; i < leftLines.size(); i++) {
             String line = leftLines.get(i);

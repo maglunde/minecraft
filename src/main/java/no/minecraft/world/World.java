@@ -45,16 +45,9 @@ public class World {
     private boolean gameWon = false;
     private Vector3f spawnPoint = null;
 
-    private int lastCenterCx = 0;
-    private int lastCenterCz = 0;
     private int lastUpdateCx = Integer.MIN_VALUE;
     private int lastUpdateCz = Integer.MIN_VALUE;
     private int lastUpdateRd = -1;
-    private int renderedChunkCount = 0;
-
-    public int getRenderedChunkCount() {
-        return renderedChunkCount;
-    }
 
     public World() {
         this(new Random().nextLong());
@@ -1032,8 +1025,6 @@ public class World {
     }
 
     public void updateLoadedChunks(int centerCx, int centerCz) {
-        this.lastCenterCx = centerCx;
-        this.lastCenterCz = centerCz;
         int rd = no.minecraft.settings.GameSettings.getInstance().getRenderDistance();
         if (centerCx != lastUpdateCx || centerCz != lastUpdateCz || rd != lastUpdateRd) {
             lastUpdateCx = centerCx;
@@ -1061,7 +1052,6 @@ public class World {
             Chunk chunk = entry.getValue();
             int dist = Math.max(Math.abs(chunk.getChunkX() - centerCx), Math.abs(chunk.getChunkZ() - centerCz));
             if (dist > unloadDist && !chunk.needsSave()) {
-                chunk.unloadMesh();
                 iterator.remove();
                 activeGenerated.remove(entry.getKey());
             }
@@ -1076,7 +1066,6 @@ public class World {
                 Map.Entry<Long, Chunk> entry = it.next();
                 Chunk chunk = entry.getValue();
                 if (!chunk.needsSave()) {
-                    chunk.unloadMesh();
                     it.remove();
                     genSet.remove(entry.getKey());
                 }
@@ -1876,39 +1865,6 @@ public class World {
         return Noise.fbm2D(seed ^ 0x4D455341L, x * 0.0025, z * 0.0025, 2, 0.5);
     }
 
-    public void updateAndRender(int centerCx, int centerCz, int renderDistance) {
-        updateAndRender(centerCx, centerCz, renderDistance, null);
-    }
-
-    public void updateAndRender(int centerCx, int centerCz, int renderDistance, no.minecraft.math.Frustum frustum) {
-        this.lastCenterCx = centerCx;
-        this.lastCenterCz = centerCz;
-        Map<Long, Chunk> activeChunks = getActiveChunks();
-        renderedChunkCount = 0;
-
-        for (int dx = -renderDistance; dx <= renderDistance; dx++) {
-            for (int dz = -renderDistance; dz <= renderDistance; dz++) {
-                int cx = centerCx + dx;
-                int cz = centerCz + dz;
-                Chunk chunk = activeChunks.get(chunkKey(cx, cz));
-                if (chunk != null) {
-                    chunk.updateMeshIfNeeded();
-                    if (frustum == null || frustum.intersectsAabb(
-                            chunk.getWorldStartX(), 0, chunk.getWorldStartZ(),
-                            chunk.getWorldStartX() + Chunk.SIZE_X, Chunk.SIZE_Y, chunk.getWorldStartZ() + Chunk.SIZE_Z)) {
-                        chunk.render();
-                        renderedChunkCount++;
-                    }
-                }
-            }
-        }
-    }
-
-    public void updateAndRender() {
-        int rd = no.minecraft.settings.GameSettings.getInstance().getRenderDistance();
-        updateAndRender(lastCenterCx, lastCenterCz, rd);
-    }
-
     public int getLoadedChunkCount() {
         return getActiveChunks().size();
     }
@@ -1980,9 +1936,6 @@ public class World {
         chests.clear();
         boats.clear();
         for (Map<Long, Chunk> map : dimensionChunks.values()) {
-            for (Chunk chunk : map.values()) {
-                chunk.cleanup();
-            }
             map.clear();
         }
         for (Set<Long> set : dimensionGenerated.values()) {

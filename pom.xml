@@ -201,6 +201,7 @@
                 <configuration>
                     <executable>java</executable>
                     <arguments>
+                        <argument>-Xms4G</argument>
                         <argument>-classpath</argument>
                         <classpath/>
                         <argument>no.minecraft.Main</argument>
@@ -227,6 +228,7 @@
                             <executable>java</executable>
                             <arguments>
                                 <argument>-XstartOnFirstThread</argument>
+                                <argument>-Xms4G</argument>
                                 <argument>-classpath</argument>
                                 <classpath/>
                                 <argument>no.minecraft.Main</argument>

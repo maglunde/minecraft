@@ -9,4 +9,4 @@ if %errorlevel% neq 0 (
 )
 
 echo Starter Minecraft Java Clone med Windows Native Java...
-java --enable-native-access=ALL-UNNAMED -cp "target/classes;target/dependency/*" no.minecraft.Main
+java -Xms4G --enable-native-access=ALL-UNNAMED -cp "target/classes;target/dependency/*" no.minecraft.Main

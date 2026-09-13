@@ -74,6 +74,7 @@ public class Main {
     private boolean sprintActive = false;
     private Raycast.HitResult targetedHit = null;
     private static final float FIXED_TICK = 1.0f / 60.0f; // 60 ticks/s fixed simulation step (smooth without interpolation on 60 Hz displays)
+    private final ChunkRenderer chunkRenderer = new ChunkRenderer();
     private final no.minecraft.math.Frustum frustum = new no.minecraft.math.Frustum();
 
     private static final String WORLD_VERT = """
@@ -1139,7 +1140,8 @@ public class Main {
             atlas.bind();
             int playerCx = Math.floorDiv((int) Math.floor(player.getPosition().x), Chunk.SIZE_X);
             int playerCz = Math.floorDiv((int) Math.floor(player.getPosition().z), Chunk.SIZE_Z);
-            world.updateAndRender(playerCx, playerCz, gs.getRenderDistance(), frustum);
+            chunkRenderer.render(world, playerCx, playerCz, gs.getRenderDistance(), frustum);
+            hud.setRenderedChunkCount(chunkRenderer.getRenderedChunkCount());
 
             // 3. Render 3D Dropped Items on ground (spinning & bobbing)
             itemRenderer.render(world.getDroppedItems(), worldShader, view, projection, atlas);
@@ -1470,6 +1472,7 @@ public class Main {
         if (handRenderer != null) handRenderer.cleanup();
         if (playerRenderer != null) playerRenderer.cleanup();
         if (blockOutline != null) blockOutline.cleanup();
+        chunkRenderer.cleanup();
         if (worldShader != null) worldShader.cleanup();
         if (atlas != null) atlas.cleanup();
         if (world != null) world.cleanup();
