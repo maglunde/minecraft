@@ -15,6 +15,7 @@ public class TextureAtlas {
     public static final int ATLAS_TILES_PER_ROW = 16;
     public static final int TILE_SIZE = 16;
     public static final int ATLAS_SIZE = ATLAS_TILES_PER_ROW * TILE_SIZE; // 256x256 pixels
+    private static final float[][] UVS = createUvs();
 
     private final int textureId;
 
@@ -44,16 +45,22 @@ public class TextureAtlas {
     }
 
     public static float[] getUVs(int tileIndex) {
-        int tileX = tileIndex % ATLAS_TILES_PER_ROW;
-        int tileY = tileIndex / ATLAS_TILES_PER_ROW;
+        return UVS[tileIndex];
+    }
 
-        float u0 = (float) tileX / ATLAS_TILES_PER_ROW;
-        float v0 = (float) tileY / ATLAS_TILES_PER_ROW;
-        float u1 = u0 + (1.0f / ATLAS_TILES_PER_ROW);
-        float v1 = v0 + (1.0f / ATLAS_TILES_PER_ROW);
-
-        // [u0, v0, u1, v1]
-        return new float[]{u0, v0, u1, v1};
+    private static float[][] createUvs() {
+        float[][] uvs = new float[ATLAS_TILES_PER_ROW * ATLAS_TILES_PER_ROW][4];
+        for (int tileIndex = 0; tileIndex < uvs.length; tileIndex++) {
+            int tileX = tileIndex % ATLAS_TILES_PER_ROW;
+            int tileY = tileIndex / ATLAS_TILES_PER_ROW;
+            float u0 = (float) tileX / ATLAS_TILES_PER_ROW;
+            float v0 = (float) tileY / ATLAS_TILES_PER_ROW;
+            uvs[tileIndex][0] = u0;
+            uvs[tileIndex][1] = v0;
+            uvs[tileIndex][2] = u0 + (1.0f / ATLAS_TILES_PER_ROW);
+            uvs[tileIndex][3] = v0 + (1.0f / ATLAS_TILES_PER_ROW);
+        }
+        return uvs;
     }
 
     private ByteBuffer generateAtlasImage() {

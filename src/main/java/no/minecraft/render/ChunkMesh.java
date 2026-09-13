@@ -24,6 +24,8 @@ final class ChunkMesh {
     private int vaoId;
     private int vboId;
     private int vertexCount;
+    private final FloatArray vertices = new FloatArray(64 * 1024);
+    private FloatBuffer uploadBuffer;
 
     ChunkMesh(World world, Chunk chunk) {
         this.world = world;
@@ -32,7 +34,7 @@ final class ChunkMesh {
 
     public void rebuildMesh() {
         chunk.getSkyLight(0, 0, 0);
-        List<Float> vertices = new ArrayList<>();
+        vertices.clear();
 
         List<int[]> torches = new ArrayList<>();
         for (int dx = -1; dx <= 1; dx++) {
@@ -112,13 +114,12 @@ final class ChunkMesh {
         glBindVertexArray(vaoId);
         glBindBuffer(GL_ARRAY_BUFFER, vboId);
 
-        FloatBuffer buffer = BufferUtils.createFloatBuffer(vertices.size());
-        for (float f : vertices) {
-            buffer.put(f);
-        }
-        buffer.flip();
+        ensureUploadBuffer(vertices.size());
+        uploadBuffer.clear();
+        uploadBuffer.put(vertices.array(), 0, vertices.size());
+        uploadBuffer.flip();
 
-        glBufferData(GL_ARRAY_BUFFER, buffer, GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, uploadBuffer, GL_STATIC_DRAW);
 
         // Position: 3 floats
         glVertexAttribPointer(0, 3, GL_FLOAT, false, 7 * Float.BYTES, 0);
@@ -161,11 +162,11 @@ final class ChunkMesh {
         return chunk.getSkyLight(lx, ny, lz) / 15.0f;
     }
 
-    private void addFace(List<Float> v, float x, float y, float z, BlockType.Face face, BlockType block, float faceLight, float torchLight) {
+    private void addFace(FloatArray v, float x, float y, float z, BlockType.Face face, BlockType block, float faceLight, float torchLight) {
         addFaceWithTexture(v, x, y, z, face, block.getTexture(face), faceLight, torchLight);
     }
 
-    private void addFaceWithTexture(List<Float> v, float x, float y, float z, BlockType.Face face, int textureId, float faceLight, float torchLight) {
+    private void addFaceWithTexture(FloatArray v, float x, float y, float z, BlockType.Face face, int textureId, float faceLight, float torchLight) {
         faceLight *= skyExposure((int) x, (int) y, (int) z, face);
         float[] uv = TextureAtlas.getUVs(textureId);
         float u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
@@ -229,7 +230,7 @@ final class ChunkMesh {
         }
     }
 
-    private void addFurnace(List<Float> v, float wx, float wy, float wz, int x, int y, int z, float torchLight) {
+    private void addFurnace(FloatArray v, float wx, float wy, float wz, int x, int y, int z, float torchLight) {
         FurnaceData fd = world.getFurnace((int) wx, (int) wy, (int) wz);
         BlockType.Face facing = (fd != null && fd.getFacing() != null) ? fd.getFacing() : BlockType.Face.NORTH;
         int frontTex = (fd != null && fd.isBurning()) ? 116 : 33;
@@ -293,7 +294,7 @@ final class ChunkMesh {
         return b != null && b.isSolid();
     }
 
-    private void addCactus(List<Float> v, float wx, float wy, float wz, int x, int y, int z, float torchLight) {
+    private void addCactus(FloatArray v, float wx, float wy, float wz, int x, int y, int z, float torchLight) {
         float x0 = wx + 0.0625f; // 1/16
         float x1 = wx + 0.9375f; // 15/16
         float y0 = wy;
@@ -381,7 +382,7 @@ final class ChunkMesh {
         addVertex(v, x1, y0, z1, uSide0, vSide1, 0.8f, torchLight);
     }
 
-    private void addChest(List<Float> v, float wx, float wy, float wz, int x, int y, int z, float torchLight) {
+    private void addChest(FloatArray v, float wx, float wy, float wz, int x, int y, int z, float torchLight) {
         float x0 = wx + 0.0625f; // 1/16
         float x1 = wx + 0.9375f; // 15/16
         float y0 = wy;
@@ -456,7 +457,7 @@ final class ChunkMesh {
         addVertex(v, x1, y0, z1, uvE[0], uvE[3], 0.8f, torchLight);
     }
 
-    private void addTorch(List<Float> v, float wx, float wy, float wz, int x, int y, int z) {
+    private void addTorch(FloatArray v, float wx, float wy, float wz, int x, int y, int z) {
         boolean floorSolid = isSolidBlock(x, y - 1, z);
         boolean westSolid  = isSolidBlock(x - 1, y, z);
         boolean eastSolid  = isSolidBlock(x + 1, y, z);
@@ -571,7 +572,7 @@ final class ChunkMesh {
         addVertex(v, b11x, b11y, b11z, uMin, vMax, faceLight, torchLight);
     }
 
-    private void addVertex(List<Float> v, float x, float y, float z, float u, float valV, float faceLight, float torchLight) {
+    private void addVertex(FloatArray v, float x, float y, float z, float u, float valV, float faceLight, float torchLight) {
         v.add(x);
         v.add(y);
         v.add(z);
@@ -598,6 +599,43 @@ final class ChunkMesh {
             vaoId = 0;
         }
         vertexCount = 0;
+    }
+
+    private void ensureUploadBuffer(int requiredFloats) {
+        if (uploadBuffer == null || uploadBuffer.capacity() < requiredFloats) {
+            uploadBuffer = BufferUtils.createFloatBuffer(requiredFloats);
+        }
+    }
+
+    /** Reusable primitive vertex collector; avoids Float boxing for every vertex attribute. */
+    private static final class FloatArray {
+        private float[] values;
+        private int size;
+
+        FloatArray(int initialCapacity) {
+            values = new float[initialCapacity];
+        }
+
+        void clear() {
+            size = 0;
+        }
+
+        void add(float value) {
+            if (size == values.length) {
+                float[] grown = new float[values.length * 2];
+                System.arraycopy(values, 0, grown, 0, values.length);
+                values = grown;
+            }
+            values[size++] = value;
+        }
+
+        int size() {
+            return size;
+        }
+
+        float[] array() {
+            return values;
+        }
     }
 
 }

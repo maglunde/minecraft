@@ -33,6 +33,7 @@ public final class ChunkRenderer {
             for (int dz = -renderDistance; dz <= renderDistance; dz++) {
                 Chunk chunk = world.getChunk(centerCx + dx, centerCz + dz);
                 if (chunk == null) continue;
+                if (!isChunkVisible(chunk, frustum)) continue;
                 ChunkMesh mesh = meshes.get(chunk);
                 if (mesh == null) {
                     mesh = new ChunkMesh(world, chunk);
@@ -43,15 +44,18 @@ public final class ChunkRenderer {
                     mesh.rebuildMesh();
                     chunk.setDirty(false);
                 }
-                if (frustum == null || frustum.intersectsAabb(
-                        chunk.getWorldStartX(), 0, chunk.getWorldStartZ(),
-                        chunk.getWorldStartX() + Chunk.SIZE_X, Chunk.SIZE_Y,
-                        chunk.getWorldStartZ() + Chunk.SIZE_Z)) {
-                    mesh.render();
-                    renderedChunkCount++;
-                }
+                mesh.render();
+                renderedChunkCount++;
             }
         }
+    }
+
+    /** Kept separate so culling can be tested without an OpenGL context. */
+    static boolean isChunkVisible(Chunk chunk, Frustum frustum) {
+        return frustum == null || frustum.intersectsAabb(
+                chunk.getWorldStartX(), 0, chunk.getWorldStartZ(),
+                chunk.getWorldStartX() + Chunk.SIZE_X, Chunk.SIZE_Y,
+                chunk.getWorldStartZ() + Chunk.SIZE_Z);
     }
 
     public void cleanup() {
