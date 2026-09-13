@@ -122,6 +122,15 @@ public class World {
         updateLoadedChunks(scx, scz);
     }
 
+    private no.minecraft.world.gen.OverworldGenerator overworldGenerator;
+
+    public no.minecraft.world.gen.OverworldGenerator getOverworldGenerator() {
+        if (overworldGenerator == null) {
+            overworldGenerator = new no.minecraft.world.gen.OverworldGenerator(seed, this);
+        }
+        return overworldGenerator;
+    }
+
     public static long chunkKey(int cx, int cz) {
         return (((long) cx) << 32) | (cz & 0xFFFFFFFFL);
     }
@@ -1818,7 +1827,7 @@ public class World {
         }
     }
 
-    int getTerrainHeight(int x, int z) {
+    public int getTerrainHeight(int x, int z) {
         // Seeded value-noise fields: each seed produces a completely different landscape
         double cont = Noise.fbm2D(seed ^ 0x434F4E54L, x * 0.0020, z * 0.0020, 4, 0.5);
         double ero  = Noise.fbm2D(seed ^ 0x45524F53L, x * 0.0040, z * 0.0040, 3, 0.5);
