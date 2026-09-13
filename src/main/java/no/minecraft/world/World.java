@@ -10,12 +10,16 @@ public class World {
     public static final int RENDER_DISTANCE = 5;
     public static final int UNLOAD_DISTANCE = RENDER_DISTANCE + 2;
     public static final int SEA_LEVEL = 18;
+    /** Small fixed amount of terrain work performed by each world update. */
+    public static final int CHUNK_LOAD_BUDGET = 2;
 
     // Dimension management
     private Dimension currentDimension = Dimension.OVERWORLD;
     private final Map<Dimension, Map<Long, Chunk>> dimensionChunks = new EnumMap<>(Dimension.class);
     private final Map<Dimension, Set<Long>> dimensionGenerated = new EnumMap<>(Dimension.class);
     private final Map<Dimension, Set<Long>> savedChunkKeys = new EnumMap<>(Dimension.class);
+    // LinkedHashSet preserves nearest-first insertion order while preventing duplicate requests.
+    private final Map<Dimension, LinkedHashSet<Long>> pendingChunkLoads = new EnumMap<>(Dimension.class);
 
     // Save directory this world is persisted to (null for unsaved worlds)
     private Path saveDir = null;
@@ -57,6 +61,7 @@ public class World {
         for (Dimension dim : Dimension.values()) {
             dimensionChunks.put(dim, new HashMap<>());
             dimensionGenerated.put(dim, new HashSet<>());
+            pendingChunkLoads.put(dim, new LinkedHashSet<>());
         }
         setSeed(seed);
     }
@@ -74,6 +79,9 @@ public class World {
 
     public void setCurrentDimension(Dimension currentDimension) {
         this.currentDimension = currentDimension;
+        lastUpdateCx = Integer.MIN_VALUE;
+        lastUpdateCz = Integer.MIN_VALUE;
+        lastUpdateRd = -1;
     }
 
     public Map<Dimension, Map<Long, Chunk>> getDimensionChunks() {
@@ -107,6 +115,7 @@ public class World {
         for (Dimension dim : Dimension.values()) {
             dimensionChunks.put(dim, new ConcurrentHashMap<>());
             dimensionGenerated.put(dim, ConcurrentHashMap.newKeySet());
+            pendingChunkLoads.put(dim, new LinkedHashSet<>());
         }
         updateLoadedChunks(0, 0);
         this.spawnPoint = findSafeSpawnPosition(0, 0);
@@ -1031,15 +1040,45 @@ public class World {
             lastUpdateCz = centerCz;
             lastUpdateRd = rd;
 
-            for (int dx = -rd; dx <= rd; dx++) {
-                for (int dz = -rd; dz <= rd; dz++) {
+            queueDesiredChunks(centerCx, centerCz, rd);
+        }
+        processPendingChunkLoads();
+        evictFarChunks(centerCx, centerCz, rd + 2);
+    }
+
+    /** Queues the square around the player in Chebyshev-distance order (center first). */
+    private void queueDesiredChunks(int centerCx, int centerCz, int renderDistance) {
+        LinkedHashSet<Long> pending = pendingChunkLoads.get(currentDimension);
+        pending.clear(); // Requests from the old player position are no longer desired.
+        Set<Long> generated = getActiveGenerated();
+        for (int distance = 0; distance <= renderDistance; distance++) {
+            for (int dx = -distance; dx <= distance; dx++) {
+                for (int dz = -distance; dz <= distance; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != distance) continue;
                     int cx = centerCx + dx;
                     int cz = centerCz + dz;
-                    ensureChunkGenerated(cx, cz);
+                    long key = chunkKey(cx, cz);
+                    if (!generated.contains(key)) pending.add(key);
                 }
             }
         }
-        evictFarChunks(centerCx, centerCz, rd + 2);
+    }
+
+    private void processPendingChunkLoads() {
+        LinkedHashSet<Long> pending = pendingChunkLoads.get(currentDimension);
+        Iterator<Long> iterator = pending.iterator();
+        int loaded = 0;
+        while (iterator.hasNext() && loaded < CHUNK_LOAD_BUDGET) {
+            long key = iterator.next();
+            iterator.remove();
+            ensureChunkGenerated((int) (key >> 32), (int) key);
+            loaded++;
+        }
+    }
+
+    /** Exposed for headless lifecycle tests and diagnostics. */
+    public int getPendingChunkLoadCount() {
+        return pendingChunkLoads.get(currentDimension).size();
     }
 
     private void evictFarChunks(int centerCx, int centerCz, int unloadDist) {
@@ -1051,7 +1090,8 @@ public class World {
             Map.Entry<Long, Chunk> entry = iterator.next();
             Chunk chunk = entry.getValue();
             int dist = Math.max(Math.abs(chunk.getChunkX() - centerCx), Math.abs(chunk.getChunkZ() - centerCz));
-            if (dist > unloadDist && !chunk.needsSave()) {
+            if (dist > unloadDist) {
+                if (chunk.needsSave() && !saveChunkBeforeUnload(currentDimension, chunk)) continue;
                 iterator.remove();
                 activeGenerated.remove(entry.getKey());
             }
@@ -1065,10 +1105,9 @@ public class World {
             while (it.hasNext()) {
                 Map.Entry<Long, Chunk> entry = it.next();
                 Chunk chunk = entry.getValue();
-                if (!chunk.needsSave()) {
-                    it.remove();
-                    genSet.remove(entry.getKey());
-                }
+                if (chunk.needsSave() && !saveChunkBeforeUnload(dimEntry.getKey(), chunk)) continue;
+                it.remove();
+                genSet.remove(entry.getKey());
             }
         }
     }
@@ -1941,6 +1980,9 @@ public class World {
         for (Set<Long> set : dimensionGenerated.values()) {
             set.clear();
         }
+        for (LinkedHashSet<Long> pending : pendingChunkLoads.values()) {
+            pending.clear();
+        }
         savedChunkKeys.clear();
         this.lastUpdateCx = Integer.MIN_VALUE;
         this.lastUpdateCz = Integer.MIN_VALUE;
@@ -1949,6 +1991,10 @@ public class World {
 
     public void setSaveDirectory(Path saveDir) {
         this.saveDir = saveDir;
+    }
+
+    public Path getSaveDirectory() {
+        return saveDir;
     }
 
     public void markChunkSaved(Dimension dim, int cx, int cz) {
@@ -1970,5 +2016,10 @@ public class World {
     private boolean loadChunkFromSave(Chunk chunk, int cx, int cz) {
         if (saveDir == null) return false;
         return no.minecraft.world.save.WorldSaveManager.loadChunkInto(chunk, saveDir, currentDimension);
+    }
+
+    private boolean saveChunkBeforeUnload(Dimension dimension, Chunk chunk) {
+        if (saveDir == null) return false;
+        return no.minecraft.world.save.WorldSaveManager.saveChunk(this, dimension, chunk);
     }
 }

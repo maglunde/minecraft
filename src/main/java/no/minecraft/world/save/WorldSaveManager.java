@@ -629,6 +629,28 @@ public class WorldSaveManager {
         }
     }
 
+    /**
+     * Persists one dirty chunk before World evicts it. This intentionally does not
+     * rewrite world.dat: the chunk file is independently atomic and sufficient to
+     * make the player edit durable.
+     */
+    public static boolean saveChunk(World world, Dimension dim, Chunk chunk) {
+        Path worldDir = world.getSaveDirectory();
+        if (worldDir == null || chunk == null || !chunk.needsSave()) return false;
+        try {
+            writeChunkFile(chunkFile(worldDir, dim, chunk.getChunkX(), chunk.getChunkZ()),
+                    dim, chunk.getChunkX(), chunk.getChunkZ(), chunk.getBlocks());
+            world.markChunkSaved(dim, chunk.getChunkX(), chunk.getChunkZ());
+            chunk.clearNeedsSave();
+            return true;
+        } catch (IOException e) {
+            world.markChunkUnsaved(dim, chunk.getChunkX(), chunk.getChunkZ());
+            System.err.println("Failed to save chunk " + dim + " " + chunk.getChunkX() + "," + chunk.getChunkZ()
+                    + " before unload: " + e.getMessage());
+            return false;
+        }
+    }
+
     private static boolean saveLoadedChunks(World world, Path worldDir) {
         boolean allSaved = true;
         for (Dimension dim : Dimension.values()) {

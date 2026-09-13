@@ -50,6 +50,8 @@ public class TerrainGenerationTest {
     public void chunkBorderIsContinuous() {
         World world = new World(12345L);
         world.updateLoadedChunks(0, 0);
+        // Streaming is gradual; this test needs both sides of the border immediately.
+        world.ensureChunkGenerated(1, 0);
 
         // The generated surface at the border columns of chunk (0,0) and (1,0) must match
         // the terrain function exactly — terrain is a pure function of world coords, so a
