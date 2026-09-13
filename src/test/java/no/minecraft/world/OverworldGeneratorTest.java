@@ -112,4 +112,54 @@ public class OverworldGeneratorTest {
         assertTrue(elapsedMs < 25.0,
                 "Trilinær chunkgenerering skal være lynrask, tok: " + elapsedMs + " ms");
     }
+
+    @Test
+    public void productionGenerationIsIndependentOfRequestOrder() {
+        World firstOrder = new World(24680L);
+        World secondOrder = new World(24680L);
+
+        firstOrder.ensureChunkGenerated(-3, 2);
+        Chunk expected = firstOrder.ensureChunkGenerated(4, -2);
+
+        Chunk actual = secondOrder.ensureChunkGenerated(4, -2);
+        secondOrder.ensureChunkGenerated(-3, 2);
+
+        assertChunkEquals(expected, actual);
+    }
+
+    @Test
+    public void changingSeedReplacesTheProductionGenerator() {
+        World world = new World(111L);
+        OverworldGenerator original = world.getOverworldGenerator();
+        Chunk before = world.ensureChunkGenerated(7, -4);
+
+        world.setSeed(222L);
+        OverworldGenerator reset = world.getOverworldGenerator();
+        Chunk after = world.ensureChunkGenerated(7, -4);
+
+        assertNotSame(original, reset);
+        assertEquals(222L, reset.getSeed());
+        assertTrue(chunksDiffer(before, after));
+    }
+
+    private static void assertChunkEquals(Chunk expected, Chunk actual) {
+        for (int x = 0; x < Chunk.SIZE_X; x++) {
+            for (int z = 0; z < Chunk.SIZE_Z; z++) {
+                for (int y = 0; y < Chunk.SIZE_Y; y++) {
+                    assertEquals(expected.getBlock(x, y, z), actual.getBlock(x, y, z));
+                }
+            }
+        }
+    }
+
+    private static boolean chunksDiffer(Chunk first, Chunk second) {
+        for (int x = 0; x < Chunk.SIZE_X; x++) {
+            for (int z = 0; z < Chunk.SIZE_Z; z++) {
+                for (int y = 0; y < Chunk.SIZE_Y; y++) {
+                    if (first.getBlock(x, y, z) != second.getBlock(x, y, z)) return true;
+                }
+            }
+        }
+        return false;
+    }
 }

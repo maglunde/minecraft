@@ -106,6 +106,7 @@ public class World {
 
     public void setSeed(long seed) {
         this.seed = seed;
+        this.overworldGenerator = null;
         Random r = new Random(seed);
         this.offsetX = (r.nextDouble() - 0.5) * 200000.0;
         this.offsetZ = (r.nextDouble() - 0.5) * 200000.0;
@@ -1123,7 +1124,7 @@ public class World {
         } else if (currentDimension == Dimension.THE_END) {
             generateEndChunk(chunk, startX, startZ);
         } else {
-            generateOverworldChunk(chunk, startX, startZ);
+            getOverworldGenerator().generateChunk(chunk);
         }
     }
 
