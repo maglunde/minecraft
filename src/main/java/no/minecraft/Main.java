@@ -161,6 +161,7 @@ public class Main {
     private void init() {
         errorCallback = GLFWErrorCallback.createPrint(System.err).set();
         no.minecraft.settings.GameSettings.load();
+        no.minecraft.settings.GameSettings.getInstance().setRenderDistance(7);
 
         if (!glfwInit()) {
             throw new IllegalStateException("Failed to initialize GLFW");

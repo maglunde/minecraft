@@ -28,6 +28,12 @@ public class GameSettingsTest {
     }
 
     @Test
+    public void testDefaultRenderDistanceIsSeven() {
+        GameSettings settings = GameSettings.getInstance();
+        assertEquals(7, settings.getRenderDistance());
+    }
+
+    @Test
     public void testCalculateGuiScale() {
         GameSettings settings = GameSettings.getInstance();
         int originalGuiScale = settings.getGuiScale();

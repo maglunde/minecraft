@@ -64,7 +64,7 @@ public class GameSettings {
     private float fov = 70.0f;
 
     // Video Settings
-    private int renderDistance = 5; // 3 to 20
+    private int renderDistance = 7; // 3 to 20
     private float brightness = 1.0f; // 0.0f (Moody) to 1.0f (Bright)
 
     // Master Sound Volume (0.0f to 1.0f)
